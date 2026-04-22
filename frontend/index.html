@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>简陋版 - 用户登录/注册</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 400px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin: 8px 0 16px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .message {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>注册新用户</h2>
+    <input type="text" id="regUsername" placeholder="用户名">
+    <input type="password" id="regPassword" placeholder="密码">
+    <button id="registerBtn">立即注册</button>
+    <div id="regMessage" class="message"></div>
+  </div>
+
+  <div class="card">
+    <h2>登录</h2>
+    <input type="text" id="loginUsername" placeholder="用户名">
+    <input type="password" id="loginPassword" placeholder="密码">
+    <button id="loginBtn">登录</button>
+    <div id="loginMessage" class="message"></div>
+  </div>
+
+  <script>
+    // 后端接口地址（根据实际情况修改）
+    const API_BASE = 'http://localhost:3000/api';
+
+    // 注册功能
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+      const username = document.getElementById('regUsername').value.trim();
+      const password = document.getElementById('regPassword').value.trim();
+      const messageDiv = document.getElementById('regMessage');
+
+      if (!username || !password) {
+        showMessage(messageDiv, '用户名和密码不能为空', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          showMessage(messageDiv, data.message, 'success');
+          // 清空表单
+          document.getElementById('regUsername').value = '';
+          document.getElementById('regPassword').value = '';
+        } else {
+          showMessage(messageDiv, data.message, 'error');
+        }
+      } catch (err) {
+        showMessage(messageDiv, '网络错误，请确保后端服务已启动', 'error');
+        console.error(err);
+      }
+    });
+
+    // 登录功能
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      const messageDiv = document.getElementById('loginMessage');
+
+      if (!username || !password) {
+        showMessage(messageDiv, '用户名和密码不能为空', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          showMessage(messageDiv, data.message + '，即将跳转（演示）', 'success');
+          // 这里可以添加登录成功后的跳转逻辑，比如 window.location.href = '/dashboard.html';
+        } else {
+          showMessage(messageDiv, data.message, 'error');
+        }
+      } catch (err) {
+        showMessage(messageDiv, '网络错误，请确保后端服务已启动', 'error');
+        console.error(err);
+      }
+    });
+
+    function showMessage(element, text, type) {
+      element.textContent = text;
+      element.className = `message ${type}`;
+      // 3秒后自动清除消息
+      setTimeout(() => {
+        element.textContent = '';
+        element.className = 'message';
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
