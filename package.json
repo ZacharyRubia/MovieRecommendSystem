@@ -1,5 +1,15 @@
 {
-  "dependencies": {
-    "express": "^5.2.1"
+  "name": "movie-recommend-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Movie Recommendation System - Monorepo with separate backend and frontend",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "start:backend": "cd backend && npm start",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run start:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

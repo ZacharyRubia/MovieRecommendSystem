@@ -1,0 +1,8 @@
+{
+  "name": "movie-recommend-frontend",
+  "version": "1.0.0",
+  "description": "Movie Recommendation System Frontend",
+  "scripts": {
+    "dev": "npx http-server . -p 8080 -c-1"
+  }
+}
