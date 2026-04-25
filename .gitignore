@@ -1,3 +1,14 @@
 # 依赖文件夹
 node_modules/
 
+# 大数据文件（超过GitHub限制）
+movie data/
+scripts/tmp/
+
+# IDE配置（可选，如果不共享配置则取消注释）
+.vscode/
+
+# 数据库文件（SQLite数据库可能较大，初始化脚本可以提交）
+*.db
+*.sqlite
+*.sqlite3

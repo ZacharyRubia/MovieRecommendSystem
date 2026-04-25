@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理员登录 - 电影推荐系统</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .login-container {
+      width: 100%;
+      max-width: 400px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      padding: 40px 30px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo h1 {
+      color: #333;
+      font-size: 28px;
+      margin-bottom: 5px;
+    }
+    .logo p {
+      color: #666;
+      font-size: 14px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e1e1e1;
+      border-radius: 5px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+      outline: none;
+    }
+    input:focus {
+      border-color: #667eea;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .message {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 5px;
+      text-align: center;
+      font-weight: 500;
+      display: none;
+    }
+    .message.error {
+      display: block;
+      background-color: #ffeaea;
+      color: #dc3545;
+      border: 1px solid #dc3545;
+    }
+    .message.success {
+      display: block;
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #155724;
+    }
+    .loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    .loading span::after {
+      content: '...';
+      animation: loading 1s infinite;
+    }
+    @keyframes loading {
+      0%, 100% { content: '...'; }
+      33% { content: '.'; }
+      66% { content: '..'; }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo">
+      <h1>管理员登录</h1>
+      <p>电影推荐系统管理后台</p>
+    </div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="username">用户名</label>
+        <input type="text" id="username" placeholder="请输入管理员用户名" required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">密码</label>
+        <input type="password" id="password" placeholder="请输入密码" required>
+      </div>
+
+      <button type="submit" id="loginBtn">
+        <span>登录</span>
+      </button>
+    </form>
+
+    <div id="message" class="message"></div>
+  </div>
+
+  <script>
+    const API_BASE = `http://${window.location.hostname}:3000/api`;
+    const loginForm = document.getElementById('loginForm');
+    const messageDiv = document.getElementById('message');
+    const loginBtn = document.getElementById('loginBtn');
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      if (!username || !password) {
+        showMessage('请输入用户名和密码', 'error');
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await fetch(`${API_BASE}/users/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showMessage('登录成功，正在跳转...', 'success');
+          // 保存登录状态
+          localStorage.setItem('adminToken', JSON.stringify(data.data));
+          localStorage.setItem('isAdminLoggedIn', 'true');
+          // 跳转到用户管理页面
+          setTimeout(() => {
+            window.location.href = 'user-management.html';
+          }, 1000);
+        } else {
+          showMessage(data.message, 'error');
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('登录错误:', err);
+        showMessage('网络错误，请确保后端服务已启动', 'error');
+        setLoading(false);
+      }
+    });
+
+    function showMessage(text, type) {
+      messageDiv.textContent = text;
+      messageDiv.className = `message ${type}`;
+    }
+
+    function setLoading(isLoading) {
+      if (isLoading) {
+        loginBtn.classList.add('loading');
+        loginBtn.querySelector('span').textContent = '登录中';
+      } else {
+        loginBtn.classList.remove('loading');
+        loginBtn.querySelector('span').textContent = '登录';
+      }
+    }
+
+    // 检查是否已经登录
+    if (localStorage.getItem('isAdminLoggedIn') === 'true') {
+      window.location.href = 'user-management.html';
+    }
+  </script>
+</body>
+</html>

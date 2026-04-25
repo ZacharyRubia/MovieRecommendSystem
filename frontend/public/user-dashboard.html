@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户主页 - 电影推荐系统</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    .header {
+      background-color: #000000;
+      color: #ffffff;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      font-size: 24px;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .logout-btn {
+      padding: 8px 16px;
+      background-color: #ffffff;
+      color: #000000;
+      border: 2px solid #ffffff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover {
+      background-color: #000000;
+      color: #ffffff;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    .welcome-card {
+      background-color: #ffffff;
+      border: 3px solid #000000;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+    .welcome-card h2 {
+      margin-bottom: 15px;
+      color: #000000;
+    }
+    .welcome-card p {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #333333;
+    }
+    .role-badge {
+      display: inline-block;
+      padding: 5px 12px;
+      background-color: #000000;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 4px;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>电影推荐系统</h1>
+    <div class="user-info">
+      <span id="usernameDisplay"></span>
+      <button class="logout-btn" id="logoutBtn">退出登录</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="welcome-card">
+      <h2>欢迎回来 <span id="welcomeUsername"></span><span class="role-badge">普通用户</span></h2>
+      <p>欢迎使用电影推荐系统，作为普通用户，您可以浏览电影、获取个性化推荐、收藏喜欢的电影等。</p>
+      <p>更多功能正在开发中...</p>
+    </div>
+  </div>
+
+  <script>
+    // 后端接口地址
+    const API_BASE = `http://${window.location.hostname}:3000/api`;
+
+    // 检查是否登录
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser) {
+      window.location.href = '/index.html';
+    } else {
+      // 如果是管理员，跳转到管理页面
+      if (currentUser.role_id === 1) {
+        window.location.href = '/user-management.html';
+      }
+      document.getElementById('usernameDisplay').textContent = currentUser.username;
+      document.getElementById('welcomeUsername').textContent = currentUser.username;
+    }
+
+    // 退出登录
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('currentUser');
+      window.location.href = '/index.html';
+    });
+  </script>
+</body>
+</html>

@@ -147,8 +147,8 @@
   </div>
 
   <script>
-    // 后端接口地址（根据实际情况修改）
-    const API_BASE = 'http://localhost:3000/api';
+    // 后端接口地址 - 使用当前页面的主机名，避免 Private Network Access (PNA) 限制
+    const API_BASE = `http://${window.location.hostname}:3000/api`;
 
     // 表单切换功能
     document.getElementById('loginTab').addEventListener('click', () => {
@@ -198,36 +198,47 @@
       }
     });
 
-    // 登录功能
-    document.getElementById('loginBtn').addEventListener('click', async () => {
-      const username = document.getElementById('loginUsername').value.trim();
-      const password = document.getElementById('loginPassword').value.trim();
-      const messageDiv = document.getElementById('loginMessage');
+     // 登录功能
+     document.getElementById('loginBtn').addEventListener('click', async () => {
+       const username = document.getElementById('loginUsername').value.trim();
+       const password = document.getElementById('loginPassword').value.trim();
+       const messageDiv = document.getElementById('loginMessage');
 
-      if (!username || !password) {
-        showMessage(messageDiv, '用户名和密码不能为空', 'error');
-        return;
-      }
+       if (!username || !password) {
+         showMessage(messageDiv, '用户名和密码不能为空', 'error');
+         return;
+       }
 
-      try {
-        const response = await fetch(`${API_BASE}/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        const data = await response.json();
+       try {
+         const response = await fetch(`${API_BASE}/login`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ username, password })
+         });
+         const data = await response.json();
 
-        if (data.success) {
-          showMessage(messageDiv, data.message + '，即将跳转（演示）', 'success');
-          // 这里可以添加登录成功后的跳转逻辑，比如 window.location.href = '/dashboard.html';
-        } else {
-          showMessage(messageDiv, data.message, 'error');
-        }
-      } catch (err) {
-        showMessage(messageDiv, '网络错误，请确保后端服务已启动', 'error');
-        console.error(err);
-      }
-    });
+         if (data.success) {
+           showMessage(messageDiv, data.message + '，正在跳转...', 'success');
+           // 登录成功后根据用户角色跳转
+            setTimeout(() => {
+              if (data.data.role_id === 1) {
+                // 管理员跳转到用户管理页面
+                window.location.href = './user-management.html';
+              } else {
+                // 普通用户跳转到用户页面
+                window.location.href = './user-dashboard.html';
+              }
+            }, 1000);
+           // 保存用户信息到本地存储
+           localStorage.setItem('currentUser', JSON.stringify(data.data));
+         } else {
+           showMessage(messageDiv, data.message, 'error');
+         }
+       } catch (err) {
+         showMessage(messageDiv, '网络错误，请确保后端服务已启动', 'error');
+         console.error(err);
+       }
+     });
 
     function showMessage(element, text, type) {
       element.textContent = text;
