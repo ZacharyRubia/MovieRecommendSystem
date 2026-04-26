@@ -44,7 +44,7 @@
       color: #ffffff;
     }
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 30px auto;
       padding: 0 20px;
     }
@@ -73,6 +73,128 @@
       border-radius: 4px;
       margin-left: 10px;
     }
+    .section-title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #000000;
+    }
+    .movies-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 25px;
+      margin-bottom: 30px;
+    }
+    .movie-card {
+      background-color: #ffffff;
+      border: 2px solid #000000;
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .movie-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+    .movie-cover {
+      width: 100%;
+      height: 300px;
+      object-fit: cover;
+      background-color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999999;
+      font-size: 14px;
+    }
+    .movie-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .movie-info {
+      padding: 15px;
+    }
+    .movie-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #000000;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .movie-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: #666666;
+    }
+    .movie-year {
+      background-color: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .movie-rating {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: #ff9800;
+      font-weight: bold;
+    }
+    .star-icon {
+      font-size: 16px;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      font-size: 18px;
+      color: #666666;
+    }
+    .error-message {
+      text-align: center;
+      padding: 40px;
+      font-size: 18px;
+      color: #d32f2f;
+    }
+    .no-movies {
+      text-align: center;
+      padding: 60px;
+      font-size: 18px;
+      color: #666666;
+      background-color: #ffffff;
+      border: 2px solid #000000;
+      border-radius: 8px;
+    }
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .pagination button {
+      padding: 8px 16px;
+      background-color: #ffffff;
+      color: #000000;
+      border: 2px solid #000000;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .pagination button:hover:not(:disabled) {
+      background-color: #000000;
+      color: #ffffff;
+    }
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .pagination .current-page {
+      background-color: #000000;
+      color: #ffffff;
+    }
   </style>
 </head>
 <body>
@@ -87,14 +209,25 @@
   <div class="container">
     <div class="welcome-card">
       <h2>欢迎回来 <span id="welcomeUsername"></span><span class="role-badge">普通用户</span></h2>
-      <p>欢迎使用电影推荐系统，作为普通用户，您可以浏览电影、获取个性化推荐、收藏喜欢的电影等。</p>
-      <p>更多功能正在开发中...</p>
+      <p>欢迎使用电影推荐系统，浏览精彩电影，享受观影体验！</p>
     </div>
+
+    <h3 class="section-title">电影列表</h3>
+    <div id="moviesContainer" class="movies-grid">
+      <div class="loading">加载中...</div>
+    </div>
+    
+    <div id="pagination" class="pagination"></div>
   </div>
 
   <script>
     // 后端接口地址
     const API_BASE = `http://${window.location.hostname}:3000/api`;
+
+    // 当前页码
+    let currentPage = 1;
+    const pageSize = 12;
+    let totalPages = 1;
 
     // 检查是否登录
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
@@ -114,6 +247,91 @@
       localStorage.removeItem('currentUser');
       window.location.href = '/index.html';
     });
+
+    // 加载电影列表
+    async function loadMovies(page = 1) {
+      const container = document.getElementById('moviesContainer');
+      container.innerHTML = '<div class="loading">加载中...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/movies?page=${page}&limit=${pageSize}`);
+        const data = await response.json();
+
+        if (data.success) {
+          const { movies, pagination } = data.data;
+          totalPages = pagination.totalPages;
+          currentPage = page;
+
+          if (movies.length === 0) {
+            container.innerHTML = '<div class="no-movies">暂无电影数据</div>';
+          } else {
+            renderMovies(movies);
+            renderPagination();
+          }
+        } else {
+          container.innerHTML = `<div class="error-message">${data.message || '加载失败'}</div>`;
+        }
+      } catch (error) {
+        console.error('加载电影失败:', error);
+        container.innerHTML = '<div class="error-message">网络错误，请确保后端服务已启动</div>';
+      }
+    }
+
+    // 渲染电影卡片
+    function renderMovies(movies) {
+      const container = document.getElementById('moviesContainer');
+      container.innerHTML = movies.map(movie => `
+        <div class="movie-card" onclick="goToMovieDetail(${movie.id})">
+          <div class="movie-cover">
+            ${movie.cover_url 
+              ? `<img src="${movie.cover_url}" alt="${movie.title}" onerror="this.parentElement.innerHTML='暂无封面'">`
+              : '暂无封面'
+            }
+          </div>
+          <div class="movie-info">
+            <div class="movie-title" title="${movie.title}">${movie.title}</div>
+            <div class="movie-meta">
+              <span class="movie-year">${movie.release_year || '未知'}</span>
+              <span class="movie-rating">
+                <span class="star-icon">★</span>
+                ${parseFloat(movie.avg_rating).toFixed(1) || '暂无'}
+              </span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 渲染分页
+    function renderPagination() {
+      const paginationContainer = document.getElementById('pagination');
+      let html = '';
+
+      // 上一页
+      html += `<button onclick="loadMovies(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
+
+      // 页码
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+          html += `<button class="${i === currentPage ? 'current-page' : ''}" onclick="loadMovies(${i})">${i}</button>`;
+        } else if (i === currentPage - 2 || i === currentPage + 2) {
+          html += `<span style="padding: 8px">...</span>`;
+        }
+      }
+
+      // 下一页
+      html += `<button onclick="loadMovies(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
+
+      paginationContainer.innerHTML = html;
+    }
+
+    // 跳转到电影详情页
+    function goToMovieDetail(movieId) {
+      window.location.href = `/movie-detail.html?id=${movieId}`;
+    }
+
+    // 页面加载时加载电影列表
+    loadMovies(1);
   </script>
 </body>
 </html>

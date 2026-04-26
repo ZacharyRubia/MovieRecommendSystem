@@ -5,6 +5,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { query } = require('./src/config/db');
 const usersRouter = require('./src/routes/users');
+const moviesRouter = require('./src/routes/movies');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,8 @@ app.use('/public', express.static(path.join(__dirname, '../frontend/public')));
 
 // 用户路由
 app.use('/api/users', usersRouter);
+// 电影路由
+app.use('/api/movies', moviesRouter);
 
 // 用户注册接口 - 第一个注册用户自动成为管理员
 app.post('/api/register', async (req, res) => {
@@ -112,4 +115,7 @@ app.listen(PORT, () => {
   console.log(`  POST http://localhost:${PORT}/api/users`);
   console.log(`  PUT  http://localhost:${PORT}/api/users/:id`);
   console.log(`  DELETE http://localhost:${PORT}/api/users/:id`);
+  console.log(`  GET  http://localhost:${PORT}/api/movies`);
+  console.log(`  GET  http://localhost:${PORT}/api/movies/:id`);
+  console.log(`  POST http://localhost:${PORT}/api/movies/:movieId/rate`);
 });

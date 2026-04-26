@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const usersRouter = require('./routes/users');
+const moviesRouter = require('./routes/movies');
 
 const app = express();
 
@@ -24,5 +25,6 @@ app.use(express.json()); // 解析 JSON 格式的请求体
 
 // API 路由
 app.use('/api/users', usersRouter);
+app.use('/api/movies', moviesRouter);
 
 module.exports = app;
