@@ -8,58 +8,58 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background-color: #f0f0f0;
+      background-color: #f5f7fa;
       min-height: 100vh;
       display: flex;
     }
 
-    /* 侧边栏 - 纯黑 */
+    /* 侧边栏 */
     .sidebar {
       width: 250px;
-      background: #111;
-      color: #fff;
+      background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+      color: white;
       display: flex;
       flex-direction: column;
       position: fixed;
       height: 100vh;
       left: 0; top: 0;
-      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
       z-index: 100;
     }
-    .sidebar-header { padding: 30px 20px; border-bottom: 1px solid #333; }
+    .sidebar-header { padding: 30px 20px; border-bottom: 1px solid rgba(255,255,255,0.2); }
     .sidebar-header h1 { font-size: 20px; font-weight: 600; }
-    .sidebar-header p { font-size: 12px; opacity: 0.5; margin-top: 5px; }
+    .sidebar-header p { font-size: 12px; opacity: 0.8; margin-top: 5px; }
     .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; }
     .nav-item {
       display: flex; align-items: center; padding: 15px 25px;
-      color: #888; cursor: pointer; transition: all 0.3s;
-      border-left: 3px solid transparent; text-decoration: none;
+      color: rgba(255,255,255,0.8); cursor: pointer; transition: all 0.3s;
+      border-left: 3px solid transparent;
     }
-    .nav-item:hover { background: #222; color: #fff; }
-    .nav-item.active { background: #1a1a1a; color: #fff; border-left-color: #fff; }
+    .nav-item:hover { background: rgba(255,255,255,0.1); color: white; }
+    .nav-item.active { background: rgba(255,255,255,0.15); color: white; border-left-color: white; }
     .nav-item svg { width: 20px; height: 20px; margin-right: 12px; }
     .nav-item span { font-size: 14px; font-weight: 500; }
-    .sidebar-footer { padding: 20px; border-top: 1px solid #333; }
+    .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.2); }
     .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
     .user-avatar {
       width: 40px; height: 40px; border-radius: 50%;
-      background: #333;
-      display: flex; align-items: center; justify-content: center; font-weight: 600; color: #fff;
+      background: rgba(255,255,255,0.2);
+      display: flex; align-items: center; justify-content: center; font-weight: 600;
     }
     .user-details p { font-size: 14px; font-weight: 500; }
-    .user-details small { font-size: 11px; opacity: 0.5; }
+    .user-details small { font-size: 11px; opacity: 0.7; }
     .btn-logout {
       width: 100%; padding: 10px;
-      background: #222;
-      border: 1px solid #444;
-      color: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;
     }
-    .btn-logout:hover { background: #333; border-color: #666; }
+    .btn-logout:hover { background: rgba(255,255,255,0.3); }
 
     /* 主内容区 */
     .main-content { flex: 1; margin-left: 250px; padding: 30px; }
     .page-header { margin-bottom: 30px; }
-    .page-header h2 { font-size: 28px; color: #111; margin-bottom: 5px; }
+    .page-header h2 { font-size: 28px; color: #333; margin-bottom: 5px; }
     .page-header p { color: #666; font-size: 14px; }
 
     /* 页面内容 */
@@ -68,152 +68,150 @@
 
     /* 工具栏 */
     .toolbar {
-      background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
       display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;
     }
     .search-box { display: flex; gap: 10px; flex: 1; max-width: 400px; }
     .search-box input {
-      flex: 1; padding: 10px 15px; border: 2px solid #ddd;
+      flex: 1; padding: 10px 15px; border: 2px solid #e1e1e1;
       border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.3s;
     }
-    .search-box input:focus { border-color: #111; }
+    .search-box input:focus { border-color: #667eea; }
     .toolbar-actions { display: flex; gap: 10px; }
     .btn {
       padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px;
       font-weight: 500; cursor: pointer; transition: all 0.3s;
       display: inline-flex; align-items: center; gap: 6px;
     }
-    .btn-primary { background: #111; color: #fff; }
-    .btn-primary:hover { background: #333; }
-    .btn-success { background: #333; color: #fff; }
-    .btn-success:hover { background: #555; }
-    .btn-danger { background: #cc0000; color: #fff; }
-    .btn-danger:hover { background: #aa0000; }
-    .btn-secondary { background: #888; color: #fff; }
-    .btn-secondary:hover { background: #666; }
-    .btn-warning { background: #555; color: #fff; }
-    .btn-warning:hover { background: #777; }
+    .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #218838; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #545b62; }
+    .btn-warning { background: #ffc107; color: #212529; }
+    .btn-warning:hover { background: #e0a800; }
 
     /* 数据表格 */
-    .table-container { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+    .table-container { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
-    thead { background: #f5f5f5; }
+    thead { background: #f8f9fa; }
     th {
-      padding: 15px 20px; text-align: left; font-weight: 600; color: #111;
-      border-bottom: 2px solid #ddd; font-size: 14px;
+      padding: 15px 20px; text-align: left; font-weight: 600; color: #333;
+      border-bottom: 2px solid #dee2e6; font-size: 14px;
     }
     td {
-      padding: 15px 20px; border-bottom: 1px solid #eee;
-      color: #333; font-size: 14px;
+      padding: 15px 20px; border-bottom: 1px solid #dee2e6;
+      color: #555; font-size: 14px;
     }
     tbody tr { transition: background-color 0.2s; }
-    tbody tr:hover { background-color: #f9f9f9; }
+    tbody tr:hover { background-color: #f8f9fa; }
     tbody tr:last-child td { border-bottom: none; }
     .table-actions { display: flex; gap: 8px; }
     .btn-sm { padding: 6px 12px; font-size: 12px; }
-    .btn-edit { background: #333; color: #fff; }
-    .btn-edit:hover { background: #555; }
-    .btn-delete { background: #cc0000; color: #fff; }
-    .btn-delete:hover { background: #aa0000; }
+    .btn-edit { background: #ffc107; color: #212529; }
+    .btn-edit:hover { background: #e0a800; }
+    .btn-delete { background: #dc3545; color: white; }
+    .btn-delete:hover { background: #c82333; }
 
     /* 电影封面 */
-    .movie-cover { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; background: #ddd; }
+    .movie-cover { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; background: #e1e1e1; }
     .movie-info { display: flex; align-items: center; gap: 12px; }
-    .movie-title { font-weight: 500; color: #111; }
+    .movie-title { font-weight: 500; color: #333; }
     .movie-meta { font-size: 12px; color: #999; margin-top: 3px; }
 
     /* 标签 */
     .tag {
-      display: inline-block; padding: 3px 8px; background: #eee;
-      border-radius: 4px; font-size: 12px; margin: 2px; color: #333;
+      display: inline-block; padding: 3px 8px; background: #e9ecef;
+      border-radius: 4px; font-size: 12px; margin: 2px; color: #495057;
     }
 
-    /* 角色徽章 */
-    .badge {
-      display: inline-block; padding: 4px 10px; border-radius: 20px;
-      font-size: 12px; font-weight: 500;
+    /* 状态标签 */
+    .status-tag {
+      display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
     }
-    .badge-admin { background: #111; color: #fff; }
-    .badge-user { background: #e0e0e0; color: #333; }
+    .status-tag.active { background: #d4edda; color: #155724; }
+    .status-tag.inactive { background: #f8d7da; color: #721c24; }
+    .status-tag.pending { background: #fff3cd; color: #856404; }
+    .status-tag.approved { background: #d4edda; color: #155724; }
+    .status-tag.rejected { background: #f8d7da; color: #721c24; }
 
     /* 分页 */
     .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 20px; }
     .pagination button {
-      padding: 8px 12px; border: 1px solid #ccc; background: #fff;
-      border-radius: 4px; cursor: pointer; transition: all 0.3s; color: #333;
+      padding: 8px 12px; border: 1px solid #dee2e6; background: white;
+      border-radius: 4px; cursor: pointer; transition: all 0.3s;
     }
-    .pagination button:hover:not(:disabled) { background: #111; color: #fff; border-color: #111; }
-    .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination button:hover:not(:disabled) { background: #667eea; color: white; border-color: #667eea; }
+    .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
     .pagination span { color: #666; font-size: 14px; }
 
     /* 模态框 */
     .modal {
       display: none; position: fixed; top: 0; left: 0;
-      width: 100%; height: 100%; background: rgba(0,0,0,0.6);
+      width: 100%; height: 100%; background: rgba(0,0,0,0.5);
       z-index: 1000; justify-content: center; align-items: center;
     }
     .modal.active { display: flex; }
     .modal-content {
-      background: #fff; border-radius: 10px; width: 100%;
+      background: white; border-radius: 10px; width: 100%;
       max-width: 600px; max-height: 90vh; overflow-y: auto;
     }
     .modal-header {
-      padding: 20px; border-bottom: 1px solid #ddd;
+      padding: 20px; border-bottom: 1px solid #dee2e6;
       display: flex; justify-content: space-between; align-items: center;
     }
-    .modal-header h3 { font-size: 20px; color: #111; }
+    .modal-header h3 { font-size: 20px; color: #333; }
     .modal-close {
       background: none; border: none; font-size: 24px; color: #999;
       cursor: pointer; padding: 0; line-height: 1;
     }
-    .modal-close:hover { color: #111; }
+    .modal-close:hover { color: #333; }
     .modal-body { padding: 20px; }
     .modal-footer {
-      padding: 20px; border-top: 1px solid #ddd;
+      padding: 20px; border-top: 1px solid #dee2e6;
       display: flex; justify-content: flex-end; gap: 10px;
     }
     .form-group { margin-bottom: 20px; }
     .form-group label {
       display: block; margin-bottom: 8px; font-size: 14px;
-      font-weight: 500; color: #111;
+      font-weight: 500; color: #333;
     }
     .form-group input, .form-group textarea, .form-group select {
-      width: 100%; padding: 10px 15px; border: 2px solid #ddd;
+      width: 100%; padding: 10px 15px; border: 2px solid #e1e1e1;
       border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.3s;
     }
-    .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #111; }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #667eea; }
     .form-group textarea { min-height: 100px; resize: vertical; }
     .form-row { display: flex; gap: 15px; }
     .form-col { flex: 1; }
 
     /* 关联选择器 */
     .relation-selector {
-      border: 2px solid #ddd; border-radius: 6px;
+      border: 2px solid #e1e1e1; border-radius: 6px;
       padding: 15px; max-height: 200px; overflow-y: auto;
     }
     .relation-item {
       display: flex; align-items: center; padding: 8px 0;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid #f0f0f0;
     }
     .relation-item:last-child { border-bottom: none; }
     .relation-item input[type="checkbox"] { width: auto; margin-right: 10px; }
     .relation-item label { margin: 0; cursor: pointer; flex: 1; }
-    .relation-item .role-input { width: 120px; padding: 5px 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px; }
+    .relation-item .role-input { width: 120px; padding: 5px 8px; font-size: 12px; }
 
-    /* 偏好选择 */
-    .preferences { display: flex; flex-wrap: wrap; gap: 8px; }
-    .preference-item { display: flex; align-items: center; gap: 5px; }
-
-    /* 消息提示 - 保留红/绿用于重要提示 */
+    /* 消息提示 */
     .toast {
       position: fixed; top: 20px; right: 20px;
-      padding: 15px 25px; border-radius: 6px; color: #fff;
+      padding: 15px 25px; border-radius: 6px; color: white;
       font-weight: 500; display: none; z-index: 2000;
       animation: slideIn 0.3s ease;
     }
-    .toast.success { background: #111; display: block; }
-    .toast.error { background: #cc0000; display: block; }
+    .toast.success { background: #28a745; display: block; }
+    .toast.error { background: #dc3545; display: block; }
     @keyframes slideIn {
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
@@ -221,30 +219,29 @@
 
     /* 空状态 */
     .empty-state { text-align: center; padding: 60px 20px; color: #999; }
-    .empty-state svg { width: 80px; height: 80px; margin-bottom: 20px; opacity: 0.3; }
+    .empty-state svg { width: 80px; height: 80px; margin-bottom: 20px; opacity: 0.5; }
 
     /* 加载 */
     .loading { text-align: center; padding: 60px; color: #999; }
 
     /* 批量导入区域 */
     .import-area {
-      border: 2px dashed #ccc; border-radius: 8px;
+      border: 2px dashed #dee2e6; border-radius: 8px;
       padding: 40px; text-align: center; margin-bottom: 20px;
       transition: all 0.3s; cursor: pointer;
     }
-    .import-area:hover { border-color: #111; background: #f9f9f9; }
-    .import-area svg { width: 60px; height: 60px; color: #999; margin-bottom: 15px; }
-    .import-result { background: #f5f5f5; border-radius: 6px; padding: 15px; margin-top: 15px; }
-    .import-result h4 { font-size: 14px; margin-bottom: 10px; color: #111; }
+    .import-area:hover { border-color: #667eea; background: #f8f9ff; }
+    .import-area svg { width: 60px; height: 60px; color: #6c757d; margin-bottom: 15px; }
+    .import-result { background: #f8f9fa; border-radius: 6px; padding: 15px; margin-top: 15px; }
+    .import-result h4 { font-size: 14px; margin-bottom: 10px; color: #333; }
     .import-result ul { list-style: none; max-height: 150px; overflow-y: auto; }
-    .import-result li { font-size: 12px; padding: 5px 0; color: #cc0000; }
+    .import-result li { font-size: 12px; padding: 5px 0; color: #dc3545; }
 
     /* 统计卡片 */
-    .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-bottom: 30px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
     .stat-card {
-      background: #fff; border-radius: 10px; padding: 20px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      border: 1px solid #e0e0e0;
+      background: white; border-radius: 10px; padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
     .stat-card .stat-icon {
       width: 50px; height: 50px; border-radius: 10px;
@@ -252,24 +249,23 @@
       margin-bottom: 15px;
     }
     .stat-card .stat-icon svg { width: 24px; height: 24px; }
-    .stat-card .stat-value { font-size: 28px; font-weight: 700; color: #111; margin-bottom: 5px; }
-    .stat-card .stat-label { font-size: 14px; color: #888; }
-    .stat-icon.movies { background: #e8e8e8; color: #111; }
-    .stat-icon.tags { background: #d0d0d0; color: #111; }
-    .stat-icon.directors { background: #e0e0e0; color: #111; }
-    .stat-icon.actors { background: #d8d8d8; color: #111; }
-    .stat-icon.users { background: #e4e4e4; color: #111; }
+    .stat-card .stat-value { font-size: 28px; font-weight: 700; color: #333; margin-bottom: 5px; }
+    .stat-card .stat-label { font-size: 14px; color: #999; }
+    .stat-icon.movies { background: rgba(102,126,234,0.15); color: #667eea; }
+    .stat-icon.tags { background: rgba(40,167,69,0.15); color: #28a745; }
+    .stat-icon.directors { background: rgba(255,193,7,0.15); color: #ffc107; }
+    .stat-icon.actors { background: rgba(220,53,69,0.15); color: #dc3545; }
 
     /* 响应式 */
     @media (max-width: 1200px) {
-      .stats-grid { grid-template-columns: repeat(3, 1fr); }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 768px) {
       .sidebar { width: 60px; }
       .sidebar-header h1, .sidebar-header p, .nav-item span, .user-info, .sidebar-footer { display: none; }
       .sidebar-header { padding: 15px; text-align: center; }
       .nav-item { padding: 15px; justify-content: center; border-left: none; border-right: 3px solid transparent; }
-      .nav-item.active { border-right-color: #fff; border-left-color: transparent; }
+      .nav-item.active { border-right-color: white; border-left-color: transparent; }
       .main-content { margin-left: 60px; }
       .stats-grid { grid-template-columns: 1fr; }
     }
@@ -304,11 +300,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span>演员管理</span>
       </div>
-      <div class="nav-item" data-page="users" onclick="switchPage('users')">
+      <a class="nav-item" href="user-management.html" style="text-decoration:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
         <span>用户管理</span>
-      </div>
-      <a class="nav-item" href="admin-profile.html">
+      </a>
+      <a class="nav-item" href="admin-profile.html" style="text-decoration:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v6M9 14h6"/></svg>
         <span>个人设置</span>
       </a>
@@ -362,13 +358,6 @@
           </div>
           <div class="stat-value" id="statActors">0</div>
           <div class="stat-label">演员总数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon users">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          </div>
-          <div class="stat-value" id="statUsers">0</div>
-          <div class="stat-label">用户总数</div>
         </div>
       </div>
     </div>
@@ -516,42 +505,6 @@
         <div id="actorsEmpty" class="empty-state" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <p>暂无演员数据</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== 用户管理页 ==================== -->
-    <div class="page-content" id="page-users">
-      <div class="page-header">
-        <h2>用户管理</h2>
-        <p>管理系统用户账号与权限</p>
-      </div>
-      <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="userSearch" placeholder="搜索用户名...">
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-primary" onclick="openUserModal()">添加用户</button>
-        </div>
-      </div>
-      <div class="table-container">
-        <div id="usersLoading" class="loading">加载中...</div>
-        <table id="usersTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>用户名</th>
-              <th>邮箱</th>
-              <th>角色</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="usersTableBody"></tbody>
-        </table>
-        <div id="usersEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          <p>暂无用户数据</p>
         </div>
       </div>
     </div>
@@ -747,58 +700,6 @@
     </div>
   </div>
 
-  <!-- ==================== 用户 模态框 ==================== -->
-  <div class="modal" id="userModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="userModalTitle">添加用户</h3>
-        <button class="modal-close" onclick="closeModal('userModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="userForm">
-          <input type="hidden" id="userId">
-          <div class="form-group">
-            <label for="formUsername">用户名 *</label>
-            <input type="text" id="formUsername" placeholder="请输入用户名" required>
-          </div>
-          <div class="form-group">
-            <label for="formEmail">邮箱</label>
-            <input type="email" id="formEmail" placeholder="请输入邮箱">
-          </div>
-          <div class="form-group" id="passwordGroup">
-            <label for="formPassword">密码 *</label>
-            <input type="password" id="formPassword" placeholder="请输入密码">
-          </div>
-          <div class="form-group">
-            <label for="formRole">角色</label>
-            <select id="formRole">
-              <option value="2">普通用户</option>
-              <option value="1">管理员</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>电影偏好类型</label>
-            <div class="preferences">
-              <label class="preference-item"><input type="checkbox" value="科幻"> 科幻</label>
-              <label class="preference-item"><input type="checkbox" value="动作"> 动作</label>
-              <label class="preference-item"><input type="checkbox" value="剧情"> 剧情</label>
-              <label class="preference-item"><input type="checkbox" value="喜剧"> 喜剧</label>
-              <label class="preference-item"><input type="checkbox" value="爱情"> 爱情</label>
-              <label class="preference-item"><input type="checkbox" value="动画"> 动画</label>
-              <label class="preference-item"><input type="checkbox" value="悬疑"> 悬疑</label>
-              <label class="preference-item"><input type="checkbox" value="惊悚"> 惊悚</label>
-              <label class="preference-item"><input type="checkbox" value="纪录片"> 纪录片</label>
-            </div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('userModal')">取消</button>
-        <button class="btn btn-primary" onclick="saveUser()">保存</button>
-      </div>
-    </div>
-  </div>
-
   <!-- ==================== 删除确认 模态框 ==================== -->
   <div class="modal" id="deleteModal">
     <div class="modal-content" style="max-width:400px;">
@@ -821,31 +722,23 @@
 
   <script>
     // ==================== 全局配置 ====================
-    const ADMIN_API = `http://${window.location.hostname}:3000/api/admin`;
-    const USER_API = `http://${window.location.hostname}:3000/api`;
+    const API_BASE = `http://${window.location.hostname}:3000/api/admin`;
     let allTags = [];
     let allDirectors = [];
     let allActors = [];
-    let allUsers = [];
     let moviePage = 1;
     let moviePageSize = 20;
     let movieTotal = 0;
     let movieSearchKeyword = '';
     let importData = null;
-    let userModalMode = 'add';
-    let userEditId = null;
 
     // ==================== 登录检查 ====================
     function checkAuth() {
       const adminToken = localStorage.getItem('adminToken');
       const isLoggedIn = localStorage.getItem('isAdminLoggedIn');
       if (!adminToken || isLoggedIn !== 'true') {
-        // 也检查旧的用户管理登录状态
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
-        if (!currentUser || currentUser.role_id !== 1) {
-          window.location.href = 'admin-login.html';
-          return false;
-        }
+        window.location.href = 'admin-login.html';
+        return false;
       }
       // 显示管理员名称
       try {
@@ -853,12 +746,7 @@
         if (token.username) {
           document.getElementById('adminName').textContent = token.username;
         }
-      } catch(e) {
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
-        if (currentUser && currentUser.username) {
-          document.getElementById('adminName').textContent = currentUser.username;
-        }
-      }
+      } catch(e) {}
       return true;
     }
 
@@ -866,7 +754,6 @@
     function logout() {
       localStorage.removeItem('adminToken');
       localStorage.removeItem('isAdminLoggedIn');
-      localStorage.removeItem('currentUser');
       window.location.href = 'admin-login.html';
     }
 
@@ -880,19 +767,21 @@
 
     // ==================== 页面切换 ====================
     function switchPage(pageName) {
+      // 更新导航高亮
       document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === pageName);
       });
+      // 更新页面显示
       document.querySelectorAll('.page-content').forEach(page => {
         page.classList.toggle('active', page.id === `page-${pageName}`);
       });
+      // 加载对应数据
       switch(pageName) {
         case 'dashboard': loadDashboard(); break;
         case 'movies': loadMovies(); break;
         case 'tags': loadTags(); break;
         case 'directors': loadDirectors(); break;
         case 'actors': loadActors(); break;
-        case 'users': loadUsers(); break;
       }
     }
 
@@ -904,18 +793,16 @@
     // ==================== 数据概览 ====================
     async function loadDashboard() {
       try {
-        const [moviesRes, tagsRes, directorsRes, actorsRes, usersRes] = await Promise.all([
-          fetch(`${ADMIN_API}/movies?page=1&pageSize=1`).then(r => r.json()),
-          fetch(`${ADMIN_API}/tags`).then(r => r.json()),
-          fetch(`${ADMIN_API}/directors`).then(r => r.json()),
-          fetch(`${ADMIN_API}/actors`).then(r => r.json()),
-          fetch(`${USER_API}/users`).then(r => r.json())
+        const [moviesRes, tagsRes, directorsRes, actorsRes] = await Promise.all([
+          fetch(`${API_BASE}/movies?page=1&pageSize=1`).then(r => r.json()),
+          fetch(`${API_BASE}/tags`).then(r => r.json()),
+          fetch(`${API_BASE}/directors`).then(r => r.json()),
+          fetch(`${API_BASE}/actors`).then(r => r.json())
         ]);
         document.getElementById('statMovies').textContent = moviesRes.success ? moviesRes.data.total : 0;
         document.getElementById('statTags').textContent = tagsRes.success ? tagsRes.data.length : 0;
         document.getElementById('statDirectors').textContent = directorsRes.success ? directorsRes.data.length : 0;
         document.getElementById('statActors').textContent = actorsRes.success ? actorsRes.data.length : 0;
-        document.getElementById('statUsers').textContent = usersRes.success ? usersRes.data.length : 0;
       } catch (err) {
         console.error('加载概览数据失败:', err);
         showToast('加载概览数据失败', 'error');
@@ -935,7 +822,7 @@
       pagination.style.display = 'none';
 
       try {
-        const url = `${ADMIN_API}/movies?page=${moviePage}&pageSize=${moviePageSize}${movieSearchKeyword ? '&search=' + encodeURIComponent(movieSearchKeyword) : ''}`;
+        const url = `${API_BASE}/movies?page=${moviePage}&pageSize=${moviePageSize}${movieSearchKeyword ? '&search=' + encodeURIComponent(movieSearchKeyword) : ''}`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -1006,7 +893,10 @@
       const pagination = document.getElementById('moviesPagination');
       const totalPages = Math.ceil(movieTotal / moviePageSize);
 
-      if (totalPages <= 1) { pagination.style.display = 'none'; return; }
+      if (totalPages <= 1) {
+        pagination.style.display = 'none';
+        return;
+      }
 
       pagination.style.display = 'flex';
       pagination.innerHTML = '';
@@ -1034,6 +924,7 @@
       loadMovies();
     }
 
+    // 电影搜索回车
     document.getElementById('movieSearch').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') searchMovies();
     });
@@ -1048,26 +939,31 @@
       document.getElementById('movieReleaseYear').value = movieData ? (movieData.release_year || '') : '';
       document.getElementById('movieDuration').value = movieData ? (movieData.duration || '') : '';
 
+      // 加载关联选择器
       await loadRelationSelectors(movieData);
+
       document.getElementById('movieModal').classList.add('active');
     }
 
     async function loadRelationSelectors(movieData = null) {
       try {
+        // 并行加载标签、导演、演员
         const [tagsRes, directorsRes, actorsRes] = await Promise.all([
-          fetch(`${ADMIN_API}/tags`).then(r => r.json()),
-          fetch(`${ADMIN_API}/directors`).then(r => r.json()),
-          fetch(`${ADMIN_API}/actors`).then(r => r.json())
+          fetch(`${API_BASE}/tags`).then(r => r.json()),
+          fetch(`${API_BASE}/directors`).then(r => r.json()),
+          fetch(`${API_BASE}/actors`).then(r => r.json())
         ]);
 
         allTags = tagsRes.success ? tagsRes.data : [];
         allDirectors = directorsRes.success ? directorsRes.data : [];
         allActors = actorsRes.success ? actorsRes.data : [];
 
+        // 当前电影的关联
         const movieTags = movieData && movieData.tags ? movieData.tags.map(t => t.id) : [];
         const movieDirectors = movieData && movieData.directors ? movieData.directors.map(d => d.id) : [];
         const movieActors = movieData && movieData.actors ? movieData.actors : [];
 
+        // 渲染标签选择器
         const tagSelector = document.getElementById('movieTagSelector');
         tagSelector.innerHTML = allTags.length === 0
           ? '<p style="color:#999;font-size:13px;">暂无标签，请先添加标签</p>'
@@ -1078,6 +974,7 @@
               </div>
             `).join('');
 
+        // 渲染导演选择器
         const directorSelector = document.getElementById('movieDirectorSelector');
         directorSelector.innerHTML = allDirectors.length === 0
           ? '<p style="color:#999;font-size:13px;">暂无导演，请先添加导演</p>'
@@ -1088,6 +985,7 @@
               </div>
             `).join('');
 
+        // 渲染演员选择器（带角色输入）
         const actorSelector = document.getElementById('movieActorSelector');
         actorSelector.innerHTML = allActors.length === 0
           ? '<p style="color:#999;font-size:13px;">暂无演员，请先添加演员</p>'
@@ -1110,10 +1008,13 @@
 
     async function editMovie(id) {
       try {
-        const res = await fetch(`${ADMIN_API}/movies/${id}`);
+        const res = await fetch(`${API_BASE}/movies/${id}`);
         const data = await res.json();
-        if (data.success) { openMovieModal(data.data); }
-        else { showToast(data.message || '获取电影详情失败', 'error'); }
+        if (data.success) {
+          openMovieModal(data.data);
+        } else {
+          showToast(data.message || '获取电影详情失败', 'error');
+        }
       } catch (err) {
         console.error('获取电影详情失败:', err);
         showToast('网络错误', 'error');
@@ -1123,21 +1024,30 @@
     async function saveMovie() {
       const id = document.getElementById('movieId').value;
       const title = document.getElementById('movieTitle').value.trim();
-      if (!title) { showToast('电影标题不能为空', 'error'); return; }
+      if (!title) {
+        showToast('电影标题不能为空', 'error');
+        return;
+      }
 
+      // 收集关联数据
       const selectedTags = [];
       document.querySelectorAll('#movieTagSelector input[type="checkbox"]:checked').forEach(cb => {
         selectedTags.push(parseInt(cb.value));
       });
+
       const selectedDirectors = [];
       document.querySelectorAll('#movieDirectorSelector input[type="checkbox"]:checked').forEach(cb => {
         selectedDirectors.push(parseInt(cb.value));
       });
+
       const selectedActors = [];
       document.querySelectorAll('#movieActorSelector input[type="checkbox"]:checked').forEach(cb => {
         const actorId = parseInt(cb.value);
         const roleInput = document.getElementById(`ma_role_${actorId}`);
-        selectedActors.push({ id: actorId, role: roleInput ? roleInput.value.trim() : '' });
+        selectedActors.push({
+          id: actorId,
+          role: roleInput ? roleInput.value.trim() : ''
+        });
       });
 
       const body = {
@@ -1153,10 +1063,15 @@
       };
 
       try {
-        const url = id ? `${ADMIN_API}/movies/${id}` : `${ADMIN_API}/movies`;
+        const url = id ? `${API_BASE}/movies/${id}` : `${API_BASE}/movies`;
         const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
         const data = await res.json();
+
         if (data.success) {
           showToast(data.message || (id ? '电影更新成功' : '电影创建成功'), 'success');
           closeModal('movieModal');
@@ -1183,11 +1098,15 @@
     function handleImportFile(event) {
       const file = event.target.files[0];
       if (!file) return;
+
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
           const data = JSON.parse(e.target.result);
-          if (!Array.isArray(data)) { showToast('JSON格式错误：需要一个数组', 'error'); return; }
+          if (!Array.isArray(data)) {
+            showToast('JSON格式错误：需要一个数组', 'error');
+            return;
+          }
           importData = data;
           document.getElementById('importPreview').style.display = 'block';
           document.getElementById('importFileCount').textContent = `已解析 ${data.length} 条电影数据`;
@@ -1201,23 +1120,35 @@
     }
 
     async function doImport() {
-      if (!importData || importData.length === 0) { showToast('没有可导入的数据', 'error'); return; }
+      if (!importData || importData.length === 0) {
+        showToast('没有可导入的数据', 'error');
+        return;
+      }
+
       document.getElementById('importBtn').disabled = true;
       document.getElementById('importBtn').textContent = '导入中...';
 
       try {
-        const res = await fetch(`${ADMIN_API}/movies/batch-import`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const res = await fetch(`${API_BASE}/movies/batch-import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ movies: importData })
         });
         const data = await res.json();
+
         const resultDiv = document.getElementById('importResult');
         resultDiv.style.display = 'block';
         document.getElementById('importResultMsg').textContent = data.message || '导入完成';
+
         if (data.data && data.data.errors && data.data.errors.length > 0) {
-          document.getElementById('importErrors').innerHTML = data.data.errors.map(err => `<li>${escapeHtml(err)}</li>`).join('');
+          const errorsList = document.getElementById('importErrors');
+          errorsList.innerHTML = data.data.errors.map(err => `<li>${escapeHtml(err)}</li>`).join('');
         }
-        if (data.success) { showToast('批量导入完成', 'success'); loadMovies(); }
+
+        if (data.success) {
+          showToast('批量导入完成', 'success');
+          loadMovies();
+        }
       } catch (err) {
         console.error('批量导入失败:', err);
         showToast('网络错误，导入失败', 'error');
@@ -1232,17 +1163,27 @@
       const loading = document.getElementById('tagsLoading');
       const table = document.getElementById('tagsTable');
       const empty = document.getElementById('tagsEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
+
+      loading.style.display = 'block';
+      table.style.display = 'none';
+      empty.style.display = 'none';
 
       try {
-        const res = await fetch(`${ADMIN_API}/tags`);
+        const res = await fetch(`${API_BASE}/tags`);
         const data = await res.json();
-        if (data.success) { allTags = data.data; renderTags(data.data); }
-        else { showToast(data.message || '获取标签列表失败', 'error'); }
+
+        if (data.success) {
+          allTags = data.data;
+          renderTags(data.data);
+        } else {
+          showToast(data.message || '获取标签列表失败', 'error');
+        }
       } catch (err) {
         console.error('加载标签失败:', err);
         showToast('网络错误，加载标签失败', 'error');
-      } finally { loading.style.display = 'none'; }
+      } finally {
+        loading.style.display = 'none';
+      }
     }
 
     function renderTags(tags) {
@@ -1250,11 +1191,19 @@
       const empty = document.getElementById('tagsEmpty');
       const tbody = document.getElementById('tagsTableBody');
       const searchVal = document.getElementById('tagSearch').value.trim().toLowerCase();
+
       const filtered = searchVal ? tags.filter(t => t.name.toLowerCase().includes(searchVal)) : tags;
 
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
+      if (filtered.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
 
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
+      table.style.display = 'table';
+      empty.style.display = 'none';
+      tbody.innerHTML = '';
+
       filtered.forEach(tag => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -1272,7 +1221,10 @@
       });
     }
 
-    document.getElementById('tagSearch').addEventListener('input', () => renderTags(allTags));
+    // 标签搜索
+    document.getElementById('tagSearch').addEventListener('input', () => {
+      renderTags(allTags);
+    });
 
     function openTagModal(tagData = null) {
       document.getElementById('tagModalTitle').textContent = tagData ? '编辑标签' : '添加标签';
@@ -1281,21 +1233,39 @@
       document.getElementById('tagModal').classList.add('active');
     }
 
-    function editTag(id, name) { openTagModal({ id, name }); }
+    function editTag(id, name) {
+      openTagModal({ id, name });
+    }
 
     async function saveTag() {
       const id = document.getElementById('tagId').value;
       const name = document.getElementById('tagName').value.trim();
-      if (!name) { showToast('标签名称不能为空', 'error'); return; }
+      if (!name) {
+        showToast('标签名称不能为空', 'error');
+        return;
+      }
 
       try {
-        const url = id ? `${ADMIN_API}/tags/${id}` : `${ADMIN_API}/tags`;
+        const url = id ? `${API_BASE}/tags/${id}` : `${API_BASE}/tags`;
         const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
         const data = await res.json();
-        if (data.success) { showToast(data.message || (id ? '标签更新成功' : '标签创建成功'), 'success'); closeModal('tagModal'); loadTags(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-      } catch (err) { console.error('保存标签失败:', err); showToast('网络错误，保存失败', 'error'); }
+
+        if (data.success) {
+          showToast(data.message || (id ? '标签更新成功' : '标签创建成功'), 'success');
+          closeModal('tagModal');
+          loadTags();
+        } else {
+          showToast(data.message || '操作失败', 'error');
+        }
+      } catch (err) {
+        console.error('保存标签失败:', err);
+        showToast('网络错误，保存失败', 'error');
+      }
     }
 
     // ==================== 导演管理 ====================
@@ -1303,17 +1273,27 @@
       const loading = document.getElementById('directorsLoading');
       const table = document.getElementById('directorsTable');
       const empty = document.getElementById('directorsEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
+
+      loading.style.display = 'block';
+      table.style.display = 'none';
+      empty.style.display = 'none';
 
       try {
-        const res = await fetch(`${ADMIN_API}/directors`);
+        const res = await fetch(`${API_BASE}/directors`);
         const data = await res.json();
-        if (data.success) { allDirectors = data.data; renderDirectors(data.data); }
-        else { showToast(data.message || '获取导演列表失败', 'error'); }
+
+        if (data.success) {
+          allDirectors = data.data;
+          renderDirectors(data.data);
+        } else {
+          showToast(data.message || '获取导演列表失败', 'error');
+        }
       } catch (err) {
         console.error('加载导演失败:', err);
         showToast('网络错误，加载导演失败', 'error');
-      } finally { loading.style.display = 'none'; }
+      } finally {
+        loading.style.display = 'none';
+      }
     }
 
     function renderDirectors(directors) {
@@ -1321,11 +1301,19 @@
       const empty = document.getElementById('directorsEmpty');
       const tbody = document.getElementById('directorsTableBody');
       const searchVal = document.getElementById('directorSearch').value.trim().toLowerCase();
+
       const filtered = searchVal ? directors.filter(d => d.name.toLowerCase().includes(searchVal)) : directors;
 
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
+      if (filtered.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
 
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
+      table.style.display = 'table';
+      empty.style.display = 'none';
+      tbody.innerHTML = '';
+
       filtered.forEach(director => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -1345,7 +1333,10 @@
       });
     }
 
-    document.getElementById('directorSearch').addEventListener('input', () => renderDirectors(allDirectors));
+    // 导演搜索
+    document.getElementById('directorSearch').addEventListener('input', () => {
+      renderDirectors(allDirectors);
+    });
 
     async function openDirectorModal(directorData = null) {
       document.getElementById('directorModalTitle').textContent = directorData ? '编辑导演' : '添加导演';
@@ -1357,14 +1348,24 @@
     }
 
     async function editDirector(id) {
-      const director = allDirectors.find(d => d.id === id);
-      if (director) openDirectorModal(director);
+      try {
+        const director = allDirectors.find(d => d.id === id);
+        if (director) {
+          openDirectorModal(director);
+        }
+      } catch (err) {
+        console.error('获取导演详情失败:', err);
+        showToast('获取导演详情失败', 'error');
+      }
     }
 
     async function saveDirector() {
       const id = document.getElementById('directorId').value;
       const name = document.getElementById('directorName').value.trim();
-      if (!name) { showToast('导演名称不能为空', 'error'); return; }
+      if (!name) {
+        showToast('导演名称不能为空', 'error');
+        return;
+      }
 
       const body = {
         name,
@@ -1373,13 +1374,26 @@
       };
 
       try {
-        const url = id ? `${ADMIN_API}/directors/${id}` : `${ADMIN_API}/directors`;
+        const url = id ? `${API_BASE}/directors/${id}` : `${API_BASE}/directors`;
         const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
         const data = await res.json();
-        if (data.success) { showToast(data.message || (id ? '导演更新成功' : '导演创建成功'), 'success'); closeModal('directorModal'); loadDirectors(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-      } catch (err) { console.error('保存导演失败:', err); showToast('网络错误，保存失败', 'error'); }
+
+        if (data.success) {
+          showToast(data.message || (id ? '导演更新成功' : '导演创建成功'), 'success');
+          closeModal('directorModal');
+          loadDirectors();
+        } else {
+          showToast(data.message || '操作失败', 'error');
+        }
+      } catch (err) {
+        console.error('保存导演失败:', err);
+        showToast('网络错误，保存失败', 'error');
+      }
     }
 
     // ==================== 演员管理 ====================
@@ -1387,17 +1401,27 @@
       const loading = document.getElementById('actorsLoading');
       const table = document.getElementById('actorsTable');
       const empty = document.getElementById('actorsEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
+
+      loading.style.display = 'block';
+      table.style.display = 'none';
+      empty.style.display = 'none';
 
       try {
-        const res = await fetch(`${ADMIN_API}/actors`);
+        const res = await fetch(`${API_BASE}/actors`);
         const data = await res.json();
-        if (data.success) { allActors = data.data; renderActors(data.data); }
-        else { showToast(data.message || '获取演员列表失败', 'error'); }
+
+        if (data.success) {
+          allActors = data.data;
+          renderActors(data.data);
+        } else {
+          showToast(data.message || '获取演员列表失败', 'error');
+        }
       } catch (err) {
         console.error('加载演员失败:', err);
         showToast('网络错误，加载演员失败', 'error');
-      } finally { loading.style.display = 'none'; }
+      } finally {
+        loading.style.display = 'none';
+      }
     }
 
     function renderActors(actors) {
@@ -1405,11 +1429,19 @@
       const empty = document.getElementById('actorsEmpty');
       const tbody = document.getElementById('actorsTableBody');
       const searchVal = document.getElementById('actorSearch').value.trim().toLowerCase();
+
       const filtered = searchVal ? actors.filter(a => a.name.toLowerCase().includes(searchVal)) : actors;
 
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
+      if (filtered.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
 
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
+      table.style.display = 'table';
+      empty.style.display = 'none';
+      tbody.innerHTML = '';
+
       filtered.forEach(actor => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -1429,7 +1461,10 @@
       });
     }
 
-    document.getElementById('actorSearch').addEventListener('input', () => renderActors(allActors));
+    // 演员搜索
+    document.getElementById('actorSearch').addEventListener('input', () => {
+      renderActors(allActors);
+    });
 
     async function openActorModal(actorData = null) {
       document.getElementById('actorModalTitle').textContent = actorData ? '编辑演员' : '添加演员';
@@ -1441,14 +1476,24 @@
     }
 
     async function editActor(id) {
-      const actor = allActors.find(a => a.id === id);
-      if (actor) openActorModal(actor);
+      try {
+        const actor = allActors.find(a => a.id === id);
+        if (actor) {
+          openActorModal(actor);
+        }
+      } catch (err) {
+        console.error('获取演员详情失败:', err);
+        showToast('获取演员详情失败', 'error');
+      }
     }
 
     async function saveActor() {
       const id = document.getElementById('actorId').value;
       const name = document.getElementById('actorName').value.trim();
-      if (!name) { showToast('演员名称不能为空', 'error'); return; }
+      if (!name) {
+        showToast('演员名称不能为空', 'error');
+        return;
+      }
 
       const body = {
         name,
@@ -1457,151 +1502,24 @@
       };
 
       try {
-        const url = id ? `${ADMIN_API}/actors/${id}` : `${ADMIN_API}/actors`;
+        const url = id ? `${API_BASE}/actors/${id}` : `${API_BASE}/actors`;
         const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const data = await res.json();
-        if (data.success) { showToast(data.message || (id ? '演员更新成功' : '演员创建成功'), 'success'); closeModal('actorModal'); loadActors(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-      } catch (err) { console.error('保存演员失败:', err); showToast('网络错误，保存失败', 'error'); }
-    }
-
-    // ==================== 用户管理 ====================
-    async function loadUsers() {
-      const loading = document.getElementById('usersLoading');
-      const table = document.getElementById('usersTable');
-      const empty = document.getElementById('usersEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
-
-      try {
-        const res = await fetch(`${USER_API}/users`);
-        const data = await res.json();
-        if (data.success) { allUsers = data.data; renderUsers(data.data); }
-        else { showToast(data.message || '获取用户列表失败', 'error'); }
-      } catch (err) {
-        console.error('加载用户失败:', err);
-        showToast('网络错误，加载用户失败', 'error');
-      } finally { loading.style.display = 'none'; }
-    }
-
-    function renderUsers(users) {
-      const table = document.getElementById('usersTable');
-      const empty = document.getElementById('usersEmpty');
-      const tbody = document.getElementById('usersTableBody');
-      const searchVal = document.getElementById('userSearch').value.trim().toLowerCase();
-      const filtered = searchVal ? users.filter(u => u.username.toLowerCase().includes(searchVal)) : users;
-
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
-
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
-      filtered.forEach(user => {
-        const row = document.createElement('tr');
-        const roleBadge = user.role_id === 1
-          ? '<span class="badge badge-admin">管理员</span>'
-          : '<span class="badge badge-user">普通用户</span>';
-
-        row.innerHTML = `
-          <td>${user.id}</td>
-          <td>${escapeHtml(user.username)}</td>
-          <td>${user.email || '-'}</td>
-          <td>${roleBadge}</td>
-          <td>${user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-'}</td>
-          <td>
-            <div class="table-actions">
-              ${user.role_id === 1
-                ? `<button class="btn btn-sm btn-edit" onclick="changeRole(${user.id}, 2)">降级为用户</button>`
-                : `<button class="btn btn-sm btn-success" onclick="changeRole(${user.id}, 1)">升级为管理员</button>`
-              }
-              <button class="btn btn-sm btn-delete" onclick="confirmDelete('user', ${user.id}, '${escapeHtml(user.username)}')">删除</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    document.getElementById('userSearch').addEventListener('input', () => renderUsers(allUsers));
-
-    async function changeRole(userId, newRoleId) {
-      const user = allUsers.find(u => u.id === userId);
-      const action = newRoleId === 1 ? '升级' : '降级';
-      if (!confirm(`确定要将用户 "${user.username}" ${action}为${newRoleId === 1 ? '管理员' : '普通用户'}吗？`)) return;
-
-      try {
-        const res = await fetch(`${USER_API}/users/${userId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role_id: newRoleId })
-        });
-        const data = await res.json();
-        if (data.success) { showToast(data.message, 'success'); loadUsers(); }
-        else { showToast(data.message, 'error'); }
-      } catch (err) {
-        console.error('更改角色失败:', err);
-        showToast('网络错误，更改角色失败', 'error');
-      }
-    }
-
-    function openUserModal(mode = 'add', userData = null) {
-      userModalMode = mode;
-      userEditId = userData ? userData.id : null;
-      document.getElementById('userModalTitle').textContent = mode === 'edit' ? '编辑用户' : '添加用户';
-      document.getElementById('userId').value = userData ? userData.id : '';
-      document.getElementById('formUsername').value = userData ? userData.username : '';
-      document.getElementById('formEmail').value = userData ? (userData.email || '') : '';
-      document.getElementById('formPassword').value = '';
-      document.getElementById('formRole').value = userData ? (userData.role_id === 1 ? '1' : '2') : '2';
-
-      if (mode === 'edit') {
-        document.getElementById('passwordGroup').style.display = 'none';
-        document.getElementById('formUsername').disabled = true;
-      } else {
-        document.getElementById('passwordGroup').style.display = 'block';
-        document.getElementById('formUsername').disabled = false;
-      }
-
-      document.getElementById('userModal').classList.add('active');
-    }
-
-    async function saveUser() {
-      const username = document.getElementById('formUsername').value.trim();
-      const email = document.getElementById('formEmail').value.trim();
-      const password = document.getElementById('formPassword').value;
-      const role_id = parseInt(document.getElementById('formRole').value);
-
-      if (userModalMode === 'add' && (!username || !password)) {
-        showToast('用户名和密码不能为空', 'error');
-        return;
-      }
-
-      try {
-        let url, method, body;
-        if (userModalMode === 'edit') {
-          url = `${USER_API}/users/${userEditId}`;
-          method = 'PUT';
-          body = { email, role_id };
-          if (password) body.password = password;
-        } else {
-          url = `${USER_API}/users`;
-          method = 'POST';
-          body = { username, email, password, role_id };
-        }
-
         const res = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
         const data = await res.json();
+
         if (data.success) {
-          showToast(data.message, 'success');
-          closeModal('userModal');
-          loadUsers();
+          showToast(data.message || (id ? '演员更新成功' : '演员创建成功'), 'success');
+          closeModal('actorModal');
+          loadActors();
         } else {
-          showToast(data.message, 'error');
+          showToast(data.message || '操作失败', 'error');
         }
       } catch (err) {
-        console.error('保存用户失败:', err);
+        console.error('保存演员失败:', err);
         showToast('网络错误，保存失败', 'error');
       }
     }
@@ -1614,23 +1532,19 @@
       const confirmBtn = document.getElementById('confirmDeleteBtn');
       confirmBtn.onclick = async () => {
         try {
-          let url;
-          if (type === 'user') {
-            url = `${USER_API}/users/${id}`;
-          } else {
-            url = `${ADMIN_API}/${type}s/${id}`;
-          }
+          const url = `${API_BASE}/${type}s/${id}`;
           const res = await fetch(url, { method: 'DELETE' });
           const data = await res.json();
+
           if (data.success) {
             showToast(data.message || '删除成功', 'success');
             closeModal('deleteModal');
+            // 刷新对应列表
             switch(type) {
               case 'movie': loadMovies(); break;
               case 'tag': loadTags(); break;
               case 'director': loadDirectors(); break;
               case 'actor': loadActors(); break;
-              case 'user': loadUsers(); break;
             }
           } else {
             showToast(data.message || '删除失败', 'error');
@@ -1653,7 +1567,8 @@
     // ==================== 页面初始化 ====================
     document.addEventListener('DOMContentLoaded', () => {
       if (!checkAuth()) return;
-      loadDashboard();
+      // 已合并到 user-management.html，自动跳转
+      window.location.href = 'user-management.html';
     });
   </script>
 </body>

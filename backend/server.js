@@ -7,6 +7,7 @@ const { query } = require('./src/config/db');
 const usersRouter = require('./src/routes/users');
 const moviesRouter = require('./src/routes/movies');
 const transcodeRouter = require('./src/routes/transcode');
+const adminRouter = require('./src/routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -93,6 +94,8 @@ app.use('/api/users', usersRouter);
 app.use('/api/movies', moviesRouter);
 // 转码路由
 app.use('/api/transcode', transcodeRouter);
+// 管理员路由
+app.use('/api/admin', adminRouter);
 
 // 用户注册接口 - 第一个注册用户自动成为管理员
 app.post('/api/register', async (req, res) => {

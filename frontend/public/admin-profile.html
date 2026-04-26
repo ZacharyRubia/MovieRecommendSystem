@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人设置 - 电影推荐系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* 侧边栏 - 纯黑 */
+    .sidebar {
+      width: 250px;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      left: 0; top: 0;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+      z-index: 100;
+    }
+    .sidebar-header { padding: 30px 20px; border-bottom: 1px solid #333; }
+    .sidebar-header h1 { font-size: 20px; font-weight: 600; }
+    .sidebar-header p { font-size: 12px; opacity: 0.5; margin-top: 5px; }
+    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; }
+    .nav-item {
+      display: flex; align-items: center; padding: 15px 25px;
+      color: #888; cursor: pointer; transition: all 0.3s;
+      border-left: 3px solid transparent; text-decoration: none;
+    }
+    .nav-item:hover { background: #222; color: #fff; }
+    .nav-item.active { background: #1a1a1a; color: #fff; border-left-color: #fff; }
+    .nav-item svg { width: 20px; height: 20px; margin-right: 12px; flex-shrink: 0; }
+    .nav-item span { font-size: 14px; font-weight: 500; }
+    .sidebar-footer { padding: 20px; border-top: 1px solid #333; }
+    .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .user-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: #333;
+      display: flex; align-items: center; justify-content: center; font-weight: 600; color: #fff;
+    }
+    .user-details p { font-size: 14px; font-weight: 500; }
+    .user-details small { font-size: 11px; opacity: 0.5; }
+    .btn-logout {
+      width: 100%; padding: 10px;
+      background: #222;
+      border: 1px solid #444;
+      color: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;
+    }
+    .btn-logout:hover { background: #333; border-color: #666; }
+
+    /* 主内容区 */
+    .main-content { flex: 1; margin-left: 250px; padding: 30px; max-width: 800px; }
+    .page-header { margin-bottom: 30px; }
+    .page-header h2 { font-size: 28px; color: #111; margin-bottom: 5px; }
+    .page-header p { color: #666; font-size: 14px; }
+
+    /* 个人信息卡片 */
+    .profile-card {
+      background: #fff; border-radius: 10px; padding: 30px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 25px; border: 1px solid #e0e0e0;
+    }
+    .profile-card h3 {
+      font-size: 18px; color: #111; margin-bottom: 25px;
+      padding-bottom: 15px; border-bottom: 1px solid #eee;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .profile-card h3 svg { width: 22px; height: 22px; }
+
+    /* 头像区域 */
+    .avatar-section {
+      display: flex; align-items: center; gap: 25px;
+      margin-bottom: 30px; padding-bottom: 25px; border-bottom: 1px solid #eee;
+    }
+    .avatar-large {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: #ddd; display: flex; align-items: center; justify-content: center;
+      font-size: 32px; font-weight: 700; color: #333;
+      flex-shrink: 0; overflow: hidden;
+    }
+    .avatar-large img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+    .avatar-info h4 { font-size: 16px; color: #111; margin-bottom: 5px; }
+    .avatar-info p { font-size: 13px; color: #888; margin-bottom: 10px; }
+    .avatar-url-input { display: flex; gap: 10px; align-items: center; }
+    .avatar-url-input input {
+      flex: 1; padding: 8px 12px; border: 2px solid #ddd;
+      border-radius: 6px; font-size: 13px; outline: none; transition: border-color 0.3s;
+    }
+    .avatar-url-input input:focus { border-color: #111; }
+
+    /* 表单 */
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block; font-size: 14px; font-weight: 600;
+      color: #333; margin-bottom: 8px;
+    }
+    .form-group input {
+      width: 100%; padding: 12px 15px; border: 2px solid #ddd;
+      border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.3s;
+      background: #fff;
+    }
+    .form-group input:focus { border-color: #111; }
+    .form-group input:read-only { background: #f5f5f5; color: #888; cursor: not-allowed; }
+    .form-group .hint { font-size: 12px; color: #999; margin-top: 5px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+    /* 按钮 */
+    .btn {
+      padding: 10px 24px; border: none; border-radius: 6px;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s;
+    }
+    .btn-primary { background: #111; color: #fff; }
+    .btn-primary:hover { background: #333; }
+    .btn-secondary { background: #fff; color: #111; border: 2px solid #ddd; }
+    .btn-secondary:hover { border-color: #111; }
+    .btn-group { display: flex; gap: 12px; margin-top: 10px; }
+
+    /* 密码强度指示器 */
+    .password-strength { display: flex; gap: 5px; margin-top: 8px; }
+    .strength-bar {
+      flex: 1; height: 4px; border-radius: 2px; background: #ddd;
+      transition: background 0.3s;
+    }
+    .strength-bar.weak { background: #999; }
+    .strength-bar.medium { background: #666; }
+    .strength-bar.strong { background: #111; }
+    .strength-text { font-size: 12px; color: #888; margin-top: 4px; }
+
+    /* 消息提示 */
+    .toast {
+      position: fixed; top: 20px; right: 20px;
+      padding: 15px 25px; border-radius: 6px; color: #fff;
+      font-weight: 500; display: none; z-index: 2000;
+      animation: slideIn 0.3s ease;
+    }
+    .toast.success { background: #111; display: block; }
+    .toast.error { background: #cc0000; display: block; }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* 信息展示行 */
+    .info-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid #f0f0f0;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { font-size: 14px; color: #888; }
+    .info-value { font-size: 14px; color: #111; font-weight: 500; }
+
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .sidebar { width: 60px; }
+      .sidebar-header h1, .sidebar-header p, .nav-item span, .user-info, .sidebar-footer { display: none; }
+      .sidebar-header { padding: 15px; text-align: center; }
+      .nav-item { padding: 15px; justify-content: center; border-left: none; border-right: 3px solid transparent; }
+      .nav-item.active { border-right-color: #fff; border-left-color: transparent; }
+      .main-content { margin-left: 60px; padding: 20px; }
+      .form-row { grid-template-columns: 1fr; }
+      .avatar-section { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>🎬 电影管理系统</h1>
+      <p>Movie Recommend Admin</p>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="user-management.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span>数据概览</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=movies">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg>
+        <span>电影管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=tags">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        <span>标签管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=directors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        <span>导演管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=actors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>演员管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=users">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        <span>用户管理</span>
+      </a>
+      <a class="nav-item active" href="admin-profile.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v6M9 14h6"/></svg>
+        <span>个人设置</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="sidebarAvatar">管</div>
+        <div class="user-details">
+          <p id="adminName">管理员</p>
+          <small>超级管理员</small>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="logout()">退出登录</button>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main-content">
+    <div class="page-header">
+      <h2>个人设置</h2>
+      <p>管理您的账户信息和安全设置</p>
+    </div>
+
+    <!-- 个人信息卡片 -->
+    <div class="profile-card">
+      <h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        基本信息
+      </h3>
+
+      <!-- 头像 -->
+      <div class="avatar-section">
+        <div class="avatar-large" id="profileAvatar">管</div>
+        <div class="avatar-info">
+          <h4 id="profileDisplayName">管理员</h4>
+          <p>超级管理员</p>
+        </div>
+      </div>
+
+      <!-- 只读信息 -->
+      <div class="info-row">
+        <span class="info-label">用户名</span>
+        <span class="info-value" id="infoUsername">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">角色</span>
+        <span class="info-value">超级管理员</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">注册时间</span>
+        <span class="info-value" id="infoCreatedAt">-</span>
+      </div>
+    </div>
+
+    <!-- 编辑信息卡片 -->
+    <div class="profile-card">
+      <h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        编辑资料
+      </h3>
+
+      <div class="form-group">
+        <label>邮箱地址</label>
+        <input type="email" id="editEmail" placeholder="请输入邮箱地址">
+        <div class="hint">用于接收系统通知和找回密码</div>
+      </div>
+
+      <div class="form-group">
+        <label>头像链接</label>
+        <input type="url" id="editAvatarUrl" placeholder="请输入头像图片URL">
+        <div class="hint">支持 JPG、PNG 格式的图片链接</div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="saveProfile()">保存修改</button>
+        <button class="btn btn-secondary" onclick="loadProfile()">重置</button>
+      </div>
+    </div>
+
+    <!-- 修改密码卡片 -->
+    <div class="profile-card">
+      <h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        修改密码
+      </h3>
+
+      <div class="form-group">
+        <label>当前密码</label>
+        <input type="password" id="oldPassword" placeholder="请输入当前密码">
+      </div>
+
+      <div class="form-group">
+        <label>新密码</label>
+        <input type="password" id="newPassword" placeholder="请输入新密码（至少6位）" oninput="checkPasswordStrength()">
+        <div class="password-strength">
+          <div class="strength-bar" id="str1"></div>
+          <div class="strength-bar" id="str2"></div>
+          <div class="strength-bar" id="str3"></div>
+          <div class="strength-bar" id="str4"></div>
+        </div>
+        <div class="strength-text" id="strengthText"></div>
+      </div>
+
+      <div class="form-group">
+        <label>确认新密码</label>
+        <input type="password" id="confirmPassword" placeholder="请再次输入新密码">
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="changePassword()">修改密码</button>
+        <button class="btn btn-secondary" onclick="clearPasswordForm()">取消</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 消息提示 -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API_BASE = `http://${window.location.hostname}:3000/api/admin`;
+    let adminId = null;
+
+    // 检查登录状态
+    function checkAuth() {
+      const admin = localStorage.getItem('adminToken');
+      if (!admin) {
+        window.location.href = 'admin-login.html';
+        return null;
+      }
+      try {
+        const data = JSON.parse(admin);
+        adminId = data.id;
+        return data;
+      } catch (e) {
+        window.location.href = 'admin-login.html';
+        return null;
+      }
+    }
+
+    // 加载管理员信息
+    async function loadProfile() {
+      const admin = checkAuth();
+      if (!admin) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/profile/${adminId}`);
+        const result = await response.json();
+
+        if (result.success) {
+          const data = result.data;
+          
+          // 更新展示信息
+          document.getElementById('infoUsername').textContent = data.username || '-';
+          document.getElementById('infoCreatedAt').textContent = data.created_at ? new Date(data.created_at).toLocaleString('zh-CN') : '-';
+          document.getElementById('profileDisplayName').textContent = data.username || '管理员';
+          document.getElementById('adminName').textContent = data.username || '管理员';
+
+          // 更新头像
+          updateAvatars(data);
+
+          // 填充编辑表单
+          document.getElementById('editEmail').value = data.email || '';
+          document.getElementById('editAvatarUrl').value = data.avatar_url || '';
+        } else {
+          showToast(result.message || '加载信息失败', 'error');
+        }
+      } catch (err) {
+        console.error('加载管理员信息失败:', err);
+        showToast('网络错误，请稍后重试', 'error');
+      }
+    }
+
+    // 更新头像显示
+    function updateAvatars(data) {
+      const initial = (data.username || '管').charAt(0);
+      const profileAvatar = document.getElementById('profileAvatar');
+      const sidebarAvatar = document.getElementById('sidebarAvatar');
+      
+      if (data.avatar_url) {
+        profileAvatar.innerHTML = `<img src="${data.avatar_url}" onerror="this.parentElement.textContent='${initial}'">`;
+        sidebarAvatar.innerHTML = `<img src="${data.avatar_url}" onerror="this.parentElement.textContent='${initial}'">`;
+      } else {
+        profileAvatar.textContent = initial;
+        sidebarAvatar.textContent = initial;
+      }
+    }
+
+    // 保存个人资料
+    async function saveProfile() {
+      checkAuth();
+      if (!adminId) return;
+
+      const email = document.getElementById('editEmail').value.trim();
+      const avatar_url = document.getElementById('editAvatarUrl').value.trim();
+
+      // 邮箱格式验证
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('请输入有效的邮箱地址', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/profile/${adminId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, avatar_url })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          showToast('资料更新成功', 'success');
+          loadProfile(); // 重新加载显示
+        } else {
+          showToast(result.message || '更新失败', 'error');
+        }
+      } catch (err) {
+        console.error('保存资料失败:', err);
+        showToast('网络错误，请稍后重试', 'error');
+      }
+    }
+
+    // 密码强度检测
+    function checkPasswordStrength() {
+      const password = document.getElementById('newPassword').value;
+      const bars = [document.getElementById('str1'), document.getElementById('str2'), document.getElementById('str3'), document.getElementById('str4')];
+      const text = document.getElementById('strengthText');
+
+      // 重置
+      bars.forEach(b => b.className = 'strength-bar');
+      text.textContent = '';
+
+      if (!password) return;
+
+      let strength = 0;
+      if (password.length >= 6) strength++;
+      if (password.length >= 10) strength++;
+      if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
+      if (/[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password)) strength++;
+
+      const levels = ['weak', 'weak', 'medium', 'medium', 'strong'];
+      const labels = ['', '弱', '较弱', '中等', '强'];
+
+      for (let i = 0; i < strength; i++) {
+        bars[i].className = 'strength-bar ' + levels[strength];
+      }
+      text.textContent = '密码强度：' + labels[strength];
+    }
+
+    // 修改密码
+    async function changePassword() {
+      checkAuth();
+      if (!adminId) return;
+
+      const oldPassword = document.getElementById('oldPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+
+      if (!oldPassword) {
+        showToast('请输入当前密码', 'error');
+        return;
+      }
+      if (!newPassword) {
+        showToast('请输入新密码', 'error');
+        return;
+      }
+      if (newPassword.length < 6) {
+        showToast('新密码长度不能少于6位', 'error');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        showToast('两次输入的新密码不一致', 'error');
+        return;
+      }
+      if (oldPassword === newPassword) {
+        showToast('新密码不能与当前密码相同', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/profile/${adminId}/password`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ oldPassword, newPassword })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          showToast('密码修改成功', 'success');
+          clearPasswordForm();
+        } else {
+          showToast(result.message || '修改失败', 'error');
+        }
+      } catch (err) {
+        console.error('修改密码失败:', err);
+        showToast('网络错误，请稍后重试', 'error');
+      }
+    }
+
+    // 清空密码表单
+    function clearPasswordForm() {
+      document.getElementById('oldPassword').value = '';
+      document.getElementById('newPassword').value = '';
+      document.getElementById('confirmPassword').value = '';
+      // 重置强度指示器
+      const bars = [document.getElementById('str1'), document.getElementById('str2'), document.getElementById('str3'), document.getElementById('str4')];
+      bars.forEach(b => b.className = 'strength-bar');
+      document.getElementById('strengthText').textContent = '';
+    }
+
+    // 消息提示
+    function showToast(message, type) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast ' + type;
+      setTimeout(() => { toast.className = 'toast'; }, 3000);
+    }
+
+    // 退出登录
+    function logout() {
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('isAdminLoggedIn');
+      window.location.href = 'admin-login.html';
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      const admin = checkAuth();
+      if (admin) {
+        if (admin.username) {
+          document.getElementById('adminName').textContent = admin.username;
+        }
+        loadProfile();
+      }
+    });
+  </script>
+</body>
+</html>
