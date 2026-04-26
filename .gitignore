@@ -12,3 +12,6 @@ scripts/tmp/
 *.db
 *.sqlite
 *.sqlite3
+
+# 电影资源
+backend/media/

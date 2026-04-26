@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const { query } = require('./src/config/db');
 const usersRouter = require('./src/routes/users');
 const moviesRouter = require('./src/routes/movies');
+const transcodeRouter = require('./src/routes/transcode');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,13 +17,82 @@ app.use(express.json()); // 解析 JSON 格式的请求体
 
 // 静态文件服务 - 提供前端页面
 const path = require('path');
+const fs = require('fs');
 app.use(express.static(path.join(__dirname, '../frontend/public')));
 app.use('/public', express.static(path.join(__dirname, '../frontend/public')));
+
+// 媒体文件流服务 - 支持 Range 请求（支持 MKV, MP4, AVI, MOV 等）
+const MEDIA_DIR = path.join(__dirname, 'media');
+if (!fs.existsSync(MEDIA_DIR)) {
+  fs.mkdirSync(MEDIA_DIR, { recursive: true });
+}
+
+// 媒体文件流路由 - 支持 Range 请求（用于视频点播）
+app.get('/api/media/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(MEDIA_DIR, filename);
+  
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: '文件不存在' });
+  }
+
+  const stat = fs.statSync(filePath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunksize = (end - start) + 1;
+    const file = fs.createReadStream(filePath, { start, end });
+    const head = {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': 'application/octet-stream'
+    };
+    res.writeHead(206, head);
+    file.pipe(res);
+  } else {
+    const head = {
+      'Content-Length': fileSize,
+      'Accept-Ranges': 'bytes',
+      'Content-Type': 'application/octet-stream'
+    };
+    res.writeHead(200, head);
+    fs.createReadStream(filePath).pipe(res);
+  }
+});
+
+// 获取媒体文件列表
+app.get('/api/media', (req, res) => {
+  try {
+    const files = fs.readdirSync(MEDIA_DIR).filter(file => {
+      const ext = path.extname(file).toLowerCase();
+      return ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v'].includes(ext);
+    });
+    const fileList = files.map(file => {
+      const stat = fs.statSync(path.join(MEDIA_DIR, file));
+      return {
+        name: file,
+        size: stat.size,
+        sizeMB: (stat.size / (1024 * 1024)).toFixed(2) + ' MB',
+        created: stat.birthtime
+      };
+    });
+    res.json({ success: true, data: fileList });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // 用户路由
 app.use('/api/users', usersRouter);
 // 电影路由
 app.use('/api/movies', moviesRouter);
+// 转码路由
+app.use('/api/transcode', transcodeRouter);
 
 // 用户注册接口 - 第一个注册用户自动成为管理员
 app.post('/api/register', async (req, res) => {
