@@ -15,3 +15,6 @@ scripts/tmp/
 
 # 电影资源
 backend/media/
+
+# 脚本临时资源
+/scripts/__pycache__/

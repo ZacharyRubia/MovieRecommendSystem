@@ -87,7 +87,7 @@ def process_and_import_ratings(csv_path, db_config, chunk_size=100000):
             conn.commit()
             inserted = cursor.rowcount
             total_users_inserted += inserted
-            print(f"   ✅ users 表: 本块 {len(unique_users)} 个用户, 新增 {inserted} 个")
+            print(f"   ✅ users 表: 本块 {len(unique_users)} 个用户, 新增 {inserted} 个 (累计 {total_users_inserted:,} 个)")
 
             # ==========================================
             # 步骤 B: 生成 request_id 和时间戳
@@ -124,16 +124,20 @@ def process_and_import_ratings(csv_path, db_config, chunk_size=100000):
                     row['created_at']
                 ))
 
-            behavior_insert_query = """
-            INSERT IGNORE INTO users_movies_behaviors 
-            (user_id, movie_id, behavior_type, rating, request_id, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            cursor.executemany(behavior_insert_query, behavior_data)
-            conn.commit()
-            inserted_behaviors = cursor.rowcount
-            total_behaviors_inserted += inserted_behaviors
-            print(f"   ✅ users_movies_behaviors 表: 本块插入 {inserted_behaviors} 条 (累计 {total_behaviors_inserted:,} 条)")
+            # 如果本块中没有有效的行为数据，则跳过插入
+            if behavior_data:
+                behavior_insert_query = """
+                INSERT IGNORE INTO users_movies_behaviors 
+                (user_id, movie_id, behavior_type, rating, request_id, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                cursor.executemany(behavior_insert_query, behavior_data)
+                conn.commit()
+                inserted_behaviors = cursor.rowcount
+                total_behaviors_inserted += inserted_behaviors
+                print(f"   ✅ users_movies_behaviors 表: 本块插入 {inserted_behaviors} 条 (累计 {total_behaviors_inserted:,} 条)")
+            else:
+                print(f"   ⚠️  本块无有效评分数据，跳过行为插入")
 
         # ==========================================
         # 步骤 D: 全量聚合更新电影平均分
@@ -155,7 +159,8 @@ def process_and_import_ratings(csv_path, db_config, chunk_size=100000):
         cursor.execute(update_avg_query)
         conn.commit()
         agg_elapsed = time.time() - agg_start
-        print(f"   ✅ 电影平均评分更新完成！(耗时 {agg_elapsed:.2f} 秒)")
+        updated_movies = cursor.rowcount
+        print(f"   ✅ 电影平均评分更新完成！更新了 {updated_movies} 部电影 (耗时 {agg_elapsed:.2f} 秒)")
 
         # ==========================================
         # 最终统计
