@@ -130,4 +130,3 @@ DB_CONFIG = {
 - `pandas` — CSV 数据加载与清洗
 - `pymysql` — 数据库连接（与后端 server.js 一致，避免多驱动冲突）
 - `os` + `sys` + `io` — 路径管理与编码修复
-- `math` — NaN 值检测
