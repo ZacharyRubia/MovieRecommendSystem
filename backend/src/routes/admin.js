@@ -22,6 +22,12 @@ router.post('/directors', adminController.createDirector);
 router.put('/directors/:id', adminController.updateDirector);
 router.delete('/directors/:id', adminController.deleteDirector);
 
+// ==================== 题材管理 ====================
+router.get('/genres', adminController.getAllGenres);
+router.post('/genres', adminController.createGenre);
+router.put('/genres/:id', adminController.updateGenre);
+router.delete('/genres/:id', adminController.deleteGenre);
+
 // ==================== 演员管理 ====================
 router.get('/actors', adminController.getAllActors);
 router.post('/actors', adminController.createActor);

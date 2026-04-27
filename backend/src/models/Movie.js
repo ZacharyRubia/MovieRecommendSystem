@@ -7,7 +7,7 @@ class MovieModel {
     const offset = (page - 1) * limit;
     return query(`
       SELECT id, title, description, cover_url, video_url, release_year, duration, avg_rating, created_at
-      FROM movie
+      FROM movies
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
@@ -15,7 +15,7 @@ class MovieModel {
 
   // 获取电影总数
   static async count() {
-    const rows = await query('SELECT COUNT(*) as total FROM movie', []);
+    const rows = await query('SELECT COUNT(*) as total FROM movies', []);
     return rows[0].total;
   }
 
@@ -23,7 +23,7 @@ class MovieModel {
   static async findById(id) {
     const rows = await query(`
       SELECT id, title, description, cover_url, video_url, release_year, duration, avg_rating, created_at
-      FROM movie
+      FROM movies
       WHERE id = ?
     `, [id]);
     return rows[0];
@@ -33,7 +33,7 @@ class MovieModel {
   static async create(movieData) {
     const { title, description, cover_url, video_url, release_year, duration } = movieData;
     const result = await query(
-      'INSERT INTO movie (title, description, cover_url, video_url, release_year, duration) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO movies (title, description, cover_url, video_url, release_year, duration) VALUES (?, ?, ?, ?, ?, ?)',
       [title, description || '', cover_url || '', video_url || '', release_year || null, duration || null]
     );
     return result.insertId;
@@ -42,9 +42,9 @@ class MovieModel {
   // 更新电影评分
   static async updateAvgRating(movieId) {
     await query(`
-      UPDATE movie m
+      UPDATE movies m
       SET avg_rating = (
-        SELECT AVG(rating) FROM user_movie_behavior
+        SELECT AVG(rating) FROM users_movies_behaviors
         WHERE movie_id = ? AND behavior_type = 'rate' AND rating IS NOT NULL
       )
       WHERE id = ?
@@ -62,7 +62,7 @@ class MovieModel {
         u.username,
         umb.rating,
         umb.created_at
-      FROM user_movie_behavior umb
+      FROM users_movies_behaviors umb
       JOIN users u ON umb.user_id = u.id
       WHERE umb.movie_id = ? AND umb.behavior_type = 'rate' AND umb.rating IS NOT NULL
       ORDER BY umb.created_at DESC
@@ -73,7 +73,7 @@ class MovieModel {
   // 获取评论总数
   static async countComments(movieId) {
     const rows = await query(`
-      SELECT COUNT(*) as total FROM user_movie_behavior
+      SELECT COUNT(*) as total FROM users_movies_behaviors
       WHERE movie_id = ? AND behavior_type = 'rate' AND rating IS NOT NULL
     `, [movieId]);
     return rows[0].total;
@@ -82,7 +82,7 @@ class MovieModel {
   // 用户评分
   static async addRating(userId, movieId, rating, requestId) {
     const result = await query(
-      `INSERT INTO user_movie_behavior (user_id, movie_id, behavior_type, rating, request_id)
+      `INSERT INTO users_movies_behaviors (user_id, movie_id, behavior_type, rating, request_id)
        VALUES (?, ?, 'rate', ?, ?)
        ON DUPLICATE KEY UPDATE rating = ?, updated_at = CURRENT_TIMESTAMP`,
       [userId, movieId, rating, requestId, rating]
@@ -94,7 +94,7 @@ class MovieModel {
   // 获取用户对电影的评分
   static async getUserRating(userId, movieId) {
     const rows = await query(`
-      SELECT rating FROM user_movie_behavior
+      SELECT rating FROM users_movies_behaviors
       WHERE user_id = ? AND movie_id = ? AND behavior_type = 'rate' AND rating IS NOT NULL
       ORDER BY created_at DESC
       LIMIT 1

@@ -11,15 +11,18 @@ exports.getAllMovies = async (req, res) => {
     let sql = `
       SELECT m.*, 
              GROUP_CONCAT(DISTINCT t.name SEPARATOR ', ') as tags,
+             GROUP_CONCAT(DISTINCT g.name SEPARATOR ', ') as genres,
              GROUP_CONCAT(DISTINCT d.name SEPARATOR ', ') as directors,
              GROUP_CONCAT(DISTINCT a.name SEPARATOR ', ') as actors
-      FROM movie m
-      LEFT JOIN movie_tag mt ON m.id = mt.movie_id
-      LEFT JOIN tag t ON mt.tag_id = t.id
-      LEFT JOIN movie_director md ON m.id = md.movie_id
-      LEFT JOIN director d ON md.director_id = d.id
-      LEFT JOIN movie_actor ma ON m.id = ma.movie_id
-      LEFT JOIN actor a ON ma.actor_id = a.id
+      FROM movies m
+      LEFT JOIN movies_tags mt ON m.id = mt.movie_id
+      LEFT JOIN tags t ON mt.tag_id = t.id
+      LEFT JOIN movies_genres mg ON m.id = mg.movie_id
+      LEFT JOIN genres g ON mg.genre_id = g.id
+      LEFT JOIN movies_directors md ON m.id = md.movie_id
+      LEFT JOIN directors d ON md.director_id = d.id
+      LEFT JOIN movies_actors ma ON m.id = ma.movie_id
+      LEFT JOIN actors a ON ma.actor_id = a.id
       WHERE 1=1
     `;
     
@@ -36,7 +39,7 @@ exports.getAllMovies = async (req, res) => {
     const movies = await db.query(sql, params);
     
     // 获取总数
-    let countSql = `SELECT COUNT(*) as total FROM movie WHERE 1=1`;
+    let countSql = `SELECT COUNT(*) as total FROM movies WHERE 1=1`;
     const countParams = [];
     if (search) {
       countSql += ` AND title LIKE ?`;
@@ -65,7 +68,7 @@ exports.getMovieById = async (req, res) => {
     const { id } = req.params;
     
     // 获取电影基本信息
-    const movies = await db.query('SELECT * FROM movie WHERE id = ?', [id]);
+    const movies = await db.query('SELECT * FROM movies WHERE id = ?', [id]);
     if (movies.length === 0) {
       return res.status(404).json({ success: false, message: '电影不存在' });
     }
@@ -74,22 +77,29 @@ exports.getMovieById = async (req, res) => {
     
     // 获取关联标签
     const tags = await db.query(`
-      SELECT t.id, t.name FROM tag t
-      JOIN movie_tag mt ON t.id = mt.tag_id
+      SELECT t.id, t.name FROM tags t
+      JOIN movies_tags mt ON t.id = mt.tag_id
       WHERE mt.movie_id = ?
+    `, [id]);
+    
+    // 获取关联题材
+    const genres = await db.query(`
+      SELECT g.id, g.name, g.code FROM genres g
+      JOIN movies_genres mg ON g.id = mg.genre_id
+      WHERE mg.movie_id = ?
     `, [id]);
     
     // 获取关联导演
     const directors = await db.query(`
-      SELECT d.id, d.name FROM director d
-      JOIN movie_director md ON d.id = md.director_id
+      SELECT d.id, d.name FROM directors d
+      JOIN movies_directors md ON d.id = md.director_id
       WHERE md.movie_id = ?
     `, [id]);
     
     // 获取关联演员
     const actors = await db.query(`
-      SELECT a.id, a.name, ma.role FROM actor a
-      JOIN movie_actor ma ON a.id = ma.actor_id
+      SELECT a.id, a.name, ma.role FROM actors a
+      JOIN movies_actors ma ON a.id = ma.actor_id
       WHERE ma.movie_id = ?
     `, [id]);
     
@@ -98,6 +108,7 @@ exports.getMovieById = async (req, res) => {
       data: {
         ...movie,
         tags,
+        genres,
         directors,
         actors
       }
@@ -111,7 +122,7 @@ exports.getMovieById = async (req, res) => {
 // 创建电影
 exports.createMovie = async (req, res) => {
   try {
-    const { title, description, cover_url, video_url, release_year, duration, tags = [], directors = [], actors = [] } = req.body;
+    const { title, description, cover_url, video_url, release_year, duration, tags = [], genres = [], directors = [], actors = [] } = req.body;
     
     if (!title) {
       return res.status(400).json({ success: false, message: '电影标题不能为空' });
@@ -119,7 +130,7 @@ exports.createMovie = async (req, res) => {
     
     // 插入电影
     const result = await db.query(
-      'INSERT INTO movie (title, description, cover_url, video_url, release_year, duration) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO movies (title, description, cover_url, video_url, release_year, duration) VALUES (?, ?, ?, ?, ?, ?)',
       [title, description || '', cover_url || '', video_url || '', release_year || null, duration || null]
     );
     
@@ -128,19 +139,25 @@ exports.createMovie = async (req, res) => {
     // 关联标签
     if (tags && tags.length > 0) {
       const tagValues = tags.map(tagId => [movieId, tagId]);
-      await db.query('INSERT IGNORE INTO movie_tag (movie_id, tag_id) VALUES ?', [tagValues]);
+      await db.query('INSERT IGNORE INTO movies_tags (movie_id, tag_id) VALUES ?', [tagValues]);
+    }
+    
+    // 关联题材
+    if (genres && genres.length > 0) {
+      const genreValues = genres.map(genreId => [movieId, genreId]);
+      await db.query('INSERT IGNORE INTO movies_genres (movie_id, genre_id) VALUES ?', [genreValues]);
     }
     
     // 关联导演
     if (directors && directors.length > 0) {
       const directorValues = directors.map(directorId => [movieId, directorId]);
-      await db.query('INSERT IGNORE INTO movie_director (movie_id, director_id) VALUES ?', [directorValues]);
+      await db.query('INSERT IGNORE INTO movies_directors (movie_id, director_id) VALUES ?', [directorValues]);
     }
     
     // 关联演员
     if (actors && actors.length > 0) {
       const actorValues = actors.map(actor => [movieId, actor.id, actor.role || '']);
-      await db.query('INSERT IGNORE INTO movie_actor (movie_id, actor_id, role) VALUES ?', [actorValues]);
+      await db.query('INSERT IGNORE INTO movies_actors (movie_id, actor_id, role) VALUES ?', [actorValues]);
     }
     
     res.json({
@@ -158,7 +175,7 @@ exports.createMovie = async (req, res) => {
 exports.updateMovie = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, cover_url, video_url, release_year, duration, tags, directors, actors } = req.body;
+    const { title, description, cover_url, video_url, release_year, duration, tags, genres, directors, actors } = req.body;
     
     // 更新电影基本信息
     const updateFields = [];
@@ -191,33 +208,42 @@ exports.updateMovie = async (req, res) => {
     
     if (updateFields.length > 0) {
       updateValues.push(id);
-      await db.query(`UPDATE movie SET ${updateFields.join(', ')} WHERE id = ?`, updateValues);
+      await db.query(`UPDATE movies SET ${updateFields.join(', ')} WHERE id = ?`, updateValues);
     }
     
     // 更新标签关联
     if (tags !== undefined) {
-      await db.query('DELETE FROM movie_tag WHERE movie_id = ?', [id]);
+      await db.query('DELETE FROM movies_tags WHERE movie_id = ?', [id]);
       if (tags.length > 0) {
         const tagValues = tags.map(tagId => [id, tagId]);
-        await db.query('INSERT INTO movie_tag (movie_id, tag_id) VALUES ?', [tagValues]);
+        await db.query('INSERT INTO movies_tags (movie_id, tag_id) VALUES ?', [tagValues]);
+      }
+    }
+    
+    // 更新题材关联
+    if (genres !== undefined) {
+      await db.query('DELETE FROM movies_genres WHERE movie_id = ?', [id]);
+      if (genres.length > 0) {
+        const genreValues = genres.map(genreId => [id, genreId]);
+        await db.query('INSERT INTO movies_genres (movie_id, genre_id) VALUES ?', [genreValues]);
       }
     }
     
     // 更新导演关联
     if (directors !== undefined) {
-      await db.query('DELETE FROM movie_director WHERE movie_id = ?', [id]);
+      await db.query('DELETE FROM movies_directors WHERE movie_id = ?', [id]);
       if (directors.length > 0) {
         const directorValues = directors.map(directorId => [id, directorId]);
-        await db.query('INSERT INTO movie_director (movie_id, director_id) VALUES ?', [directorValues]);
+        await db.query('INSERT INTO movies_directors (movie_id, director_id) VALUES ?', [directorValues]);
       }
     }
     
     // 更新演员关联
     if (actors !== undefined) {
-      await db.query('DELETE FROM movie_actor WHERE movie_id = ?', [id]);
+      await db.query('DELETE FROM movies_actors WHERE movie_id = ?', [id]);
       if (actors.length > 0) {
         const actorValues = actors.map(actor => [id, actor.id, actor.role || '']);
-        await db.query('INSERT INTO movie_actor (movie_id, actor_id, role) VALUES ?', [actorValues]);
+        await db.query('INSERT INTO movies_actors (movie_id, actor_id, role) VALUES ?', [actorValues]);
       }
     }
     
@@ -236,7 +262,7 @@ exports.deleteMovie = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const result = await db.query('DELETE FROM movie WHERE id = ?', [id]);
+    const result = await db.query('DELETE FROM movies WHERE id = ?', [id]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '电影不存在' });
@@ -269,7 +295,7 @@ exports.batchImportMovies = async (req, res) => {
       const movie = movies[i];
       try {
         const result = await db.query(
-          'INSERT INTO movie (title, description, cover_url, video_url, release_year, duration) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO movies (title, description, cover_url, video_url, release_year, duration) VALUES (?, ?, ?, ?, ?, ?)',
           [movie.title, movie.description || '', movie.cover_url || '', movie.video_url || '', movie.release_year || null, movie.duration || null]
         );
         successCount++;
@@ -294,7 +320,7 @@ exports.batchImportMovies = async (req, res) => {
 
 exports.getAllTags = async (req, res) => {
   try {
-    const tags = await db.query('SELECT * FROM tag ORDER BY created_at DESC');
+    const tags = await db.query('SELECT * FROM tags ORDER BY created_at DESC');
     res.json({ success: true, data: tags });
   } catch (err) {
     console.error('获取标签列表失败:', err);
@@ -309,7 +335,7 @@ exports.createTag = async (req, res) => {
       return res.status(400).json({ success: false, message: '标签名称不能为空' });
     }
     
-    const result = await db.query('INSERT INTO tag (name) VALUES (?)', [name]);
+    const result = await db.query('INSERT INTO tags (name) VALUES (?)', [name]);
     res.json({
       success: true,
       message: '标签创建成功',
@@ -333,7 +359,7 @@ exports.updateTag = async (req, res) => {
       return res.status(400).json({ success: false, message: '标签名称不能为空' });
     }
     
-    const result = await db.query('UPDATE tag SET name = ? WHERE id = ?', [name, id]);
+    const result = await db.query('UPDATE tags SET name = ? WHERE id = ?', [name, id]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '标签不存在' });
@@ -352,7 +378,7 @@ exports.updateTag = async (req, res) => {
 exports.deleteTag = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query('DELETE FROM tag WHERE id = ?', [id]);
+    const result = await db.query('DELETE FROM tags WHERE id = ?', [id]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '标签不存在' });
@@ -369,7 +395,7 @@ exports.deleteTag = async (req, res) => {
 
 exports.getAllDirectors = async (req, res) => {
   try {
-    const directors = await db.query('SELECT * FROM director ORDER BY created_at DESC');
+    const directors = await db.query('SELECT * FROM directors ORDER BY created_at DESC');
     res.json({ success: true, data: directors });
   } catch (err) {
     console.error('获取导演列表失败:', err);
@@ -385,7 +411,7 @@ exports.createDirector = async (req, res) => {
     }
     
     const result = await db.query(
-      'INSERT INTO director (name, avatar_url, description) VALUES (?, ?, ?)',
+      'INSERT INTO directors (name, avatar_url, description) VALUES (?, ?, ?)',
       [name, avatar_url || '', description || '']
     );
     res.json({
@@ -412,7 +438,7 @@ exports.updateDirector = async (req, res) => {
     }
     
     const result = await db.query(
-      'UPDATE director SET name = ?, avatar_url = ?, description = ? WHERE id = ?',
+      'UPDATE directors SET name = ?, avatar_url = ?, description = ? WHERE id = ?',
       [name, avatar_url || '', description || '', id]
     );
     
@@ -433,7 +459,7 @@ exports.updateDirector = async (req, res) => {
 exports.deleteDirector = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query('DELETE FROM director WHERE id = ?', [id]);
+    const result = await db.query('DELETE FROM directors WHERE id = ?', [id]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '导演不存在' });
@@ -450,7 +476,7 @@ exports.deleteDirector = async (req, res) => {
 
 exports.getAllActors = async (req, res) => {
   try {
-    const actors = await db.query('SELECT * FROM actor ORDER BY created_at DESC');
+    const actors = await db.query('SELECT * FROM actors ORDER BY created_at DESC');
     res.json({ success: true, data: actors });
   } catch (err) {
     console.error('获取演员列表失败:', err);
@@ -466,7 +492,7 @@ exports.createActor = async (req, res) => {
     }
     
     const result = await db.query(
-      'INSERT INTO actor (name, avatar_url, description) VALUES (?, ?, ?)',
+      'INSERT INTO actors (name, avatar_url, description) VALUES (?, ?, ?)',
       [name, avatar_url || '', description || '']
     );
     res.json({
@@ -493,7 +519,7 @@ exports.updateActor = async (req, res) => {
     }
     
     const result = await db.query(
-      'UPDATE actor SET name = ?, avatar_url = ?, description = ? WHERE id = ?',
+      'UPDATE actors SET name = ?, avatar_url = ?, description = ? WHERE id = ?',
       [name, avatar_url || '', description || '', id]
     );
     
@@ -514,7 +540,7 @@ exports.updateActor = async (req, res) => {
 exports.deleteActor = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query('DELETE FROM actor WHERE id = ?', [id]);
+    const result = await db.query('DELETE FROM actors WHERE id = ?', [id]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '演员不存在' });
@@ -524,6 +550,81 @@ exports.deleteActor = async (req, res) => {
   } catch (err) {
     console.error('删除演员失败:', err);
     res.status(500).json({ success: false, message: '删除演员失败' });
+  }
+};
+
+// ==================== 题材管理 ====================
+
+exports.getAllGenres = async (req, res) => {
+  try {
+    const genres = await db.query('SELECT * FROM genres ORDER BY created_at DESC');
+    res.json({ success: true, data: genres });
+  } catch (err) {
+    console.error('获取题材列表失败:', err);
+    res.status(500).json({ success: false, message: '获取题材列表失败' });
+  }
+};
+
+exports.createGenre = async (req, res) => {
+  try {
+    const { name, code } = req.body;
+    if (!name || !code) {
+      return res.status(400).json({ success: false, message: '题材名称和代码不能为空' });
+    }
+    
+    const result = await db.query('INSERT INTO genres (name, code) VALUES (?, ?)', [name, code]);
+    res.json({
+      success: true,
+      message: '题材创建成功',
+      data: { id: result.insertId, name, code }
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: '题材名称或代码已存在' });
+    }
+    console.error('创建题材失败:', err);
+    res.status(500).json({ success: false, message: '创建题材失败' });
+  }
+};
+
+exports.updateGenre = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, code } = req.body;
+    
+    if (!name || !code) {
+      return res.status(400).json({ success: false, message: '题材名称和代码不能为空' });
+    }
+    
+    const result = await db.query('UPDATE genres SET name = ?, code = ? WHERE id = ?', [name, code, id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '题材不存在' });
+    }
+    
+    res.json({ success: true, message: '题材更新成功' });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: '题材名称或代码已存在' });
+    }
+    console.error('更新题材失败:', err);
+    res.status(500).json({ success: false, message: '更新题材失败' });
+  }
+};
+
+exports.deleteGenre = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query('DELETE FROM genres WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '题材不存在' });
+    }
+    
+    res.json({ success: true, message: '题材删除成功' });
+  } catch (err) {
+    console.error('删除题材失败:', err);
+    res.status(500).json({ success: false, message: '删除题材失败' });
   }
 };
 

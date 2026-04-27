@@ -296,6 +296,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
         <span>标签管理</span>
       </div>
+      <div class="nav-item" data-page="genres" onclick="switchPage('genres')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span>题材管理</span>
+      </div>
       <div class="nav-item" data-page="directors" onclick="switchPage('directors')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         <span>导演管理</span>
@@ -520,6 +524,41 @@
       </div>
     </div>
 
+    <!-- ==================== 题材管理页 ==================== -->
+    <div class="page-content" id="page-genres">
+      <div class="page-header">
+        <h2>题材管理</h2>
+        <p>管理电影题材分类</p>
+      </div>
+      <div class="toolbar">
+        <div class="search-box">
+          <input type="text" id="genreSearch" placeholder="搜索题材...">
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn btn-primary" onclick="openGenreModal()">添加题材</button>
+        </div>
+      </div>
+      <div class="table-container">
+        <div id="genresLoading" class="loading">加载中...</div>
+        <table id="genresTable" style="display:none;">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>题材名称</th>
+              <th>题材代码</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="genresTableBody"></tbody>
+        </table>
+        <div id="genresEmpty" class="empty-state" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <p>暂无题材数据</p>
+        </div>
+      </div>
+    </div>
+
     <!-- ==================== 用户管理页 ==================== -->
     <div class="page-content" id="page-users">
       <div class="page-header">
@@ -658,6 +697,33 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('importModal')">关闭</button>
         <button class="btn btn-primary" id="importBtn" onclick="doImport()" disabled>开始导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 题材 模态框 ==================== -->
+  <div class="modal" id="genreModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="genreModalTitle">添加题材</h3>
+        <button class="modal-close" onclick="closeModal('genreModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="genreForm">
+          <input type="hidden" id="genreId">
+          <div class="form-group">
+            <label for="genreName">题材名称 *</label>
+            <input type="text" id="genreName" placeholder="请输入题材名称（中文）" required>
+          </div>
+          <div class="form-group">
+            <label for="genreCode">题材代码 *</label>
+            <input type="text" id="genreCode" placeholder="请输入题材代码（英文）" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('genreModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveGenre()">保存</button>
       </div>
     </div>
   </div>
@@ -843,7 +909,7 @@
         // 也检查旧的用户管理登录状态
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
         if (!currentUser || currentUser.role_id !== 1) {
-          window.location.href = 'admin-login.html';
+          window.location.href = 'index.html';
           return false;
         }
       }
@@ -867,7 +933,7 @@
       localStorage.removeItem('adminToken');
       localStorage.removeItem('isAdminLoggedIn');
       localStorage.removeItem('currentUser');
-      window.location.href = 'admin-login.html';
+      window.location.href = 'index.html';
     }
 
     // ==================== 消息提示 ====================
@@ -890,6 +956,7 @@
         case 'dashboard': loadDashboard(); break;
         case 'movies': loadMovies(); break;
         case 'tags': loadTags(); break;
+        case 'genres': loadGenres(); break;
         case 'directors': loadDirectors(); break;
         case 'actors': loadActors(); break;
         case 'users': loadUsers(); break;
@@ -1296,6 +1363,92 @@
         if (data.success) { showToast(data.message || (id ? '标签更新成功' : '标签创建成功'), 'success'); closeModal('tagModal'); loadTags(); }
         else { showToast(data.message || '操作失败', 'error'); }
       } catch (err) { console.error('保存标签失败:', err); showToast('网络错误，保存失败', 'error'); }
+    }
+
+    // ==================== 题材管理 ====================
+    async function loadGenres() {
+      const loading = document.getElementById('genresLoading');
+      const table = document.getElementById('genresTable');
+      const empty = document.getElementById('genresEmpty');
+      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
+
+      try {
+        const res = await fetch(`${ADMIN_API}/genres`);
+        const data = await res.json();
+        if (data.success) { renderGenres(data.data); }
+        else { showToast(data.message || '获取题材列表失败', 'error'); }
+      } catch (err) {
+        console.error('加载题材失败:', err);
+        showToast('网络错误，加载题材失败', 'error');
+      } finally { loading.style.display = 'none'; }
+    }
+
+    function renderGenres(genres) {
+      const table = document.getElementById('genresTable');
+      const empty = document.getElementById('genresEmpty');
+      const tbody = document.getElementById('genresTableBody');
+      const searchVal = document.getElementById('genreSearch').value.trim().toLowerCase();
+      const filtered = searchVal ? genres.filter(g => g.name.toLowerCase().includes(searchVal) || g.code.toLowerCase().includes(searchVal)) : genres;
+
+      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
+
+      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
+      filtered.forEach(genre => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${genre.id}</td>
+          <td><span style="font-weight:500;">${escapeHtml(genre.name)}</span></td>
+          <td><code style="background:#f0f0f0;padding:3px 8px;border-radius:4px;font-size:13px;">${escapeHtml(genre.code)}</code></td>
+          <td>${genre.created_at ? new Date(genre.created_at).toLocaleString('zh-CN') : '-'}</td>
+          <td>
+            <div class="table-actions">
+              <button class="btn btn-sm btn-edit" onclick="editGenre(${genre.id})">编辑</button>
+              <button class="btn btn-sm btn-delete" onclick="confirmDelete('genre', ${genre.id}, '${escapeHtml(genre.name)}')">删除</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    document.getElementById('genreSearch').addEventListener('input', () => {
+      // Need to re-fetch genres to get full list for filtering
+      loadGenres();
+    });
+
+    function openGenreModal(genreData = null) {
+      document.getElementById('genreModalTitle').textContent = genreData ? '编辑题材' : '添加题材';
+      document.getElementById('genreId').value = genreData ? genreData.id : '';
+      document.getElementById('genreName').value = genreData ? genreData.name : '';
+      document.getElementById('genreCode').value = genreData ? genreData.code : '';
+      document.getElementById('genreModal').classList.add('active');
+    }
+
+    function editGenre(id) {
+      // Fetch all genres and find the one to edit
+      fetch(`${ADMIN_API}/genres`).then(r => r.json()).then(data => {
+        if (data.success) {
+          const genre = data.data.find(g => g.id === id);
+          if (genre) openGenreModal(genre);
+        }
+      });
+    }
+
+    async function saveGenre() {
+      const id = document.getElementById('genreId').value;
+      const name = document.getElementById('genreName').value.trim();
+      const code = document.getElementById('genreCode').value.trim();
+      if (!name) { showToast('题材名称不能为空', 'error'); return; }
+      if (!code) { showToast('题材代码不能为空', 'error'); return; }
+
+      try {
+        const url = id ? `${ADMIN_API}/genres/${id}` : `${ADMIN_API}/genres`;
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, code }) });
+        const data = await res.json();
+        if (data.success) { showToast(data.message || (id ? '题材更新成功' : '题材创建成功'), 'success'); closeModal('genreModal'); loadGenres(); }
+        else { showToast(data.message || '操作失败', 'error'); }
+      } catch (err) { console.error('保存题材失败:', err); showToast('网络错误，保存失败', 'error'); }
     }
 
     // ==================== 导演管理 ====================
