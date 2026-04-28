@@ -34,6 +34,10 @@ router.post('/actors', adminController.createActor);
 router.put('/actors/:id', adminController.updateActor);
 router.delete('/actors/:id', adminController.deleteActor);
 
+// ==================== 评论管理 ====================
+router.get('/comments', adminController.getAllComments);
+router.delete('/comments/:id', adminController.deleteComment);
+
 // ==================== 管理员个人信息 ====================
 router.get('/profile/:id', adminController.getAdminProfile);
 router.put('/profile/:id', adminController.updateAdminProfile);

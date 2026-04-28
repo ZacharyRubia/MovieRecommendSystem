@@ -36,7 +36,7 @@
     .play-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .play-icon { font-size: 24px; }
     .no-video-hint { color: #999; font-size: 16px; margin-top: 15px; display: none; }
-    .comments-section { background: #fff; border: 3px solid #000; padding: 30px; }
+    .comments-section { background: #fff; border: 3px solid #000; padding: 30px; margin-bottom: 30px; }
     .comments-title { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
     .comment-list { display: flex; flex-direction: column; gap: 15px; }
     .comment-item { padding: 15px; background: #f8f8f8; border: 2px solid #e0e0e0; border-radius: 8px; }
@@ -48,6 +48,44 @@
     .error-message { text-align: center; padding: 40px; font-size: 18px; color: #d32f2f; }
     .no-comments { text-align: center; padding: 40px; font-size: 16px; color: #666; background: #f8f8f8; border-radius: 8px; }
     .success-message { color: #43a047; font-size: 14px; margin-top: 10px; }
+    /* 文本评论样式 */
+    .text-comments-section { background: #fff; border: 3px solid #000; padding: 30px; }
+    .text-comments-title { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+    .comment-input-area { margin-bottom: 25px; }
+    .comment-textarea { width: 100%; height: 100px; padding: 12px; border: 2px solid #000; border-radius: 4px; font-size: 14px; resize: vertical; font-family: Arial, sans-serif; }
+    .comment-textarea:focus { outline: none; border-color: #ff9800; }
+    .comment-submit-btn { margin-top: 10px; padding: 10px 30px; background: #000; color: #fff; border: 2px solid #000; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .comment-submit-btn:hover { background: #fff; color: #000; }
+    .comment-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .text-comment-item { padding: 15px; background: #f8f8f8; border: 2px solid #e0e0e0; border-radius: 8px; }
+    .text-comment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .text-comment-user { font-weight: bold; color: #000; }
+    .text-comment-date { font-size: 13px; color: #999; }
+    .text-comment-content { font-size: 15px; line-height: 1.6; color: #333; word-break: break-word; }
+    .char-count { text-align: right; font-size: 13px; color: #999; margin-top: 5px; }
+    .char-count.warning { color: #ff9800; }
+    .char-count.over { color: #d32f2f; }
+    /* 回复相关样式 */
+    .text-comment-actions { margin-top: 8px; display: flex; gap: 10px; align-items: center; }
+    .action-btn { padding: 4px 12px; font-size: 13px; border: 1px solid #999; background: #fff; color: #666; cursor: pointer; border-radius: 4px; }
+    .action-btn:hover { border-color: #000; color: #000; }
+    .action-btn.danger { border-color: #d32f2f; color: #d32f2f; }
+    .action-btn.danger:hover { background: #d32f2f; color: #fff; }
+    .reply-count { font-size: 13px; color: #1976d2; cursor: pointer; }
+    .reply-count:hover { text-decoration: underline; }
+    .reply-area { margin-top: 10px; padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; display: none; }
+    .reply-textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; resize: vertical; font-family: Arial, sans-serif; }
+    .reply-textarea:focus { outline: none; border-color: #ff9800; }
+    .reply-submit-btn { margin-top: 5px; padding: 6px 20px; background: #000; color: #fff; border: 1px solid #000; font-size: 13px; font-weight: bold; cursor: pointer; }
+    .reply-submit-btn:hover { background: #fff; color: #000; }
+    .reply-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .replies-container { margin-top: 10px; display: none; }
+    .reply-item { padding: 10px; margin-bottom: 8px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; }
+    .reply-item:last-child { margin-bottom: 0; }
+    .reply-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .reply-user { font-weight: bold; font-size: 13px; }
+    .reply-date { font-size: 12px; color: #999; }
+    .reply-content { font-size: 14px; line-height: 1.5; color: #333; word-break: break-word; }
   </style>
 </head>
 <body>
@@ -71,6 +109,20 @@
       <h2 class="comments-title">用户评分</h2>
       <div id="commentsList" class="comment-list"><div class="loading">加载中...</div></div>
     </div>
+
+    <!-- 文本评论区域 -->
+    <div class="text-comments-section">
+      <h2 class="text-comments-title">电影评论</h2>
+      <div class="comment-input-area">
+        <textarea id="commentInput" class="comment-textarea" placeholder="写下你对这部电影的看法...（最多500字）" maxlength="500"></textarea>
+        <div id="charCount" class="char-count">0/500</div>
+        <button class="comment-submit-btn" onclick="submitNewComment()">发表评论</button>
+        <div id="commentMessage"></div>
+      </div>
+      <div id="textCommentsList" class="comment-list">
+        <div class="loading">加载中...</div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -80,10 +132,22 @@
     
     if (!currentUser) window.location.href = '/index.html';
 
+    // 判断当前用户是否为管理员
+    const isAdmin = currentUser.role_id === 1;
+
     let currentMovie = null;
 
     function goBack() { window.location.href = '/user-dashboard.html'; }
     function goToPlayer() { if (currentMovie?.video_url) window.location.href = `/movie-player.html?id=${movieId}`; }
+
+    // 评论字数统计
+    document.getElementById('commentInput').addEventListener('input', function() {
+      const count = this.value.length;
+      const charCount = document.getElementById('charCount');
+      charCount.textContent = `${count}/500`;
+      charCount.className = 'char-count' + (count > 480 ? (count > 500 ? ' over' : ' warning') : '');
+      if (count > 500) this.value = this.value.substring(0, 500);
+    });
 
     async function loadMovieDetail() {
       const container = document.getElementById('movieDetail');
@@ -179,8 +243,207 @@
       } catch { container.innerHTML = '<div class="error-message">网络错误，请确保后端服务已启动</div>'; }
     }
 
+    // ======== 文本评论功能 ========
+
+    // 判断当前用户是否有删除权限（是自己的评论 或者是管理员）
+    function canDeleteComment(commentUserId) {
+      return currentUser.id === commentUserId || isAdmin;
+    }
+
+    // 提交新文本评论（顶级评论）
+    async function submitNewComment() {
+      const input = document.getElementById('commentInput');
+      const content = input.value.trim();
+      const messageDiv = document.getElementById('commentMessage');
+
+      if (!content) {
+        messageDiv.innerHTML = '<div class="error-message" style="padding:10px;font-size:14px">评论内容不能为空</div>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/movies/${movieId}/comment`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, content })
+        });
+        const data = await res.json();
+        if (data.success) {
+          messageDiv.innerHTML = '<div class="success-message">评论发表成功！</div>';
+          input.value = '';
+          document.getElementById('charCount').textContent = '0/500';
+          loadTextComments();
+          setTimeout(() => messageDiv.innerHTML = '', 2000);
+        } else {
+          messageDiv.innerHTML = `<div class="error-message" style="padding:10px;font-size:14px">${data.message || '评论失败'}</div>`;
+        }
+      } catch {
+        messageDiv.innerHTML = '<div class="error-message" style="padding:10px;font-size:14px">网络错误，请确保后端服务已启动</div>';
+      }
+    }
+
+    // 提交回复
+    async function submitReply(commentId) {
+      const textarea = document.querySelector(`.reply-textarea[data-comment-id="${commentId}"]`);
+      const btn = document.querySelector(`.reply-submit-btn[data-comment-id="${commentId}"]`);
+      const content = textarea.value.trim();
+
+      if (!content) {
+        alert('回复内容不能为空');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '提交中...';
+
+      try {
+        const res = await fetch(`${API_BASE}/movies/${movieId}/comment`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, content, parentId: commentId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          textarea.value = '';
+          toggleReplyArea(commentId);
+          // 重新加载回复
+          loadReplies(commentId);
+          // 刷新评论列表以更新回复数
+          loadTextComments();
+        } else {
+          alert(data.message || '回复失败');
+        }
+      } catch {
+        alert('网络错误，请确保后端服务已启动');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '回复';
+      }
+    }
+
+    // 切换回复输入框的显示
+    function toggleReplyArea(commentId) {
+      const area = document.querySelector(`.reply-area[data-comment-id="${commentId}"]`);
+      if (area) {
+        area.style.display = area.style.display === 'none' ? 'block' : 'none';
+        if (area.style.display === 'block') {
+          const textarea = area.querySelector('.reply-textarea');
+          if (textarea) textarea.focus();
+        }
+      }
+    }
+
+    // 切换回复列表的显示
+    async function toggleReplies(commentId) {
+      const container = document.querySelector(`.replies-container[data-comment-id="${commentId}"]`);
+      if (container) {
+        if (container.style.display === 'none') {
+          await loadReplies(commentId);
+          container.style.display = 'block';
+        } else {
+          container.style.display = 'none';
+        }
+      }
+    }
+
+    // 加载评论的回复列表
+    async function loadReplies(commentId) {
+      const container = document.querySelector(`.replies-container[data-comment-id="${commentId}"]`);
+      if (!container) return;
+
+      container.innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:13px">加载中...</div>';
+
+      try {
+        const res = await fetch(`${API_BASE}/movies/comments/${commentId}/replies`);
+        const data = await res.json();
+        if (data.success) {
+          if (data.data.replies.length === 0) {
+            container.innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:13px">暂无回复</div>';
+          } else {
+            container.innerHTML = data.data.replies.map(r => `
+              <div class="reply-item">
+                <div class="reply-header">
+                  <span class="reply-user">${escapeHtml(r.username)}</span>
+                  <div>
+                    <span class="reply-date">${new Date(r.created_at).toLocaleDateString('zh-CN')}</span>
+                    ${canDeleteComment(r.user_id) ? `<button class="action-btn danger" style="margin-left:8px;padding:2px 8px;font-size:11px" onclick="deleteComment(${r.id})">删除</button>` : ''}
+                  </div>
+                </div>
+                <div class="reply-content">${escapeHtml(r.content)}</div>
+              </div>`).join('');
+          }
+        } else {
+          container.innerHTML = '<div style="padding:10px;text-align:center;color:#d32f2f;font-size:13px">加载回复失败</div>';
+        }
+      } catch {
+        container.innerHTML = '<div style="padding:10px;text-align:center;color:#d32f2f;font-size:13px">网络错误</div>';
+      }
+    }
+
+    // 删除评论（或回复）
+    async function deleteComment(commentId) {
+      if (!confirm('确定要删除这条评论吗？')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/movies/comments/${commentId}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, isAdmin })
+        });
+        const data = await res.json();
+        if (data.success) {
+          loadTextComments();
+        } else {
+          alert(data.message || '删除失败');
+        }
+      } catch {
+        alert('网络错误，请确保后端服务已启动');
+      }
+    }
+
+    // 加载文本评论
+    async function loadTextComments() {
+      const container = document.getElementById('textCommentsList');
+      try {
+        const res = await fetch(`${API_BASE}/movies/${movieId}/text-comments?limit=50`);
+        const data = await res.json();
+        if (data.success) {
+          if (data.data.comments.length === 0) {
+            container.innerHTML = '<div class="no-comments">暂无评论，来写第一条评论吧！</div>';
+          } else {
+            container.innerHTML = data.data.comments.map(c => `
+              <div class="text-comment-item" id="comment-${c.id}">
+                <div class="text-comment-header">
+                  <span class="text-comment-user">${escapeHtml(c.username)}</span>
+                  <div>
+                    <span class="text-comment-date">${new Date(c.created_at).toLocaleDateString('zh-CN')}</span>
+                    ${canDeleteComment(c.user_id) ? `<button class="action-btn danger" style="margin-left:8px" onclick="deleteComment(${c.id})">删除</button>` : ''}
+                  </div>
+                </div>
+                <div class="text-comment-content">${escapeHtml(c.content)}</div>
+                <div class="text-comment-actions">
+                  <button class="action-btn" onclick="toggleReplyArea(${c.id})">回复</button>
+                  <span class="reply-count" onclick="toggleReplies(${c.id})">${c.reply_count > 0 ? c.reply_count + ' 条回复 ▾' : '回复'}</span>
+                </div>
+                <div class="reply-area" data-comment-id="${c.id}" style="display:none">
+                  <textarea class="reply-textarea" data-comment-id="${c.id}" placeholder="回复 ${escapeHtml(c.username)}..." maxlength="500"></textarea>
+                  <button class="reply-submit-btn" data-comment-id="${c.id}" onclick="submitReply(${c.id})">回复</button>
+                </div>
+                <div class="replies-container" data-comment-id="${c.id}" style="display:none"></div>
+              </div>`).join('');
+          }
+        } else container.innerHTML = `<div class="error-message">${data.message || '加载失败'}</div>`;
+      } catch { container.innerHTML = '<div class="error-message">网络错误，请确保后端服务已启动</div>'; }
+    }
+
+    // HTML转义防止XSS
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // 初始化
     loadMovieDetail();
     loadComments();
+    loadTextComments();
   </script>
 </body>
 </html>

@@ -628,6 +628,55 @@ exports.deleteGenre = async (req, res) => {
   }
 };
 
+// ==================== 评论管理 ====================
+
+// 获取所有评论（管理用）
+exports.getAllComments = async (req, res) => {
+  try {
+    const { page = 1, pageSize = 20, search = '' } = req.query;
+    const Comment = require('../models/Comment');
+    const comments = await Comment.findAllForAdmin(page, parseInt(pageSize), search);
+    const total = await Comment.countAllForAdmin(search);
+
+    res.json({
+      success: true,
+      data: {
+        comments,
+        total,
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        totalPages: Math.ceil(total / parseInt(pageSize))
+      }
+    });
+  } catch (err) {
+    console.error('获取评论列表失败:', err);
+    res.status(500).json({ success: false, message: '获取评论列表失败' });
+  }
+};
+
+// 管理员删除任意评论
+exports.deleteComment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Comment = require('../models/Comment');
+
+    const exists = await Comment.exists(id);
+    if (!exists) {
+      return res.status(404).json({ success: false, message: '评论不存在' });
+    }
+
+    const deleted = await Comment.delete(id, null, true);
+    if (!deleted) {
+      return res.status(500).json({ success: false, message: '删除评论失败' });
+    }
+
+    res.json({ success: true, message: '评论删除成功' });
+  } catch (err) {
+    console.error('删除评论失败:', err);
+    res.status(500).json({ success: false, message: '删除评论失败' });
+  }
+};
+
 // ==================== 管理员个人信息 ====================
 
 // 获取管理员个人信息

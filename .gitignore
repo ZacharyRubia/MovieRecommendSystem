@@ -18,3 +18,6 @@ backend/media/
 
 # 脚本临时资源
 /scripts/__pycache__/
+
+# 句子生成模型
+models/

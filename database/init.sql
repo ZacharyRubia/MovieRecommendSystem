@@ -185,6 +185,27 @@ CREATE TABLE IF NOT EXISTS `users_movies_behaviors` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户-电影行为表（事件流水）';
 
 -- ============================================
+-- 15. 评论表 (comments)
+-- ============================================
+CREATE TABLE IF NOT EXISTS `comments` (
+    `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT '主键，评论ID',
+    `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+    `movie_id` BIGINT UNSIGNED NOT NULL COMMENT '电影ID',
+    `parent_id` BIGINT UNSIGNED NULL COMMENT '父评论ID，用于回复',
+    `content` TEXT NOT NULL COMMENT '评论内容',
+    `request_id` VARCHAR(64) NOT NULL COMMENT '幂等请求ID，全局唯一',
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`movie_id`) REFERENCES `movies`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`parent_id`) REFERENCES `comments`(`id`) ON DELETE CASCADE,
+    UNIQUE INDEX `uk_request_id` (`request_id`),
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_movie_id` (`movie_id`),
+    INDEX `idx_parent_id` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论表';
+
+-- ============================================
 -- 创建完成提示
 -- ============================================
 SELECT 'MovieRecommendSystem 数据库及所有表创建完成！' AS `提示信息`;

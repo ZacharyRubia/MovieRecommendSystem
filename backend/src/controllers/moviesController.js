@@ -1,4 +1,5 @@
 const Movie = require('../models/Movie');
+const Comment = require('../models/Comment');
 const crypto = require('crypto');
 
 // 生成唯一请求ID
@@ -127,7 +128,7 @@ const rateMovie = async (req, res) => {
   }
 };
 
-// 获取电影评论列表
+// 获取电影评分列表
 const getMovieComments = async (req, res) => {
   try {
     const { movieId } = req.params;
@@ -176,6 +177,142 @@ const getUserRating = async (req, res) => {
   }
 };
 
+// ==================== 文本评论管理 ====================
+
+// 获取电影文本评论列表（顶级评论，含回复数）
+const getMovieTextComments = async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+
+    const comments = await Comment.findByMovieId(movieId, page, limit);
+    const total = await Comment.countByMovieId(movieId);
+
+    res.json({
+      success: true,
+      data: {
+        comments,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('获取文本评论失败:', error);
+    res.status(500).json({ success: false, message: '获取评论失败' });
+  }
+};
+
+// 获取评论的回复列表
+const getCommentReplies = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+
+    const exists = await Comment.exists(commentId);
+    if (!exists) {
+      return res.status(404).json({ success: false, message: '评论不存在' });
+    }
+
+    const replies = await Comment.findReplies(commentId);
+
+    res.json({
+      success: true,
+      data: { replies }
+    });
+  } catch (error) {
+    console.error('获取回复失败:', error);
+    res.status(500).json({ success: false, message: '获取回复失败' });
+  }
+};
+
+// 发表文本评论（或回复）
+const addComment = async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    const { userId, content, parentId } = req.body;
+
+    if (!userId || !content) {
+      return res.status(400).json({ success: false, message: '用户ID和评论内容不能为空' });
+    }
+
+    if (content.trim().length === 0) {
+      return res.status(400).json({ success: false, message: '评论内容不能为空' });
+    }
+
+    if (content.length > 500) {
+      return res.status(400).json({ success: false, message: '评论内容不能超过500字' });
+    }
+
+    // 检查电影是否存在
+    const movie = await Movie.findById(movieId);
+    if (!movie) {
+      return res.status(404).json({ success: false, message: '电影不存在' });
+    }
+
+    // 如果是回复，检查父评论是否存在
+    if (parentId) {
+      const parentExists = await Comment.exists(parentId);
+      if (!parentExists) {
+        return res.status(404).json({ success: false, message: '要回复的评论不存在' });
+      }
+      // 确保父评论属于同一电影
+      const parentMovieId = await Comment.getMovieId(parentId);
+      if (parentMovieId !== parseInt(movieId)) {
+        return res.status(400).json({ success: false, message: '回复的评论不属于该电影' });
+      }
+    }
+
+    const requestId = generateRequestId();
+    const commentId = await Comment.create(userId, movieId, content, requestId, parentId || null);
+
+    res.json({
+      success: true,
+      message: parentId ? '回复成功' : '评论成功',
+      data: { id: commentId }
+    });
+  } catch (error) {
+    console.error('评论失败:', error);
+    res.status(500).json({ success: false, message: '评论失败' });
+  }
+};
+
+// 删除文本评论（用户删除自己的，管理员可删除任意）
+const deleteComment = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { userId, isAdmin } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: '用户ID不能为空' });
+    }
+
+    const exists = await Comment.exists(commentId);
+    if (!exists) {
+      return res.status(404).json({ success: false, message: '评论不存在' });
+    }
+
+    // 检查权限并删除
+    const adminFlag = isAdmin === true || isAdmin === 'true' || isAdmin === 1 || isAdmin === '1';
+    const deleted = await Comment.delete(commentId, userId, adminFlag);
+
+    if (!deleted) {
+      return res.status(403).json({ success: false, message: '没有权限删除此评论' });
+    }
+
+    res.json({
+      success: true,
+      message: '评论删除成功'
+    });
+  } catch (error) {
+    console.error('删除评论失败:', error);
+    res.status(500).json({ success: false, message: '删除评论失败' });
+  }
+};
+
 // 记录用户观看行为
 const recordView = async (req, res) => {
   try {
@@ -213,5 +350,9 @@ module.exports = {
   rateMovie,
   getMovieComments,
   getUserRating,
+  getMovieTextComments,
+  getCommentReplies,
+  addComment,
+  deleteComment,
   recordView
 };
