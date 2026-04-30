@@ -30,7 +30,7 @@ if sys.stdout.encoding != 'utf-8':
 # ============================================
 # MySQL 配置（与后端一致，指向 Ubuntu VM）
 DB_CONFIG = {
-    'host': '192.168.200.128',
+    'host': '192.168.1.38',
     'port': 3306,
     'user': 'newuser',
     'password': 'yourpassword',
@@ -39,7 +39,7 @@ DB_CONFIG = {
 }
 
 # Qdrant 配置（指向 Ubuntu VM 上的 Qdrant 服务）
-QDRANT_HOST = "192.168.200.128"
+QDRANT_HOST = "192.168.1.38"
 QDRANT_PORT = 6333
 COLLECTION_NAME = "movies"
 

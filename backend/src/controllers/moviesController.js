@@ -17,7 +17,7 @@ const getAllMovies = async (req, res) => {
   try {
     // 解析并安全处理参数
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 15));
     
     console.log('[DEBUG] 解析后的 page:', page);
     console.log('[DEBUG] 解析后的 limit:', limit);

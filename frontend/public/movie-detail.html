@@ -409,18 +409,20 @@
             container.innerHTML = '<div class="no-comments">暂无评论，来写第一条评论吧！</div>';
           } else {
             container.innerHTML = data.data.comments.map(c => `
-              <div class="text-comment-item" id="comment-${c.id}">
+              <div class="text-comment-item" id="comment-${c.id}" style="${c.is_pinned ? 'border-color: #ff9800; border-style: solid; border-width: 2px;' : ''}">
                 <div class="text-comment-header">
-                  <span class="text-comment-user">${escapeHtml(c.username)}</span>
+                  <span class="text-comment-user">${c.is_pinned ? '📌 ' : ''}${escapeHtml(c.username)}</span>
                   <div>
                     <span class="text-comment-date">${new Date(c.created_at).toLocaleDateString('zh-CN')}</span>
                     ${canDeleteComment(c.user_id) ? `<button class="action-btn danger" style="margin-left:8px" onclick="deleteComment(${c.id})">删除</button>` : ''}
+                    ${isAdmin ? `<button class="action-btn" style="margin-left:4px;${c.is_pinned ? 'background:#ff9800;color:#fff;border-color:#ff9800' : ''}" onclick="togglePin(${c.id}, ${c.is_pinned ? 0 : 1})">${c.is_pinned ? '取消置顶' : '置顶'}</button>` : ''}
                   </div>
                 </div>
                 <div class="text-comment-content">${escapeHtml(c.content)}</div>
+                ${c.is_pinned ? '<div style="font-size:12px;color:#ff9800;margin-top:4px;font-weight:bold">📌 管理员已将此评论置顶</div>' : ''}
                 <div class="text-comment-actions">
                   <button class="action-btn" onclick="toggleReplyArea(${c.id})">回复</button>
-                  <span class="reply-count" onclick="toggleReplies(${c.id})">${c.reply_count > 0 ? c.reply_count + ' 条回复 ▾' : '回复'}</span>
+                  ${c.reply_count > 0 ? `<span class="reply-count" onclick="toggleReplies(${c.id})">${c.reply_count} 条回复 ▾</span>` : ''}
                 </div>
                 <div class="reply-area" data-comment-id="${c.id}" style="display:none">
                   <textarea class="reply-textarea" data-comment-id="${c.id}" placeholder="回复 ${escapeHtml(c.username)}..." maxlength="500"></textarea>
@@ -431,6 +433,31 @@
           }
         } else container.innerHTML = `<div class="error-message">${data.message || '加载失败'}</div>`;
       } catch { container.innerHTML = '<div class="error-message">网络错误，请确保后端服务已启动</div>'; }
+    }
+
+    // 置顶/取消置顶评论（管理员专用）
+    async function togglePin(commentId, isPinned) {
+      const adminToken = localStorage.getItem('adminToken');
+      if (!adminToken) {
+        alert('管理员登录状态已失效');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/comments/${commentId}/pin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPinned })
+        });
+        const data = await res.json();
+        if (data.success) {
+          loadTextComments();
+        } else {
+          alert(data.message || '操作失败');
+        }
+      } catch {
+        alert('网络错误，操作失败');
+      }
     }
 
     // HTML转义防止XSS

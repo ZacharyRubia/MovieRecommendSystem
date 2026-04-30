@@ -677,6 +677,34 @@ exports.deleteComment = async (req, res) => {
   }
 };
 
+// 管理员置顶/取消置顶评论
+exports.togglePinComment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isPinned } = req.body;
+    const Comment = require('../models/Comment');
+
+    const exists = await Comment.exists(id);
+    if (!exists) {
+      return res.status(404).json({ success: false, message: '评论不存在' });
+    }
+
+    const updated = await Comment.togglePin(id, isPinned);
+    if (!updated) {
+      return res.status(500).json({ success: false, message: '操作失败' });
+    }
+
+    res.json({
+      success: true,
+      message: isPinned ? '评论已置顶' : '评论已取消置顶',
+      data: { isPinned: !!isPinned }
+    });
+  } catch (err) {
+    console.error('置顶评论失败:', err);
+    res.status(500).json({ success: false, message: '置顶评论失败' });
+  }
+};
+
 // ==================== 管理员个人信息 ====================
 
 // 获取管理员个人信息

@@ -8,6 +8,7 @@ const usersRouter = require('./src/routes/users');
 const moviesRouter = require('./src/routes/movies');
 const transcodeRouter = require('./src/routes/transcode');
 const adminRouter = require('./src/routes/admin');
+const { cacheService, writeBehindQueue } = require('./src/services/cacheService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -96,6 +97,42 @@ app.use('/api/movies', moviesRouter);
 app.use('/api/transcode', transcodeRouter);
 // 管理员路由
 app.use('/api/admin', adminRouter);
+
+// 缓存状态接口（仅用于调试/监控）
+app.get('/api/cache/status', async (req, res) => {
+  try {
+    const stats = await cacheService.getStats();
+    res.json({ success: true, data: stats });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 清除所有缓存
+app.post('/api/cache/flush', async (req, res) => {
+  try {
+    await cacheService.flushAll();
+    res.json({ success: true, message: '所有缓存已清除' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: '清除失败: ' + err.message });
+  }
+});
+
+// 强制写入所有待处理数据到数据库
+app.post('/api/cache/flush-write-behind', async (req, res) => {
+  try {
+    await writeBehindQueue.flushAll();
+    res.json({ success: true, message: '所有待写入数据已刷入数据库' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: '刷写失败: ' + err.message });
+  }
+});
+
+// 获取 Write-Behind 队列状态
+app.get('/api/cache/write-behind-status', (req, res) => {
+  const stats = writeBehindQueue.getStats();
+  res.json({ success: true, data: stats });
+});
 
 // 用户注册接口 - 第一个注册用户自动成为管理员
 app.post('/api/register', async (req, res) => {
@@ -191,4 +228,8 @@ app.listen(PORT, () => {
   console.log(`  GET  http://localhost:${PORT}/api/movies`);
   console.log(`  GET  http://localhost:${PORT}/api/movies/:id`);
   console.log(`  POST http://localhost:${PORT}/api/movies/:movieId/rate`);
+  console.log(`  GET  http://localhost:${PORT}/api/cache/status`);
+  console.log(`  POST http://localhost:${PORT}/api/cache/flush`);
+  console.log(`  POST http://localhost:${PORT}/api/cache/flush-write-behind`);
+  console.log(`  GET  http://localhost:${PORT}/api/cache/write-behind-status`);
 });

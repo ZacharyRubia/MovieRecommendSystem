@@ -312,6 +312,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
         <span>用户管理</span>
       </div>
+      <div class="nav-item" data-page="comments" onclick="switchPage('comments')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>评论管理</span>
+      </div>
       <a class="nav-item" href="admin-profile.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v6M9 14h6"/></svg>
         <span>个人设置</span>
@@ -592,6 +596,43 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
           <p>暂无用户数据</p>
         </div>
+      </div>
+    </div>
+
+    <!-- ==================== 评论管理页 ==================== -->
+    <div class="page-content" id="page-comments">
+      <div class="page-header">
+        <h2>评论管理</h2>
+        <p>管理所有用户评论，支持置顶和删除操作</p>
+      </div>
+      <div class="toolbar">
+        <div class="search-box">
+          <input type="text" id="commentSearch" placeholder="搜索评论内容、用户名或电影标题...">
+          <button class="btn btn-primary" onclick="searchComments()">搜索</button>
+        </div>
+      </div>
+      <div class="table-container">
+        <div id="commentsLoading" class="loading">加载中...</div>
+        <table id="commentsTable" style="display:none;">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>用户</th>
+              <th>电影</th>
+              <th>评论内容</th>
+              <th>类型</th>
+              <th>置顶</th>
+              <th>时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="commentsTableBody"></tbody>
+        </table>
+        <div id="commentsEmpty" class="empty-state" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <p>暂无评论数据</p>
+        </div>
+        <div class="pagination" id="commentsPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -960,6 +1001,7 @@
         case 'directors': loadDirectors(); break;
         case 'actors': loadActors(); break;
         case 'users': loadUsers(); break;
+        case 'comments': loadComments(); break;
       }
     }
 
@@ -1801,6 +1843,174 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // ==================== 评论管理 ====================
+    let commentPage = 1;
+    let commentPageSize = 20;
+    let commentTotal = 0;
+    let commentSearchKeyword = '';
+
+    async function loadComments() {
+      const loading = document.getElementById('commentsLoading');
+      const table = document.getElementById('commentsTable');
+      const empty = document.getElementById('commentsEmpty');
+      const pagination = document.getElementById('commentsPagination');
+
+      loading.style.display = 'block';
+      table.style.display = 'none';
+      empty.style.display = 'none';
+      pagination.style.display = 'none';
+
+      try {
+        const url = `${ADMIN_API}/comments?page=${commentPage}&pageSize=${commentPageSize}${commentSearchKeyword ? '&search=' + encodeURIComponent(commentSearchKeyword) : ''}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.success) {
+          commentTotal = data.data.total;
+          renderComments(data.data.comments);
+          renderCommentPagination();
+        } else {
+          showToast(data.message || '获取评论列表失败', 'error');
+          loading.style.display = 'none';
+          empty.style.display = 'block';
+        }
+      } catch (err) {
+        console.error('加载评论失败:', err);
+        showToast('网络错误，加载评论失败', 'error');
+        loading.style.display = 'none';
+        empty.style.display = 'block';
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+
+    function renderComments(comments) {
+      const table = document.getElementById('commentsTable');
+      const empty = document.getElementById('commentsEmpty');
+      const tbody = document.getElementById('commentsTableBody');
+
+      if (!comments || comments.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      table.style.display = 'table';
+      empty.style.display = 'none';
+      tbody.innerHTML = '';
+
+      comments.forEach(c => {
+        const row = document.createElement('tr');
+        const isReply = c.parent_id !== null;
+        const typeText = isReply ? '回复' : '评论';
+        const pinBtnText = c.is_pinned ? '取消置顶' : '置顶';
+        const pinBtnClass = c.is_pinned ? 'btn-warning' : 'btn btn-sm btn-success';
+
+        // 截断评论内容
+        const truncatedContent = c.content && c.content.length > 50
+          ? escapeHtml(c.content.substring(0, 50)) + '...'
+          : escapeHtml(c.content || '');
+
+        row.innerHTML = `
+          <td>${c.id}</td>
+          <td>${escapeHtml(c.username)}</td>
+          <td title="${escapeHtml(c.movie_title || '')}">${escapeHtml(c.movie_title || '-')}</td>
+          <td title="${escapeHtml(c.content || '')}">${truncatedContent || '-'}</td>
+          <td><span class="tag">${typeText}</span></td>
+          <td>${c.is_pinned ? '<span style="color:#d4a017;font-weight:bold;">★ 已置顶</span>' : '否'}</td>
+          <td>${c.created_at ? new Date(c.created_at).toLocaleString('zh-CN') : '-'}</td>
+          <td>
+            <div class="table-actions">
+              ${!isReply ? `<button class="btn btn-sm ${pinBtnClass}" onclick="togglePin(${c.id}, ${c.is_pinned ? 'false' : 'true'})">${pinBtnText}</button>` : ''}
+              <button class="btn btn-sm btn-delete" onclick="confirmDeleteComment(${c.id})">删除</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function renderCommentPagination() {
+      const pagination = document.getElementById('commentsPagination');
+      const totalPages = Math.ceil(commentTotal / commentPageSize);
+
+      if (totalPages <= 1) { pagination.style.display = 'none'; return; }
+
+      pagination.style.display = 'flex';
+      pagination.innerHTML = '';
+
+      const prevBtn = document.createElement('button');
+      prevBtn.textContent = '上一页';
+      prevBtn.disabled = commentPage <= 1;
+      prevBtn.onclick = () => { commentPage--; loadComments(); };
+      pagination.appendChild(prevBtn);
+
+      const span = document.createElement('span');
+      span.textContent = `第 ${commentPage} / ${totalPages} 页 (共 ${commentTotal} 条)`;
+      pagination.appendChild(span);
+
+      const nextBtn = document.createElement('button');
+      nextBtn.textContent = '下一页';
+      nextBtn.disabled = commentPage >= totalPages;
+      nextBtn.onclick = () => { commentPage++; loadComments(); };
+      pagination.appendChild(nextBtn);
+    }
+
+    function searchComments() {
+      commentSearchKeyword = document.getElementById('commentSearch').value.trim();
+      commentPage = 1;
+      loadComments();
+    }
+
+    document.getElementById('commentSearch').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchComments();
+    });
+
+    // 切换评论置顶状态
+    async function togglePin(commentId, pinState) {
+      try {
+        const res = await fetch(`${ADMIN_API}/comments/${commentId}/pin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPinned: pinState })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          loadComments();
+        } else {
+          showToast(data.message || '操作失败', 'error');
+        }
+      } catch (err) {
+        console.error('置顶操作失败:', err);
+        showToast('网络错误，操作失败', 'error');
+      }
+    }
+
+    // 确认删除评论
+    function confirmDeleteComment(commentId) {
+      document.getElementById('deleteMessage').textContent = '确定要删除这条评论吗？此操作不可恢复。';
+      document.getElementById('deleteModal').classList.add('active');
+
+      const confirmBtn = document.getElementById('confirmDeleteBtn');
+      confirmBtn.onclick = async () => {
+        try {
+          const res = await fetch(`${ADMIN_API}/comments/${commentId}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            showToast(data.message || '删除成功', 'success');
+            closeModal('deleteModal');
+            loadComments();
+          } else {
+            showToast(data.message || '删除失败', 'error');
+          }
+        } catch (err) {
+          console.error('删除评论失败:', err);
+          showToast('网络错误，删除失败', 'error');
+        }
+      };
     }
 
     // ==================== 页面初始化 ====================

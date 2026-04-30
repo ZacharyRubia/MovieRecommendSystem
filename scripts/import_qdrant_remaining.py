@@ -21,7 +21,7 @@ if sys.stdout.encoding != 'utf-8':
 # 配置区（与 import_qdrant.py 保持一致）
 # ============================================
 DB_CONFIG = {
-    'host': '192.168.200.128',
+    'host': '192.168.1.38',
     'port': 3306,
     'user': 'newuser',
     'password': 'yourpassword',
@@ -29,7 +29,7 @@ DB_CONFIG = {
     'charset': 'utf8mb4'
 }
 
-QDRANT_HOST = "192.168.200.128"
+QDRANT_HOST = "192.168.1.38"
 QDRANT_PORT = 6333
 COLLECTION_NAME = "movies"
 MODEL_PATH = r"D:\Code\models\all-MiniLM-L6-v2"

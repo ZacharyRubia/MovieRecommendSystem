@@ -2,7 +2,7 @@ const mysql = require('mysql2/promise'); // 使用 Promise 版本
 
 // 创建连接池
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || '192.168.200.128',
+  host: process.env.DB_HOST || '192.168.1.38',
   user: process.env.DB_USER || 'newuser',
   password: process.env.DB_PASSWORD || 'yourpassword',
   database: process.env.DB_NAME || 'MovieRecommendSystem',

@@ -1,7 +1,7 @@
 import pymysql
 
 conn = pymysql.connect(
-    host='192.168.200.128', port=3306,
+    host='192.168.1.38', port=3306,
     user='newuser', password='yourpassword',
     database='MovieRecommendSystem', charset='utf8mb4'
 )

@@ -155,7 +155,7 @@ set PYTHONIOENCODING=utf-8 && python scripts/run_import_tags.py
 
 ```python
 DB_CONFIG = {
-    'host': '192.168.200.128',
+    'host': '192.168.1.38',
     'port': 3306,
     'user': 'newuser',
     'password': 'yourpassword',
