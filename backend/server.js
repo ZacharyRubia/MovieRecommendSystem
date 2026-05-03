@@ -97,6 +97,9 @@ app.use('/api/movies', moviesRouter);
 app.use('/api/transcode', transcodeRouter);
 // 管理员路由
 app.use('/api/admin', adminRouter);
+// 推荐路由
+const recommendRouter = require('./src/routes/recommend');
+app.use('/api/recommend', recommendRouter);
 
 // 缓存状态接口（仅用于调试/监控）
 app.get('/api/cache/status', async (req, res) => {

@@ -9,8 +9,9 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background-color: #f0f0f0;
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
+      overflow: hidden;
     }
 
     /* 侧边栏 - 纯黑 */
@@ -26,10 +27,17 @@
       box-shadow: 2px 0 10px rgba(0,0,0,0.3);
       z-index: 100;
     }
-    .sidebar-header { padding: 30px 20px; border-bottom: 1px solid #333; }
+    .sidebar-header { padding: 30px 20px; border-bottom: 1px solid #333; flex-shrink: 0; }
     .sidebar-header h1 { font-size: 20px; font-weight: 600; }
     .sidebar-header p { font-size: 12px; opacity: 0.5; margin-top: 5px; }
-    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; }
+    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    .sidebar-nav::-webkit-scrollbar { width: 4px; }
+    .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .main-content { flex: 1; margin-left: 250px; height: 100vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ccc transparent; padding: 30px; }
+    .main-content::-webkit-scrollbar { width: 4px; }
+    .main-content::-webkit-scrollbar-track { background: transparent; }
+    .main-content::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
     .nav-item {
       display: flex; align-items: center; padding: 15px 25px;
       color: #888; cursor: pointer; transition: all 0.3s;
@@ -56,8 +64,6 @@
     }
     .btn-logout:hover { background: #333; border-color: #666; }
 
-    /* 主内容区 */
-    .main-content { flex: 1; margin-left: 250px; padding: 30px; }
     .page-header { margin-bottom: 30px; }
     .page-header h2 { font-size: 28px; color: #111; margin-bottom: 5px; }
     .page-header p { color: #666; font-size: 14px; }
@@ -156,8 +162,11 @@
     .modal.active { display: flex; }
     .modal-content {
       background: #fff; border-radius: 10px; width: 100%;
-      max-width: 600px; max-height: 90vh; overflow-y: auto;
+      max-width: 600px; max-height: 90vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent;
     }
+    .modal-content::-webkit-scrollbar { width: 4px; }
+    .modal-content::-webkit-scrollbar-track { background: transparent; }
+    .modal-content::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
     .modal-header {
       padding: 20px; border-bottom: 1px solid #ddd;
       display: flex; justify-content: space-between; align-items: center;
@@ -190,8 +199,11 @@
     /* 关联选择器 */
     .relation-selector {
       border: 2px solid #ddd; border-radius: 6px;
-      padding: 15px; max-height: 200px; overflow-y: auto;
+      padding: 15px; max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent;
     }
+    .relation-selector::-webkit-scrollbar { width: 4px; }
+    .relation-selector::-webkit-scrollbar-track { background: transparent; }
+    .relation-selector::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
     .relation-item {
       display: flex; align-items: center; padding: 8px 0;
       border-bottom: 1px solid #eee;
@@ -236,7 +248,10 @@
     .import-area svg { width: 60px; height: 60px; color: #999; margin-bottom: 15px; }
     .import-result { background: #f5f5f5; border-radius: 6px; padding: 15px; margin-top: 15px; }
     .import-result h4 { font-size: 14px; margin-bottom: 10px; color: #111; }
-    .import-result ul { list-style: none; max-height: 150px; overflow-y: auto; }
+    .import-result ul { list-style: none; max-height: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent; }
+    .import-result ul::-webkit-scrollbar { width: 4px; }
+    .import-result ul::-webkit-scrollbar-track { background: transparent; }
+    .import-result ul::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
     .import-result li { font-size: 12px; padding: 5px 0; color: #cc0000; }
 
     /* 统计卡片 */
@@ -449,12 +464,13 @@
           </thead>
           <tbody id="tagsTableBody"></tbody>
         </table>
-        <div id="tagsEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
-          <p>暂无标签数据</p>
+            <div id="tagsEmpty" class="empty-state" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
+              <p>暂无标签数据</p>
+            </div>
+            <div class="pagination" id="tagsPagination" style="display:none;"></div>
+          </div>
         </div>
-      </div>
-    </div>
 
     <!-- ==================== 导演管理页 ==================== -->
     <div class="page-content" id="page-directors">
@@ -489,6 +505,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
           <p>暂无导演数据</p>
         </div>
+        <div class="pagination" id="directorsPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -525,6 +542,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <p>暂无演员数据</p>
         </div>
+        <div class="pagination" id="actorsPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -560,6 +578,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           <p>暂无题材数据</p>
         </div>
+        <div class="pagination" id="genresPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -596,6 +615,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
           <p>暂无用户数据</p>
         </div>
+        <div class="pagination" id="usersPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -1014,17 +1034,17 @@
     async function loadDashboard() {
       try {
         const [moviesRes, tagsRes, directorsRes, actorsRes, usersRes] = await Promise.all([
-          fetch(`${ADMIN_API}/movies?page=1&pageSize=1`).then(r => r.json()),
-          fetch(`${ADMIN_API}/tags`).then(r => r.json()),
-          fetch(`${ADMIN_API}/directors`).then(r => r.json()),
-          fetch(`${ADMIN_API}/actors`).then(r => r.json()),
-          fetch(`${USER_API}/users`).then(r => r.json())
+          fetch(`${ADMIN_API}/movies?page=1&limit=1`).then(r => r.json()),
+          fetch(`${ADMIN_API}/tags?page=1&limit=1`).then(r => r.json()),
+          fetch(`${ADMIN_API}/directors?page=1&limit=1`).then(r => r.json()),
+          fetch(`${ADMIN_API}/actors?page=1&limit=1`).then(r => r.json()),
+          fetch(`${USER_API}/users?page=1&limit=1`).then(r => r.json())
         ]);
         document.getElementById('statMovies').textContent = moviesRes.success ? moviesRes.data.total : 0;
-        document.getElementById('statTags').textContent = tagsRes.success ? tagsRes.data.length : 0;
-        document.getElementById('statDirectors').textContent = directorsRes.success ? directorsRes.data.length : 0;
-        document.getElementById('statActors').textContent = actorsRes.success ? actorsRes.data.length : 0;
-        document.getElementById('statUsers').textContent = usersRes.success ? usersRes.data.length : 0;
+        document.getElementById('statTags').textContent = tagsRes.success ? (tagsRes.data.total || 0) : 0;
+        document.getElementById('statDirectors').textContent = directorsRes.success ? (directorsRes.data.total || 0) : 0;
+        document.getElementById('statActors').textContent = actorsRes.success ? (actorsRes.data.total || 0) : 0;
+        document.getElementById('statUsers').textContent = usersRes.success ? (usersRes.total || 0) : 0;
       } catch (err) {
         console.error('加载概览数据失败:', err);
         showToast('加载概览数据失败', 'error');
@@ -1044,7 +1064,7 @@
       pagination.style.display = 'none';
 
       try {
-        const url = `${ADMIN_API}/movies?page=${moviePage}&pageSize=${moviePageSize}${movieSearchKeyword ? '&search=' + encodeURIComponent(movieSearchKeyword) : ''}`;
+        const url = `${ADMIN_API}/movies?page=${moviePage}&limit=${moviePageSize}${movieSearchKeyword ? '&search=' + encodeURIComponent(movieSearchKeyword) : ''}`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -1169,9 +1189,9 @@
           fetch(`${ADMIN_API}/actors`).then(r => r.json())
         ]);
 
-        allTags = tagsRes.success ? tagsRes.data : [];
-        allDirectors = directorsRes.success ? directorsRes.data : [];
-        allActors = actorsRes.success ? actorsRes.data : [];
+        allTags = tagsRes.success ? (tagsRes.data.tags || tagsRes.data) : [];
+        allDirectors = directorsRes.success ? (directorsRes.data.directors || directorsRes.data) : [];
+        allActors = actorsRes.success ? (actorsRes.data.actors || actorsRes.data) : [];
 
         const movieTags = movieData && movieData.tags ? movieData.tags.map(t => t.id) : [];
         const movieDirectors = movieData && movieData.directors ? movieData.directors.map(d => d.id) : [];
@@ -1346,7 +1366,7 @@
       try {
         const res = await fetch(`${ADMIN_API}/tags`);
         const data = await res.json();
-        if (data.success) { allTags = data.data; renderTags(data.data); }
+        if (data.success) { allTags = data.data.tags || data.data; renderTags(allTags); }
         else { showToast(data.message || '获取标签列表失败', 'error'); }
       } catch (err) {
         console.error('加载标签失败:', err);
@@ -1503,7 +1523,7 @@
       try {
         const res = await fetch(`${ADMIN_API}/directors`);
         const data = await res.json();
-        if (data.success) { allDirectors = data.data; renderDirectors(data.data); }
+        if (data.success) { allDirectors = data.data.directors || data.data; renderDirectors(allDirectors); }
         else { showToast(data.message || '获取导演列表失败', 'error'); }
       } catch (err) {
         console.error('加载导演失败:', err);
@@ -1587,7 +1607,7 @@
       try {
         const res = await fetch(`${ADMIN_API}/actors`);
         const data = await res.json();
-        if (data.success) { allActors = data.data; renderActors(data.data); }
+        if (data.success) { allActors = data.data.actors || data.data; renderActors(allActors); }
         else { showToast(data.message || '获取演员列表失败', 'error'); }
       } catch (err) {
         console.error('加载演员失败:', err);
@@ -1661,22 +1681,43 @@
       } catch (err) { console.error('保存演员失败:', err); showToast('网络错误，保存失败', 'error'); }
     }
 
-    // ==================== 用户管理 ====================
-    async function loadUsers() {
+    // ==================== 用户管理（分页） ====================
+    let currentUserPage = 1;
+    const USER_PAGE_SIZE = 20;
+
+    async function loadUsers(page = currentUserPage) {
+      currentUserPage = page;
       const loading = document.getElementById('usersLoading');
       const table = document.getElementById('usersTable');
       const empty = document.getElementById('usersEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
+      const pagination = document.getElementById('usersPagination');
+      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none'; if (pagination) pagination.style.display = 'none';
 
       try {
-        const res = await fetch(`${USER_API}/users`);
+        const res = await fetch(`${USER_API}/users?page=${page}&limit=${USER_PAGE_SIZE}`);
         const data = await res.json();
-        if (data.success) { allUsers = data.data; renderUsers(data.data); }
+        if (data.success) {
+          allUsers = data.data;
+          renderUsers(data.data);
+          renderUsersPagination(data.total, data.page, data.totalPages);
+        }
         else { showToast(data.message || '获取用户列表失败', 'error'); }
       } catch (err) {
         console.error('加载用户失败:', err);
         showToast('网络错误，加载用户失败', 'error');
       } finally { loading.style.display = 'none'; }
+    }
+
+    function renderUsersPagination(total, page, totalPages) {
+      const pagination = document.getElementById('usersPagination');
+      if (!pagination) return;
+      if (!totalPages || totalPages <= 1) { pagination.style.display = 'none'; return; }
+      pagination.style.display = 'flex';
+      let html = '';
+      html += `<button class="pagination-btn" onclick="loadUsers(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>`;
+      html += `<span class="pagination-info">第 ${page} / ${totalPages} 页（共 ${total} 条）</span>`;
+      html += `<button class="pagination-btn" onclick="loadUsers(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button>`;
+      pagination.innerHTML = html;
     }
 
     function renderUsers(users) {

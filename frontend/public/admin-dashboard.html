@@ -29,7 +29,7 @@
     .sidebar-header { padding: 30px 20px; border-bottom: 1px solid rgba(255,255,255,0.2); }
     .sidebar-header h1 { font-size: 20px; font-weight: 600; }
     .sidebar-header p { font-size: 12px; opacity: 0.8; margin-top: 5px; }
-    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; }
+    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.3) transparent; }
     .nav-item {
       display: flex; align-items: center; padding: 15px 25px;
       color: rgba(255,255,255,0.8); cursor: pointer; transition: all 0.3s;
@@ -57,7 +57,7 @@
     .btn-logout:hover { background: rgba(255,255,255,0.3); }
 
     /* 主内容区 */
-    .main-content { flex: 1; margin-left: 250px; padding: 30px; }
+    .main-content { flex: 1; margin-left: 250px; height: 100vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ccc transparent; padding: 30px; }
     .page-header { margin-bottom: 30px; }
     .page-header h2 { font-size: 28px; color: #333; margin-bottom: 5px; }
     .page-header p { color: #666; font-size: 14px; }
@@ -177,7 +177,7 @@
     .modal.active { display: flex; }
     .modal-content {
       background: white; border-radius: 10px; width: 100%;
-      max-width: 600px; max-height: 90vh; overflow-y: auto;
+      max-width: 600px; max-height: 90vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent;
     }
     .modal-header {
       padding: 20px; border-bottom: 1px solid #dee2e6;
@@ -211,7 +211,7 @@
     /* 关联选择器 */
     .relation-selector {
       border: 2px solid #e1e1e1; border-radius: 6px;
-      padding: 15px; max-height: 200px; overflow-y: auto;
+      padding: 15px; max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent;
     }
     .relation-item {
       display: flex; align-items: center; padding: 8px 0;
@@ -469,6 +469,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
           <p>暂无标签数据</p>
         </div>
+        <div class="pagination" id="tagsPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -505,6 +506,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
           <p>暂无导演数据</p>
         </div>
+        <div class="pagination" id="directorsPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -541,6 +543,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <p>暂无演员数据</p>
         </div>
+        <div class="pagination" id="actorsPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -613,6 +616,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           <p>暂无题材数据</p>
         </div>
+        <div class="pagination" id="genresPagination" style="display:none;"></div>
       </div>
     </div>
 
@@ -933,20 +937,26 @@
     }
 
     // ==================== 数据概览 ====================
+    const PAGE_SIZE_DEFAULT = 50; // tags/directors/actors/genres 每页条数
+    let currentTagPage = 1;
+    let currentDirectorPage = 1;
+    let currentActorPage = 1;
+    let currentGenrePage = 1;
+
     async function loadDashboard() {
       try {
         const [moviesRes, tagsRes, genresRes, directorsRes, actorsRes] = await Promise.all([
-          fetch(`${API_BASE}/movies?page=1&pageSize=1`).then(r => r.json()),
-          fetch(`${API_BASE}/tags`).then(r => r.json()),
-          fetch(`${API_BASE}/genres`).then(r => r.json()),
-          fetch(`${API_BASE}/directors`).then(r => r.json()),
-          fetch(`${API_BASE}/actors`).then(r => r.json())
+          fetch(`${API_BASE}/movies?page=1&limit=1`).then(r => r.json()),
+          fetch(`${API_BASE}/tags?page=1&limit=1`).then(r => r.json()),
+          fetch(`${API_BASE}/genres?page=1&limit=1`).then(r => r.json()),
+          fetch(`${API_BASE}/directors?page=1&limit=1`).then(r => r.json()),
+          fetch(`${API_BASE}/actors?page=1&limit=1`).then(r => r.json())
         ]);
         document.getElementById('statMovies').textContent = moviesRes.success ? moviesRes.data.total : 0;
-        document.getElementById('statTags').textContent = tagsRes.success ? tagsRes.data.length : 0;
-        document.getElementById('statGenres').textContent = genresRes.success ? genresRes.data.length : 0;
-        document.getElementById('statDirectors').textContent = directorsRes.success ? directorsRes.data.length : 0;
-        document.getElementById('statActors').textContent = actorsRes.success ? actorsRes.data.length : 0;
+        document.getElementById('statTags').textContent = tagsRes.success ? tagsRes.data.total : 0;
+        document.getElementById('statGenres').textContent = genresRes.success ? genresRes.data.total : 0;
+        document.getElementById('statDirectors').textContent = directorsRes.success ? directorsRes.data.total : 0;
+        document.getElementById('statActors').textContent = actorsRes.success ? actorsRes.data.total : 0;
       } catch (err) {
         console.error('加载概览数据失败:', err);
         showToast('加载概览数据失败', 'error');
@@ -966,7 +976,7 @@
       pagination.style.display = 'none';
 
       try {
-        const url = `${API_BASE}/movies?page=${moviePage}&pageSize=${moviePageSize}${movieSearchKeyword ? '&search=' + encodeURIComponent(movieSearchKeyword) : ''}`;
+        const url = `${API_BASE}/movies?page=${moviePage}&limit=${moviePageSize}${movieSearchKeyword ? '&search=' + encodeURIComponent(movieSearchKeyword) : ''}`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -1009,12 +1019,9 @@
         row.innerHTML = `
           <td>${movie.id}</td>
           <td>
-            <div class="movie-info">
-              ${movie.cover_url ? `<img class="movie-cover" src="${movie.cover_url}" alt="${movie.title}" onerror="this.style.display='none'">` : '<div class="movie-cover" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🎬</div>'}
-              <div>
-                <div class="movie-title">${escapeHtml(movie.title)}</div>
-                <div class="movie-meta">${movie.avg_rating ? '⭐ ' + movie.avg_rating : ''}</div>
-              </div>
+            <div>
+              <div class="movie-title">${escapeHtml(movie.title)}</div>
+              <div class="movie-meta">${movie.avg_rating ? '⭐ ' + movie.avg_rating : ''}</div>
             </div>
           </td>
           <td>${tagsHtml || '-'}</td>
@@ -1091,18 +1098,18 @@
 
     async function loadRelationSelectors(movieData = null) {
       try {
-        // 并行加载标签、题材、导演、演员
+        // 并行加载标签、题材、导演、演员（用大 limit 获取全量用于选择器）
         const [tagsRes, genresRes, directorsRes, actorsRes] = await Promise.all([
-          fetch(`${API_BASE}/tags`).then(r => r.json()),
-          fetch(`${API_BASE}/genres`).then(r => r.json()),
-          fetch(`${API_BASE}/directors`).then(r => r.json()),
-          fetch(`${API_BASE}/actors`).then(r => r.json())
+          fetch(`${API_BASE}/tags?limit=10000`).then(r => r.json()),
+          fetch(`${API_BASE}/genres?limit=10000`).then(r => r.json()),
+          fetch(`${API_BASE}/directors?limit=10000`).then(r => r.json()),
+          fetch(`${API_BASE}/actors?limit=10000`).then(r => r.json())
         ]);
 
-        allTags = tagsRes.success ? tagsRes.data : [];
-        allDirectors = directorsRes.success ? directorsRes.data : [];
-        allActors = actorsRes.success ? actorsRes.data : [];
-        const allGenres = genresRes.success ? genresRes.data : [];
+        allTags = tagsRes.success ? tagsRes.data.tags : [];
+        allDirectors = directorsRes.success ? directorsRes.data.directors : [];
+        allActors = actorsRes.success ? actorsRes.data.actors : [];
+        const allGenres = genresRes.success ? genresRes.data.genres : [];
 
         // 当前电影的关联
         const movieTags = movieData && movieData.tags ? movieData.tags.map(t => t.id) : [];
@@ -1327,18 +1334,21 @@
       const loading = document.getElementById('tagsLoading');
       const table = document.getElementById('tagsTable');
       const empty = document.getElementById('tagsEmpty');
+      const pagination = document.getElementById('tagsPagination');
 
       loading.style.display = 'block';
       table.style.display = 'none';
       empty.style.display = 'none';
+      if (pagination) pagination.style.display = 'none';
 
       try {
-        const res = await fetch(`${API_BASE}/tags`);
+        const res = await fetch(`${API_BASE}/tags?page=${currentTagPage}&limit=${PAGE_SIZE_DEFAULT}`);
         const data = await res.json();
 
         if (data.success) {
-          allTags = data.data;
-          renderTags(data.data);
+          allTags = data.data.tags;
+          renderTags(data.data.tags);
+          renderSimplePagination('tagsPagination', data.data.page, data.data.total, PAGE_SIZE_DEFAULT, () => loadTags(), currentTagPage, (p) => { currentTagPage = p; });
         } else {
           showToast(data.message || '获取标签列表失败', 'error');
         }
@@ -1437,18 +1447,21 @@
       const loading = document.getElementById('directorsLoading');
       const table = document.getElementById('directorsTable');
       const empty = document.getElementById('directorsEmpty');
+      const pagination = document.getElementById('directorsPagination');
 
       loading.style.display = 'block';
       table.style.display = 'none';
       empty.style.display = 'none';
+      if (pagination) pagination.style.display = 'none';
 
       try {
-        const res = await fetch(`${API_BASE}/directors`);
+        const res = await fetch(`${API_BASE}/directors?page=${currentDirectorPage}&limit=${PAGE_SIZE_DEFAULT}`);
         const data = await res.json();
 
         if (data.success) {
-          allDirectors = data.data;
-          renderDirectors(data.data);
+          allDirectors = data.data.directors;
+          renderDirectors(data.data.directors);
+          renderSimplePagination('directorsPagination', data.data.page, data.data.total, PAGE_SIZE_DEFAULT, () => loadDirectors(), currentDirectorPage, (p) => { currentDirectorPage = p; });
         } else {
           showToast(data.message || '获取导演列表失败', 'error');
         }
@@ -1565,18 +1578,21 @@
       const loading = document.getElementById('actorsLoading');
       const table = document.getElementById('actorsTable');
       const empty = document.getElementById('actorsEmpty');
+      const pagination = document.getElementById('actorsPagination');
 
       loading.style.display = 'block';
       table.style.display = 'none';
       empty.style.display = 'none';
+      if (pagination) pagination.style.display = 'none';
 
       try {
-        const res = await fetch(`${API_BASE}/actors`);
+        const res = await fetch(`${API_BASE}/actors?page=${currentActorPage}&limit=${PAGE_SIZE_DEFAULT}`);
         const data = await res.json();
 
         if (data.success) {
-          allActors = data.data;
-          renderActors(data.data);
+          allActors = data.data.actors;
+          renderActors(data.data.actors);
+          renderSimplePagination('actorsPagination', data.data.page, data.data.total, PAGE_SIZE_DEFAULT, () => loadActors(), currentActorPage, (p) => { currentActorPage = p; });
         } else {
           showToast(data.message || '获取演员列表失败', 'error');
         }
@@ -1693,17 +1709,20 @@
       const loading = document.getElementById('genresLoading');
       const table = document.getElementById('genresTable');
       const empty = document.getElementById('genresEmpty');
+      const pagination = document.getElementById('genresPagination');
 
       loading.style.display = 'block';
       table.style.display = 'none';
       empty.style.display = 'none';
+      if (pagination) pagination.style.display = 'none';
 
       try {
-        const res = await fetch(`${API_BASE}/genres`);
+        const res = await fetch(`${API_BASE}/genres?page=${currentGenrePage}&limit=${PAGE_SIZE_DEFAULT}`);
         const data = await res.json();
 
         if (data.success) {
-          renderGenres(data.data);
+          renderGenres(data.data.genres);
+          renderSimplePagination('genresPagination', data.data.page, data.data.total, PAGE_SIZE_DEFAULT, () => loadGenres(), currentGenrePage, (p) => { currentGenrePage = p; });
         } else {
           showToast(data.message || '获取题材列表失败', 'error');
         }
@@ -1840,6 +1859,32 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // 通用分页渲染函数（用于 tags/directors/actors/genres）
+    function renderSimplePagination(containerId, currentPage, totalItems, pageSize, onLoadCallback, pageGetter, pageSetter) {
+      const pagination = document.getElementById(containerId);
+      if (!pagination) return;
+      const totalPages = Math.ceil(totalItems / pageSize);
+      if (totalPages <= 1) {
+        pagination.style.display = 'none';
+        return;
+      }
+      pagination.style.display = 'flex';
+      pagination.innerHTML = '';
+      const prevBtn = document.createElement('button');
+      prevBtn.textContent = '上一页';
+      prevBtn.disabled = currentPage <= 1;
+      prevBtn.onclick = () => { pageSetter(currentPage - 1); onLoadCallback(); };
+      pagination.appendChild(prevBtn);
+      const span = document.createElement('span');
+      span.textContent = `第 ${currentPage} / ${totalPages} 页 (共 ${totalItems} 条)`;
+      pagination.appendChild(span);
+      const nextBtn = document.createElement('button');
+      nextBtn.textContent = '下一页';
+      nextBtn.disabled = currentPage >= totalPages;
+      nextBtn.onclick = () => { pageSetter(currentPage + 1); onLoadCallback(); };
+      pagination.appendChild(nextBtn);
     }
 
     // ==================== 评论管理 ====================

@@ -24,14 +24,19 @@ function cacheResponse(keyPrefix, ttlSeconds = DEFAULT_TTL_SECONDS) {
       return next();
     }
 
-    // 构建缓存键：前缀 + 请求路径 + 请求参数
-    const queryString = Object.keys(req.query).length > 0
-      ? '?' + Object.entries(req.query)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([k, v]) => `${k}=${v}`)
-          .join('&')
-      : '';
-    const cacheKey = `${keyPrefix}${req.path}${queryString}`;
+    // 构建结构化缓存键：前缀 + 分页/筛选参数（更清晰，便于管理）
+    // 例如: movies:page:1:size:20:search:action
+    const { page = 1, limit = 20, pageSize = 20, search = '', ...otherParams } = req.query;
+    const size = limit || pageSize;
+    const params = [`page:${page}`, `size:${size}`];
+    if (search) params.push(`search:${search}`);
+    // 追加其他筛选参数（如 genre, year 等）
+    Object.entries(otherParams)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([k, v]) => {
+        if (v) params.push(`${k}:${v}`);
+      });
+    const cacheKey = `${keyPrefix}${params.join(':')}`;
 
     try {
       // 检查 Redis 缓存

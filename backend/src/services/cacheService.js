@@ -48,10 +48,10 @@ redis.on('close', () => {
 const CACHE_KEYS = {
   MOVIES: 'admin:movies:',
   MOVIE: 'admin:movie:',
-  TAGS: 'admin:tags',
-  GENRES: 'admin:genres',
-  DIRECTORS: 'admin:directors',
-  ACTORS: 'admin:actors',
+  TAGS: 'admin:tags:',
+  GENRES: 'admin:genres:',
+  DIRECTORS: 'admin:directors:',
+  ACTORS: 'admin:actors:',
   COMMENTS: 'admin:comments:',
   USERS: 'users:',
   ADMIN_PROFILE: 'admin:profile:'

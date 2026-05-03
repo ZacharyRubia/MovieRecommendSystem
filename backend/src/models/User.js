@@ -2,9 +2,16 @@ const { query } = require('../config/db');
 
 // 用户模型
 class UserModel {
-  // 获取所有用户
-  static async findAll() {
-    return query('SELECT * FROM users ORDER BY created_at DESC', []);
+  // 获取所有用户（分页）
+  static async findAll(page = 1, limit = 20) {
+    const offset = (page - 1) * limit;
+    return query('SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?', [limit, offset]);
+  }
+
+  // 获取用户总数
+  static async count() {
+    const rows = await query('SELECT COUNT(*) as total FROM users', []);
+    return rows[0].total;
   }
 
   // 根据ID查找用户

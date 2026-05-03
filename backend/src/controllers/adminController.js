@@ -5,7 +5,8 @@ const db = require('../config/db');
 // 获取所有电影（带分页、搜索）
 exports.getAllMovies = async (req, res) => {
   try {
-    const { page = 1, pageSize = 20, search = '' } = req.query;
+    const { page = 1, limit = 20, search = '' } = req.query;
+    const pageSize = parseInt(limit) || 20;
     const offset = (page - 1) * pageSize;
     
     let sql = `
@@ -34,7 +35,7 @@ exports.getAllMovies = async (req, res) => {
     }
     
     sql += ` GROUP BY m.id ORDER BY m.created_at DESC LIMIT ? OFFSET ?`;
-    params.push(parseInt(pageSize), parseInt(offset));
+    params.push(pageSize, parseInt(offset));
     
     const movies = await db.query(sql, params);
     
@@ -320,8 +321,38 @@ exports.batchImportMovies = async (req, res) => {
 
 exports.getAllTags = async (req, res) => {
   try {
-    const tags = await db.query('SELECT * FROM tags ORDER BY created_at DESC');
-    res.json({ success: true, data: tags });
+    const { page = 1, limit = 50, search = '' } = req.query;
+    const pageSize = parseInt(limit) || 50;
+    const offset = (page - 1) * pageSize;
+    
+    let sql = 'SELECT * FROM tags WHERE 1=1';
+    const params = [];
+    if (search) {
+      sql += ' AND name LIKE ?';
+      params.push(`%${search}%`);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(pageSize, parseInt(offset));
+    
+    const tags = await db.query(sql, params);
+    
+    let countSql = 'SELECT COUNT(*) as total FROM tags WHERE 1=1';
+    const countParams = [];
+    if (search) {
+      countSql += ' AND name LIKE ?';
+      countParams.push(`%${search}%`);
+    }
+    const countResult = await db.query(countSql, countParams);
+    
+    res.json({
+      success: true,
+      data: {
+        tags,
+        total: countResult[0].total,
+        page: parseInt(page),
+        pageSize
+      }
+    });
   } catch (err) {
     console.error('获取标签列表失败:', err);
     res.status(500).json({ success: false, message: '获取标签列表失败' });
@@ -395,8 +426,38 @@ exports.deleteTag = async (req, res) => {
 
 exports.getAllDirectors = async (req, res) => {
   try {
-    const directors = await db.query('SELECT * FROM directors ORDER BY created_at DESC');
-    res.json({ success: true, data: directors });
+    const { page = 1, limit = 50, search = '' } = req.query;
+    const pageSize = parseInt(limit) || 50;
+    const offset = (page - 1) * pageSize;
+    
+    let sql = 'SELECT * FROM directors WHERE 1=1';
+    const params = [];
+    if (search) {
+      sql += ' AND name LIKE ?';
+      params.push(`%${search}%`);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(pageSize, parseInt(offset));
+    
+    const directors = await db.query(sql, params);
+    
+    let countSql = 'SELECT COUNT(*) as total FROM directors WHERE 1=1';
+    const countParams = [];
+    if (search) {
+      countSql += ' AND name LIKE ?';
+      countParams.push(`%${search}%`);
+    }
+    const countResult = await db.query(countSql, countParams);
+    
+    res.json({
+      success: true,
+      data: {
+        directors,
+        total: countResult[0].total,
+        page: parseInt(page),
+        pageSize
+      }
+    });
   } catch (err) {
     console.error('获取导演列表失败:', err);
     res.status(500).json({ success: false, message: '获取导演列表失败' });
@@ -476,8 +537,38 @@ exports.deleteDirector = async (req, res) => {
 
 exports.getAllActors = async (req, res) => {
   try {
-    const actors = await db.query('SELECT * FROM actors ORDER BY created_at DESC');
-    res.json({ success: true, data: actors });
+    const { page = 1, limit = 50, search = '' } = req.query;
+    const pageSize = parseInt(limit) || 50;
+    const offset = (page - 1) * pageSize;
+    
+    let sql = 'SELECT * FROM actors WHERE 1=1';
+    const params = [];
+    if (search) {
+      sql += ' AND name LIKE ?';
+      params.push(`%${search}%`);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(pageSize, parseInt(offset));
+    
+    const actors = await db.query(sql, params);
+    
+    let countSql = 'SELECT COUNT(*) as total FROM actors WHERE 1=1';
+    const countParams = [];
+    if (search) {
+      countSql += ' AND name LIKE ?';
+      countParams.push(`%${search}%`);
+    }
+    const countResult = await db.query(countSql, countParams);
+    
+    res.json({
+      success: true,
+      data: {
+        actors,
+        total: countResult[0].total,
+        page: parseInt(page),
+        pageSize
+      }
+    });
   } catch (err) {
     console.error('获取演员列表失败:', err);
     res.status(500).json({ success: false, message: '获取演员列表失败' });
@@ -557,8 +648,38 @@ exports.deleteActor = async (req, res) => {
 
 exports.getAllGenres = async (req, res) => {
   try {
-    const genres = await db.query('SELECT * FROM genres ORDER BY created_at DESC');
-    res.json({ success: true, data: genres });
+    const { page = 1, limit = 50, search = '' } = req.query;
+    const pageSize = parseInt(limit) || 50;
+    const offset = (page - 1) * pageSize;
+    
+    let sql = 'SELECT * FROM genres WHERE 1=1';
+    const params = [];
+    if (search) {
+      sql += ' AND (name LIKE ? OR code LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(pageSize, parseInt(offset));
+    
+    const genres = await db.query(sql, params);
+    
+    let countSql = 'SELECT COUNT(*) as total FROM genres WHERE 1=1';
+    const countParams = [];
+    if (search) {
+      countSql += ' AND (name LIKE ? OR code LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`);
+    }
+    const countResult = await db.query(countSql, countParams);
+    
+    res.json({
+      success: true,
+      data: {
+        genres,
+        total: countResult[0].total,
+        page: parseInt(page),
+        pageSize
+      }
+    });
   } catch (err) {
     console.error('获取题材列表失败:', err);
     res.status(500).json({ success: false, message: '获取题材列表失败' });

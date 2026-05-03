@@ -1,16 +1,28 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
-// 获取所有用户
+// 获取所有用户（分页）
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.findAll();
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const users = await User.findAll(page, limit);
     // 不返回密码哈希字段
     const usersWithoutPassword = users.map(user => {
       const { password_hash, ...rest } = user;
       return rest;
     });
-    res.json({ success: true, data: usersWithoutPassword });
+    const total = await User.count();
+
+    res.json({
+      success: true,
+      data: usersWithoutPassword,
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (error) {
     console.error('获取用户列表失败:', error);
     res.status(500).json({ success: false, message: '获取用户列表失败' });

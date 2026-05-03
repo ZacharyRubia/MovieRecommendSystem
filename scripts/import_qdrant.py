@@ -43,8 +43,8 @@ QDRANT_HOST = "192.168.1.38"
 QDRANT_PORT = 6333
 COLLECTION_NAME = "movies"
 
-# 本地模型路径（已通过 scripts/download_model.py 下载到 D:\Code\models\all-MiniLM-L6-v2）
-MODEL_PATH = r"D:\Code\models\all-MiniLM-L6-v2"
+# 本地模型路径（项目根目录下的 models/all-MiniLM-L6-v2）
+MODEL_PATH = r"models/all-MiniLM-L6-v2"
 
 
 def get_movies_with_genres(cursor):
