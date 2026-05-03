@@ -1437,7 +1437,7 @@
       try {
         const res = await fetch(`${ADMIN_API}/genres`);
         const data = await res.json();
-        if (data.success) { renderGenres(data.data); }
+        if (data.success) { renderGenres(data.data.genres || []); }
         else { showToast(data.message || '获取题材列表失败', 'error'); }
       } catch (err) {
         console.error('加载题材失败:', err);
