@@ -3,7 +3,6 @@ node_modules/
 
 # 大数据文件（超过GitHub限制）
 movie data/
-scripts/tmp/
 
 # IDE配置（可选，如果不共享配置则取消注释）
 .vscode/
@@ -16,14 +15,15 @@ scripts/tmp/
 # 电影资源
 backend/media/
 
-# 脚本临时资源
-/scripts/__pycache__/
+# Python 编译缓存
+__pycache__/
+scripts/__pycache__/
 
 # 句子生成模型
 models/
 
-# 数据库测试子集
-backend/Test/extract_test_subset_test/
-scripts/__pycache__/
+# 离线实验数据
 scripts/offline/
+
+# 临时输出文件
 scripts/tmp/
