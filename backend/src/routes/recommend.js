@@ -1,20 +1,47 @@
+/**
+ * recommend.js - 推荐系统路由
+ * 
+ * 9 个 API 端点：
+ * 1. GET  /api/recommend/popular         - 热门推荐
+ * 2. GET  /api/recommend/new-releases    - 新片推荐
+ * 3. GET  /api/recommend/trending        - 趋势推荐
+ * 4. GET  /api/recommend/content-based/:userId - 基于内容推荐 (Qdrant)
+ * 5. GET  /api/recommend/user-based/:userId     - User-Based CF
+ * 6. GET  /api/recommend/item-based/:userId     - Item-Based CF
+ * 7. GET  /api/recommend/hybrid/:userId         - 混合推荐
+ * 8. GET  /api/recommend/neighbors/:userId      - 邻居查询
+ * 9. POST /api/recommend/clear-cache            - 清除缓存
+ */
+
 const express = require('express');
 const router = express.Router();
-const recommendController = require('../controllers/recommendController');
+const {
+  userBasedRecommend,
+  itemBasedRecommend,
+  hybridRecommend,
+  getUserNeighbors,
+  popularRecommend,
+  newReleaseRecommend,
+  trendingRecommend,
+  contentBasedRecommend,
+  clearCache
+} = require('../controllers/recommendController');
 
-// User-Based Collaborative Filtering 推荐
-router.get('/user-based/:userId', recommendController.userBasedRecommend);
+// ---- 新增功能（无用户上下文） ----
+router.get('/popular', popularRecommend);
+router.get('/new-releases', newReleaseRecommend);
+router.get('/trending', trendingRecommend);
 
-// Item-Based Collaborative Filtering 推荐
-router.get('/item-based/:userId', recommendController.itemBasedRecommend);
+// ---- 新增功能（有用户上下文） ----
+router.get('/content-based/:userId', contentBasedRecommend);
 
-// 混合推荐（User-Based + Item-Based）
-router.get('/hybrid/:userId', recommendController.hybridRecommend);
+// ---- 协同过滤（CF） ----
+router.get('/user-based/:userId', userBasedRecommend);
+router.get('/item-based/:userId', itemBasedRecommend);
+router.get('/hybrid/:userId', hybridRecommend);
+router.get('/neighbors/:userId', getUserNeighbors);
 
-// 获取用户最相似的邻居
-router.get('/neighbors/:userId', recommendController.getUserNeighbors);
-
-// 清除推荐缓存
-router.post('/clear-cache', recommendController.clearCache);
+// ---- 系统操作 ----
+router.post('/clear-cache', clearCache);
 
 module.exports = router;

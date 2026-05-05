@@ -21,3 +21,9 @@ backend/media/
 
 # 句子生成模型
 models/
+
+# 数据库测试子集
+backend/Test/extract_test_subset_test/
+scripts/__pycache__/
+scripts/offline/
+scripts/tmp/
