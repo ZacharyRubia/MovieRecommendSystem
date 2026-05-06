@@ -24,7 +24,7 @@ from collections import defaultdict
 from datetime import datetime
 
 # ---------- 路径配置 ----------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 
@@ -286,12 +286,11 @@ def train_user_cf(train_df, n_neighbors=30, test_df=None):
     n_movies = len(all_movies)
 
     # 构建用户-电影评分字典
+    import pandas as pd
     user_ratings = defaultdict(dict)  # user_id -> {movie_id: rating}
-    movie_users = defaultdict(set)    # movie_id -> set of user_ids
 
     for _, row in train_df.iterrows():
         user_ratings[row['user_id']][row['movie_id']] = row['rating']
-        movie_users[row['movie_id']].add(row['user_id'])
 
     # 计算每个用户的平均评分
     user_mean_rating = {}
@@ -300,48 +299,34 @@ def train_user_cf(train_df, n_neighbors=30, test_df=None):
 
     print(f"  用户平均分计算完成, 共 {len(user_mean_rating)} 个用户")
 
-    # ---------- 计算用户相似度矩阵 (Pearson) ----------
-    print("  计算用户相似度矩阵...")
-    user_ids = list(user_ratings.keys())
-    user_sim_matrix = defaultdict(dict)  # uid1 -> {uid2: similarity}
+    # ---------- 计算用户相似度矩阵 (Pearson) 优化版 ----------
+    print("  [优化版] 正在构建 User-Movie 评分矩阵...")
+    start_sim_time = time.time()
 
-    # 只计算有共同评分电影的用户对
-    common_users = defaultdict(set)  # (uid1, uid2) -> common movies
-    for mid, uids in movie_users.items():
-        uids_list = list(uids)
-        for i in range(len(uids_list)):
-            for j in range(i + 1, len(uids_list)):
-                uid1, uid2 = uids_list[i], uids_list[j]
-                if uid1 < uid2:
-                    common_users[(uid1, uid2)].add(mid)
-                else:
-                    common_users[(uid2, uid1)].add(mid)
+    # 1. 利用 pandas 直接透视出 用户-电影 矩阵 (未评分的地方会自动填充 NaN)
+    # 这一步非常快，行是 user_id，列是 movie_id
+    user_movie_matrix = train_df.pivot(index='user_id', columns='movie_id', values='rating')
 
-    print(f"  有共同评分的用户对数: {len(common_users)}")
+    print("  [优化版] 正在计算 Pearson 相似度矩阵 (向量化计算)...")
+    # 2. 直接调用 pandas 的 .corr() 方法，按行(需要转置.T)计算 Pearson 相关系数。
+    # 它会自动忽略 NaN，只计算两个用户共同评分的电影！(底层是优化的 C 语言代码)
+    sim_df = user_movie_matrix.T.corr(method='pearson', min_periods=5)
+    # 注意：min_periods=5 表示只有两个用户共同评分过至少 5 部电影，才计算相关系数，否则填 NaN。
 
+    # 3. 将 Pandas DataFrame 转换回原来代码需要的字典格式
+    user_sim_matrix = defaultdict(dict)
     pair_count = 0
-    for (uid1, uid2), common_movies in common_users.items():
-        if len(common_movies) < 3:
-            continue  # 共同评分太少，不足以计算相似度
 
-        # Pearson 相关系数
-        r1 = [user_ratings[uid1][m] for m in common_movies]
-        r2 = [user_ratings[uid2][m] for m in common_movies]
-        mean1 = np.mean(r1)
-        mean2 = np.mean(r2)
+    # 将矩阵中有效的值提取出来
+    sim_stacked = sim_df.stack()
+    for (uid1, uid2), sim in sim_stacked.items():
+        if uid1 != uid2 and sim > 0:  # 排除自己和负相关
+            user_sim_matrix[uid1][uid2] = float(sim)
+            pair_count += 1
 
-        num = sum((r1[i] - mean1) * (r2[i] - mean2) for i in range(len(r1)))
-        den1 = math.sqrt(sum((r1[i] - mean1) ** 2 for i in range(len(r1))))
-        den2 = math.sqrt(sum((r2[i] - mean2) ** 2 for i in range(len(r2))))
-
-        if den1 > 0 and den2 > 0:
-            sim = num / (den1 * den2)
-            if sim > 0:  # 只保留正相关
-                user_sim_matrix[uid1][uid2] = sim
-                user_sim_matrix[uid2][uid1] = sim
-                pair_count += 1
-
-    print(f"  有效相似度用户对: {pair_count}")
+    # 因为是对称矩阵，pair_count 会计算两遍，真实对数除以 2
+    print(f"  有效相似度用户对: {pair_count // 2}")
+    print(f"  相似度计算耗时: {time.time() - start_sim_time:.2f} 秒")
 
     # ---------- 计算训练 RMSE ----------
     train_rmse = _compute_user_cf_rmse(

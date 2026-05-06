@@ -42,7 +42,7 @@ DB_CONFIG = {
 
 # 输出目录：脚本所在目录下的 extract_test_subset_test/ 子目录
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, 'extract_test_subset_test')
+OUTPUT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), 'extract_test_subset_test')
 
 # --------------------------------
 # 辅助函数

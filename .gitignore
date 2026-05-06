@@ -27,3 +27,6 @@ scripts/offline/
 
 # 临时输出文件
 scripts/tmp/
+scripts/extract_test_subset_test
+
+/docs/lywf
