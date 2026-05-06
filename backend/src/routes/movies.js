@@ -4,8 +4,13 @@ const moviesController = require('../controllers/moviesController');
 const { cacheResponse, clearCache } = require('../middleware/cacheMiddleware');
 const { CACHE_KEYS } = require('../services/cacheService');
 
-// 获取所有电影列表（缓存 5 分钟）
-router.get('/', cacheResponse(CACHE_KEYS.MOVIES), moviesController.getAllMovies);
+// 获取所有电影列表（缓存 5 分钟，但带 ids 参数时不缓存）
+router.get('/', (req, res, next) => {
+  if (req.query.ids) {
+    return moviesController.getAllMovies(req, res);
+  }
+  cacheResponse(CACHE_KEYS.MOVIES)(req, res, next);
+}, moviesController.getAllMovies);
 
 // 获取电影详情（缓存 5 分钟）
 router.get('/:id', cacheResponse(CACHE_KEYS.MOVIE), moviesController.getMovieById);

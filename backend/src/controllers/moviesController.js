@@ -7,14 +7,31 @@ function generateRequestId() {
   return crypto.randomUUID();
 }
 
-// 获取所有电影列表
+// 获取所有电影列表（支持 ids 批量查询 & 分页）
 const getAllMovies = async (req, res) => {
   console.log('\n========== [DEBUG] 获取电影列表请求开始 ==========');
   console.log('[DEBUG] 请求URL:', req.originalUrl);
   console.log('[DEBUG] 查询参数 page:', req.query.page, '类型:', typeof req.query.page);
   console.log('[DEBUG] 查询参数 limit:', req.query.limit, '类型:', typeof req.query.limit);
-  
+  console.log('[DEBUG] 查询参数 ids:', req.query.ids);
+
   try {
+    // 支持按 IDs 批量查询
+    if (req.query.ids) {
+      const ids = req.query.ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      if (ids.length === 0) {
+        return res.status(400).json({ success: false, message: '无效的电影ID列表' });
+      }
+      const movies = await Movie.findByIds(ids);
+      return res.json({
+        success: true,
+        data: {
+          movies,
+          total: movies.length
+        }
+      });
+    }
+
     // 解析并安全处理参数
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 15));
@@ -26,14 +43,12 @@ const getAllMovies = async (req, res) => {
     console.log('[DEBUG] 开始查询电影数据...');
     const movies = await Movie.findAll(page, limit);
     console.log('[DEBUG] 查询到的电影数量:', movies.length);
-    console.log('[DEBUG] 电影数据:', JSON.stringify(movies, null, 2));
 
     console.log('[DEBUG] 开始查询电影总数...');
     const total = await Movie.count();
     console.log('[DEBUG] 电影总数:', total);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
-    console.log('[DEBUG] 计算总页数:', totalPages);
 
     const response = {
       success: true,
@@ -47,17 +62,13 @@ const getAllMovies = async (req, res) => {
         }
       }
     };
-    console.log('[DEBUG] 返回响应:', JSON.stringify(response, null, 2));
+    console.log('[DEBUG] 返回响应: movies count=' + movies.length);
     console.log('========== [DEBUG] 获取电影列表请求结束 ==========\n');
 
     res.json(response);
   } catch (error) {
     console.error('\n========== [ERROR] 获取电影列表失败 ==========');
-    console.error('[ERROR] 错误名称:', error.name);
     console.error('[ERROR] 错误消息:', error.message);
-    console.error('[ERROR] 错误堆栈:', error.stack);
-    console.error('[ERROR] SQL错误代码:', error.code);
-    console.error('[ERROR] SQL错误编号:', error.errno);
     console.error('==================================================\n');
     
     res.status(500).json({ 

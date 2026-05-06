@@ -15,6 +15,7 @@
 
 const express = require('express');
 const router = express.Router();
+const http = require('http');
 const {
   userBasedRecommend,
   itemBasedRecommend,
@@ -24,7 +25,10 @@ const {
   newReleaseRecommend,
   trendingRecommend,
   contentBasedRecommend,
-  clearCache
+  clearCache,
+  aiModelRecommend,
+  aiModelList,
+  aiHealthCheck
 } = require('../controllers/recommendController');
 
 // ---- 新增功能（无用户上下文） ----
@@ -40,6 +44,11 @@ router.get('/user-based/:userId', userBasedRecommend);
 router.get('/item-based/:userId', itemBasedRecommend);
 router.get('/hybrid/:userId', hybridRecommend);
 router.get('/neighbors/:userId', getUserNeighbors);
+
+// ---- Python AI 模型推荐（训练好的模型） ----
+router.get('/ai', aiModelRecommend);              // GET /api/recommend/ai?userId=1&algorithm=hybrid&topN=10
+router.get('/ai/models', aiModelList);            // GET /api/recommend/ai/models
+router.get('/ai/health', aiHealthCheck);          // GET /api/recommend/ai/health
 
 // ---- 系统操作 ----
 router.post('/clear-cache', clearCache);

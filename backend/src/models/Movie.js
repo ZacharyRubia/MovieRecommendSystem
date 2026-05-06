@@ -19,6 +19,17 @@ class MovieModel {
     return rows[0].total;
   }
 
+  // 根据ID列表批量查找电影
+  static async findByIds(ids) {
+    if (!ids || ids.length === 0) return [];
+    const placeholders = ids.map(() => '?').join(',');
+    return query(`
+      SELECT id, title, description, cover_url, video_url, release_year, duration, avg_rating, created_at
+      FROM movies
+      WHERE id IN (${placeholders})
+    `, ids);
+  }
+
   // 根据ID查找电影
   static async findById(id) {
     const rows = await query(`

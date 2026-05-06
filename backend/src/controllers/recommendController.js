@@ -13,6 +13,7 @@
  * 9. clearCache          - 清除缓存
  */
 const recommendService = require('../services/recommendService');
+const http = require('http');
 
 // =============================================
 // 配置常量
@@ -401,6 +402,127 @@ async function clearCache(req, res) {
   }
 }
 
+// =============================================
+// Python AI 模型推荐（代理到 Python Flask 服务）
+// =============================================
+
+/**
+ * AI 推荐服务配置
+ */
+const AI_RECOMMEND_HOST = process.env.AI_RECOMMEND_HOST || '127.0.0.1';
+const AI_RECOMMEND_PORT = parseInt(process.env.AI_RECOMMEND_PORT || '5100');
+const AI_REQUEST_TIMEOUT = 60000; // 60秒超时
+
+/**
+ * 调用 Python AI 推荐 API
+ */
+function callAiRecommendApi(endpoint, params) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(`/api/recommend/${endpoint}`, `http://${AI_RECOMMEND_HOST}:${AI_RECOMMEND_PORT}`);
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        url.searchParams.append(key, value);
+      });
+    }
+
+    const req = http.get(url, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed);
+        } catch (e) {
+          reject(new Error(`解析 Python API 响应失败: ${e.message}`));
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      reject(new Error(`连接 Python AI 服务失败 (${AI_RECOMMEND_HOST}:${AI_RECOMMEND_PORT}): ${e.message}。请确保已启动 recommend_api.py`));
+    });
+
+    req.setTimeout(AI_REQUEST_TIMEOUT, () => {
+      req.destroy();
+      reject(new Error('Python AI 服务请求超时'));
+    });
+  });
+}
+
+/**
+ * GET /api/recommend/ai?userId=1&algorithm=hybrid&topN=10
+ * AI 模型推荐（代理到 Python Flask 服务）
+ */
+async function aiModelRecommend(req, res) {
+  try {
+    const { userId, algorithm, topN } = req.query;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: '缺少 userId 参数' });
+    }
+
+    // 注意：Python API 使用 user_id / top_n 参数名
+    const params = { 
+      user_id: userId, 
+      algorithm: algorithm || 'hybrid', 
+      top_n: topN || '10' 
+    };
+    const result = await callAiRecommendApi('ai', params);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: result.message });
+    }
+
+    // 将 Python 返回的数据透传给前端
+    res.json({
+      success: true,
+      source: 'ai-model',
+      data: result.data
+    });
+  } catch (error) {
+    console.error('[AI 模型推荐] 失败:', error.message);
+    // 如果 Python 服务不可用，降级返回友好提示
+    res.status(503).json({
+      success: false,
+      source: 'ai-model',
+      message: 'AI 推荐引擎暂不可用，请确认 recommend_api.py 已启动。',
+      detail: error.message
+    });
+  }
+}
+
+/**
+ * GET /api/recommend/ai/models
+ * 列出可用 AI 模型
+ */
+async function aiModelList(req, res) {
+  try {
+    const result = await callAiRecommendApi('models', null);
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: result.message });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('[AI 模型列表] 失败:', error.message);
+    res.status(503).json({ success: false, message: 'AI 推荐引擎暂不可用', detail: error.message });
+  }
+}
+
+/**
+ * GET /api/recommend/ai/health
+ * AI 服务健康检查
+ */
+async function aiHealthCheck(req, res) {
+  try {
+    const result = await callAiRecommendApi('health', null);
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: result.message });
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(503).json({ success: false, message: 'AI 推荐引擎暂不可用', detail: error.message });
+  }
+}
+
 module.exports = {
   userBasedRecommend,
   itemBasedRecommend,
@@ -410,5 +532,8 @@ module.exports = {
   newReleaseRecommend,
   trendingRecommend,
   contentBasedRecommend,
-  clearCache
+  clearCache,
+  aiModelRecommend,
+  aiModelList,
+  aiHealthCheck
 };
