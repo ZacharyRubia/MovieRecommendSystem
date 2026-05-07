@@ -17,6 +17,26 @@ recommend_api.py - 推荐引擎 REST API 服务
 
 import os
 import sys
+import io
+
+# ============================================================
+# Windows 编码兼容性修复
+# 在 Windows 上，Python 默认使用系统区域编码（如 cp936/GBK），
+# 无法编码所有中文字符。此处将 stdout/stderr 包装为 utf-8 编码，
+# 并使用 'replace' 错误处理方式，防止 "charmap codec can't encode" 错误。
+# ============================================================
+if sys.platform == 'win32':
+    # 设置环境变量确保子进程也使用 UTF-8
+    os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+    try:
+        # 仅当 stdout 是控制台/管道且不是已配置的 UTF-8 包装器时重新包装
+        if hasattr(sys.stdout, 'buffer') and not isinstance(sys.stdout, io.TextIOWrapper):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        if hasattr(sys.stderr, 'buffer') and not isinstance(sys.stderr, io.TextIOWrapper):
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass  # 如果无法重新包装，回退到使用 PYTHONIOENCODING
+
 import pickle
 import json
 import math
@@ -33,8 +53,8 @@ try:
     HAS_PYMYSQL = True
 except ImportError:
     HAS_PYMYSQL = False
-    print("[警告] pymysql 未安装，缓存表查询功能不可用")
-    print("  安装: pip install pymysql")
+    print("[WARNING] pymysql not installed, cache query unavailable")
+    print("  Install: pip install pymysql")
 
 # ---------- 路径配置 ----------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -78,7 +98,7 @@ def get_db():
         )
         return conn
     except Exception as e:
-        print(f"[缓存] MySQL 连接失败: {e}")
+        print(f"[Cache] MySQL connection failed: {e}")
         return None
 
 
@@ -111,7 +131,7 @@ def get_cached_recommendation(user_id, algorithm='hybrid'):
                 age_seconds = CACHE_TTL_SECONDS + 1  # 视为过期
 
             if age_seconds > CACHE_TTL_SECONDS:
-                print(f"[缓存] 用户 {user_id} 缓存已过期 ({age_seconds:.0f}s > {CACHE_TTL_SECONDS}s)")
+                print(f"[Cache] User {user_id} cache expired ({age_seconds:.0f}s > {CACHE_TTL_SECONDS}s)")
                 return None
 
             # 解析 JSON
@@ -120,11 +140,11 @@ def get_cached_recommendation(user_id, algorithm='hybrid'):
             except (json.JSONDecodeError, TypeError):
                 return None
 
-            print(f"[缓存] 命中用户 {user_id}, 算法: {row['algorithm']}, 条目数: {len(items)}")
+            print(f"[Cache] Hit user {user_id}, algo: {row['algorithm']}, items: {len(items)}")
             return items, row['algorithm']
 
     except Exception as e:
-        print(f"[缓存] 查询失败: {e}")
+        print(f"[Cache] Query failed: {e}")
         return None
     finally:
         conn.close()
@@ -157,9 +177,9 @@ def save_result_to_cache(user_id, recommendations, algorithm='hybrid'):
             )
             cursor.execute(sql, (user_id, algorithm, recommend_json))
         conn.commit()
-        print(f"[缓存] 已写回用户 {user_id}, 算法: {algorithm}, 条目: {len(items)}")
+        print(f"[Cache] Saved user {user_id}, algo: {algorithm}, items: {len(items)}")
     except Exception as e:
-        print(f"[缓存] 写回失败: {e}")
+        print(f"[Cache] Save failed: {e}")
     finally:
         conn.close()
 
@@ -181,13 +201,13 @@ def load_model(algorithm='svd'):
 
     filename = model_map.get(algorithm)
     if not filename:
-        raise ValueError(f"未知算法: {algorithm}")
+        raise ValueError(f"Unknown algorithm: {algorithm}")
 
     filepath = os.path.join(MODEL_DIR, filename)
     if not os.path.exists(filepath):
-        raise FileNotFoundError(f"模型文件不存在: {filepath}")
+        raise FileNotFoundError(f"Model file not found: {filepath}")
 
-    print(f"[加载模型] {algorithm}: {filepath}")
+    print(f"[Load model] {algorithm}: {filepath}")
     with open(filepath, 'rb') as f:
         model = pickle.load(f)
 
@@ -237,8 +257,8 @@ def load_model(algorithm='svd'):
         }
 
     _models[algorithm] = model
-    print(f"  算法: {model['algorithm']}, "
-          f"训练集大小: {model.get('train_size', 'N/A')}")
+    print(f"  algo: {model['algorithm']}, "
+          f"train_size: {model.get('train_size', 'N/A')}")
     return model
 
 
@@ -384,17 +404,17 @@ def recommend_hybrid(model_svd, model_user_cf, model_item_cf,
     try:
         svd_results = recommend_svd(model_svd, user_id, n_candidates)
     except Exception as e:
-        print(f"  SVD 推荐失败: {e}")
+        print(f"  SVD recommend failed: {e}")
 
     try:
         user_cf_results = recommend_user_cf(model_user_cf, user_id, n_candidates)
     except Exception as e:
-        print(f"  User-CF 推荐失败: {e}")
+        print(f"  User-CF recommend failed: {e}")
 
     try:
         item_cf_results = recommend_item_cf(model_item_cf, user_id, n_candidates)
     except Exception as e:
-        print(f"  Item-CF 推荐失败: {e}")
+        print(f"  Item-CF recommend failed: {e}")
 
     score_map = defaultdict(float)
     weight_sum_map = defaultdict(float)
@@ -444,7 +464,7 @@ def health_check():
         meta = load_metadata()
         return jsonify({
             'success': True,
-            'message': 'recommend_api 服务运行中',
+            'message': 'recommend_api service running',
             'data': {
                 'models': [m['algorithm'] for m in meta.get('models', [])],
                 'n_users': meta.get('dataset', {}).get('n_users', 0),
@@ -478,12 +498,12 @@ def ai_recommend():
         skip_cache = request.args.get('skip_cache', 'false').lower() == 'true'
 
         if not user_id:
-            return jsonify({'success': False, 'message': '缺少 user_id 参数'}), 400
+            return jsonify({'success': False, 'message': 'Missing user_id parameter'}), 400
 
         if top_n < 1 or top_n > 100:
             top_n = 10
 
-        # -------- 第 1 步：尝试从缓存读取 --------
+        # -------- Step 1: Try reading from cache --------
         from_cache = None
         if not skip_cache:
             from_cache = get_cached_recommendation(user_id, algorithm)
@@ -507,7 +527,7 @@ def ai_recommend():
                 }
             })
 
-        # -------- 第 2 步：缓存未命中，实时计算 --------
+        # -------- Step 2: Cache miss, real-time compute --------
         start_time = __import__('time').time()
 
         if algorithm == 'hybrid':
@@ -526,7 +546,7 @@ def ai_recommend():
             model_item_cf = load_model('item_cf')
             results = recommend_item_cf(model_item_cf, user_id, top_n)
         else:
-            return jsonify({'success': False, 'message': f'未知算法: {algorithm}'}), 400
+            return jsonify({'success': False, 'message': f'Unknown algorithm: {algorithm}'}), 400
 
         elapsed = __import__('time').time() - start_time
 
@@ -536,7 +556,7 @@ def ai_recommend():
             for mid, score in results
         ]
 
-        # -------- 第 3 步：异步写回缓存 --------
+        # -------- Step 3: Async write back to cache --------
         # 仅在条目数达到阈值时写回，避免缓存无用的空结果
         if len(results) >= top_n // 2:
             save_result_to_cache(user_id, results, algorithm)
@@ -559,7 +579,7 @@ def ai_recommend():
     except FileNotFoundError as e:
         return jsonify({'success': False, 'message': str(e)}), 503
     except Exception as e:
-        return jsonify({'success': False, 'message': f'推荐失败: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'Recommendation failed: {str(e)}'}), 500
 
 
 @app.route('/api/recommend/models', methods=['GET'])
@@ -593,23 +613,23 @@ def list_models():
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description='推荐引擎 API 服务')
+    parser = argparse.ArgumentParser(description='Recommend Engine API Service')
     parser.add_argument('--port', '-p', type=int, default=5100,
-                        help='监听端口 (默认: 5100)')
+                        help='Listen port (default: 5100)')
     parser.add_argument('--host', default='0.0.0.0',
-                        help='监听地址 (默认: 0.0.0.0)')
+                        help='Listen address (default: 0.0.0.0)')
     parser.add_argument('--debug', action='store_true',
-                        help='调试模式')
+                        help='Debug mode')
     args = parser.parse_args()
 
     print(f"\n{'=' * 60}")
-    print("  推荐引擎 API 服务 (缓存优先)")
+    print("  Recommend Engine API (cache-first)")
     print(f"{'=' * 60}")
-    print(f"  端口: {args.port}")
-    print(f"  地址: {args.host}")
-    print(f"  模型目录: {MODEL_DIR}")
-    print(f"  缓存DB: {CACHE_DB_HOST}:{CACHE_DB_PORT}/{CACHE_DB_NAME}")
-    print(f"  pymysql: {'可用' if HAS_PYMYSQL else '未安装(缓存不可用)'}")
+    print(f"  Port: {args.port}")
+    print(f"  Host: {args.host}")
+    print(f"  Model Dir: {MODEL_DIR}")
+    print(f"  Cache DB: {CACHE_DB_HOST}:{CACHE_DB_PORT}/{CACHE_DB_NAME}")
+    print(f"  pymysql: {'YES' if HAS_PYMYSQL else 'NO (cache unavailable)'}")
     print(f"{'=' * 60}\n")
 
     app.run(host=args.host, port=args.port, debug=args.debug)
