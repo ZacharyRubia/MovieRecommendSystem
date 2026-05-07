@@ -24,6 +24,7 @@ models/
 
 # 离线实验数据
 scripts/offline/
+scripts/export/
 
 # 临时输出文件
 scripts/tmp/
