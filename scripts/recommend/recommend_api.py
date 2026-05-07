@@ -6,6 +6,11 @@ recommend_api.py - 推荐引擎 REST API 服务
 加载训练好的模型（SVD / User-CF / Item-CF），
 通过 Flask HTTP API 为 Node.js 后端提供推荐服务。
 
+支持缓存优先策略：
+  1. 查询 MySQL users_recommendations 表（快速返回）
+  2. 无缓存或过期 → 实时计算
+  3. 实时计算结果异步写入缓存
+
 启动:
   python recommend_api.py [--port 5100]
 """
@@ -18,12 +23,30 @@ import math
 import argparse
 import numpy as np
 from collections import defaultdict
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+
+# ---------- MySQL 缓存表支持 ----------
+try:
+    import pymysql
+    HAS_PYMYSQL = True
+except ImportError:
+    HAS_PYMYSQL = False
+    print("[警告] pymysql 未安装，缓存表查询功能不可用")
+    print("  安装: pip install pymysql")
 
 # ---------- 路径配置 ----------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
+
+# MySQL 连接参数
+CACHE_DB_HOST = os.environ.get('CACHE_DB_HOST', '192.168.1.38')
+CACHE_DB_USER = os.environ.get('CACHE_DB_USER', 'newuser')
+CACHE_DB_PASS = os.environ.get('CACHE_DB_PASS', 'yourpassword')
+CACHE_DB_NAME = os.environ.get('CACHE_DB_NAME', 'MovieRecommendSystem')
+CACHE_DB_PORT = int(os.environ.get('CACHE_DB_PORT', '3306'))
+CACHE_TTL_SECONDS = 60 * 60  # 缓存有效期 1 小时
 
 app = Flask(__name__)
 CORS(app)
@@ -31,6 +54,114 @@ CORS(app)
 # 全局模型缓存
 _models = {}
 _movie_dict = {}
+
+
+# ============================================================
+# MySQL 连接与缓存操作
+# ============================================================
+
+def get_db():
+    """获取 MySQL 数据库连接"""
+    if not HAS_PYMYSQL:
+        return None
+    try:
+        conn = pymysql.connect(
+            host=CACHE_DB_HOST,
+            user=CACHE_DB_USER,
+            password=CACHE_DB_PASS,
+            database=CACHE_DB_NAME,
+            port=CACHE_DB_PORT,
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=5,
+            read_timeout=5
+        )
+        return conn
+    except Exception as e:
+        print(f"[缓存] MySQL 连接失败: {e}")
+        return None
+
+
+def get_cached_recommendation(user_id, algorithm='hybrid'):
+    """
+    从 users_recommendations 表查询缓存的推荐结果
+    返回: (recommendations_list, algorithm) 或 None
+    """
+    conn = get_db()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT recommend_movies, algorithm, updated_at "
+                "FROM users_recommendations "
+                "WHERE user_id = %s AND algorithm = %s "
+                "ORDER BY updated_at DESC LIMIT 1",
+                (user_id, algorithm)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            # 检查缓存是否过期
+            updated = row['updated_at']
+            if isinstance(updated, datetime):
+                age_seconds = (datetime.now() - updated).total_seconds()
+            else:
+                age_seconds = CACHE_TTL_SECONDS + 1  # 视为过期
+
+            if age_seconds > CACHE_TTL_SECONDS:
+                print(f"[缓存] 用户 {user_id} 缓存已过期 ({age_seconds:.0f}s > {CACHE_TTL_SECONDS}s)")
+                return None
+
+            # 解析 JSON
+            try:
+                items = json.loads(row['recommend_movies'])
+            except (json.JSONDecodeError, TypeError):
+                return None
+
+            print(f"[缓存] 命中用户 {user_id}, 算法: {row['algorithm']}, 条目数: {len(items)}")
+            return items, row['algorithm']
+
+    except Exception as e:
+        print(f"[缓存] 查询失败: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def save_result_to_cache(user_id, recommendations, algorithm='hybrid'):
+    """
+    将实时计算结果写回 users_recommendations 缓存表
+    """
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        # 转换为 JSON
+        items = [
+            {'movie_id': int(mid), 'score': round(float(score), 4)}
+            for mid, score in recommendations
+        ]
+        recommend_json = json.dumps(items, ensure_ascii=False)
+
+        with conn.cursor() as cursor:
+            # 使用 INSERT ... ON DUPLICATE KEY UPDATE
+            sql = (
+                "INSERT INTO users_recommendations "
+                "(user_id, algorithm, recommend_movies, updated_at) "
+                "VALUES (%s, %s, %s, NOW()) "
+                "ON DUPLICATE KEY UPDATE "
+                "recommend_movies = VALUES(recommend_movies), "
+                "updated_at = NOW()"
+            )
+            cursor.execute(sql, (user_id, algorithm, recommend_json))
+        conn.commit()
+        print(f"[缓存] 已写回用户 {user_id}, 算法: {algorithm}, 条目: {len(items)}")
+    except Exception as e:
+        print(f"[缓存] 写回失败: {e}")
+    finally:
+        conn.close()
 
 
 # ============================================================
@@ -327,17 +458,24 @@ def health_check():
 @app.route('/api/recommend/ai', methods=['GET'])
 def ai_recommend():
     """
-    AI 推荐接口（使用训练好的模型）
-    
+    AI 推荐接口（使用训练好的模型，缓存优先）
+
+    策略：
+      1. 查询 MySQL users_recommendations 缓存表
+      2. 缓存命中且未过期 → 直接返回缓存结果
+      3. 缓存未命中/过期 → 实时计算，并异步写回缓存
+
     参数:
       user_id (int): 用户ID (必填)
       algorithm (str): 算法类型 - svd | user_cf | item_cf | hybrid (默认 hybrid)
       top_n (int): 推荐数量 (默认 10)
+      skip_cache (bool): 是否跳过缓存直接实时计算 (默认 false)
     """
     try:
         user_id = request.args.get('user_id', type=int)
         algorithm = request.args.get('algorithm', 'hybrid')
         top_n = request.args.get('top_n', 10, type=int)
+        skip_cache = request.args.get('skip_cache', 'false').lower() == 'true'
 
         if not user_id:
             return jsonify({'success': False, 'message': '缺少 user_id 参数'}), 400
@@ -345,6 +483,31 @@ def ai_recommend():
         if top_n < 1 or top_n > 100:
             top_n = 10
 
+        # -------- 第 1 步：尝试从缓存读取 --------
+        from_cache = None
+        if not skip_cache:
+            from_cache = get_cached_recommendation(user_id, algorithm)
+
+        if from_cache is not None:
+            cached_items, cached_algo = from_cache
+            return jsonify({
+                'success': True,
+                'data': {
+                    'userId': user_id,
+                    'algorithm': cached_algo,
+                    'topN': min(top_n, len(cached_items)),
+                    'elapsed': 0.001,  # 缓存几乎无耗时
+                    'total': len(cached_items),
+                    'recommendations': [
+                        {'movieId': int(item['movie_id']),
+                         'predictedRating': round(float(item['score']), 4)}
+                        for item in cached_items[:top_n]
+                    ],
+                    'fromCache': True
+                }
+            })
+
+        # -------- 第 2 步：缓存未命中，实时计算 --------
         start_time = __import__('time').time()
 
         if algorithm == 'hybrid':
@@ -373,6 +536,11 @@ def ai_recommend():
             for mid, score in results
         ]
 
+        # -------- 第 3 步：异步写回缓存 --------
+        # 仅在条目数达到阈值时写回，避免缓存无用的空结果
+        if len(results) >= top_n // 2:
+            save_result_to_cache(user_id, results, algorithm)
+
         return jsonify({
             'success': True,
             'data': {
@@ -381,7 +549,8 @@ def ai_recommend():
                 'topN': top_n,
                 'elapsed': round(elapsed, 3),
                 'total': len(recommendations),
-                'recommendations': recommendations
+                'recommendations': recommendations,
+                'fromCache': False
             }
         })
 
@@ -434,11 +603,13 @@ def main():
     args = parser.parse_args()
 
     print(f"\n{'=' * 60}")
-    print("  推荐引擎 API 服务")
+    print("  推荐引擎 API 服务 (缓存优先)")
     print(f"{'=' * 60}")
     print(f"  端口: {args.port}")
     print(f"  地址: {args.host}")
     print(f"  模型目录: {MODEL_DIR}")
+    print(f"  缓存DB: {CACHE_DB_HOST}:{CACHE_DB_PORT}/{CACHE_DB_NAME}")
+    print(f"  pymysql: {'可用' if HAS_PYMYSQL else '未安装(缓存不可用)'}")
     print(f"{'=' * 60}\n")
 
     app.run(host=args.host, port=args.port, debug=args.debug)

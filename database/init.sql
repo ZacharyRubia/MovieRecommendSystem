@@ -208,21 +208,27 @@ CREATE TABLE IF NOT EXISTS `comments` (
 
 
 -- ============================================
--- 16. 电影相似度缓存表 (movies_similarities)
+-- 17. 电影相似度缓存表 (movies_similarities)
+-- 对应 recommend_export_evaluation 方案中的实际表名
+-- Item-Based CF 离线计算结果
 -- ============================================
 CREATE TABLE IF NOT EXISTS `movies_similarities` (
     `movie_id` BIGINT UNSIGNED PRIMARY KEY COMMENT '电影ID',
-    `similar_movies` JSON NOT NULL COMMENT '相似电影列表(JSON，含movie_id和score)',
+    `similar_movies` JSON NOT NULL COMMENT '相似电影列表(JSON，含movie_id和similarity)',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '离线计算更新时间',
     FOREIGN KEY (`movie_id`) REFERENCES `movies`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='电影相似度缓存表（离线计算结果）';
 
--- ============================================
--- 17. 用户推荐缓存表 (users_recommendations)
--- ============================================
+
+/* ============================================
+   18. 用户推荐缓存表 (users_recommendations)
+   对应 recommend_export_evaluation 方案中的实际表名
+   SVD / 混合推荐离线计算结果
+============================================ */
 CREATE TABLE IF NOT EXISTS `users_recommendations` (
     `user_id` BIGINT UNSIGNED PRIMARY KEY COMMENT '用户ID',
     `recommend_movies` JSON NOT NULL COMMENT '推荐电影列表(JSON，含movie_id和score)',
+    `algorithm` VARCHAR(20) NOT NULL COMMENT '算法类型（svd / user_cf / item_cf / hybrid 等）',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '离线计算更新时间',
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户推荐缓存表（离线计算结果）';
