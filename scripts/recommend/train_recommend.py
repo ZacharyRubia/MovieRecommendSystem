@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train_recommend.py - 推荐算法训练脚本
+train_recommend.py - 推荐算法训练脚本 (CPU 优化版)
 
 训练三种推荐算法：
 1. SVD (Singular Value Decomposition) 矩阵分解
@@ -14,6 +14,15 @@ train_recommend.py - 推荐算法训练脚本
 数据来源: scripts/extract_test_subset_test/
 模型输出: scripts/models/
 缓存导出: scripts/export/  (可供 MySQL LOAD DATA / Qdrant 导入)
+
+优化说明：
+  - Item-CF 相似度矩阵使用 numpy 向量化计算，消除 O(n²) 双重循环
+  - SVD 去均值使用 numpy 广播替代逐行循环
+  - RMSE 计算使用 numpy 向量化替代 pandas iterrows()
+  - train_test_split 使用 numpy 随机选择替代 pandas groupby
+  - 导出函数使用批量处理 + multiprocessing 并行
+  - 数据映射复用，避免重复构建
+  - 使用多进程加速独立任务
 """
 
 import os
@@ -24,6 +33,9 @@ import time
 import math
 import random
 import csv
+from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExecutor
+from functools import partial
+
 import numpy as np
 from collections import defaultdict
 from datetime import datetime
@@ -38,20 +50,25 @@ EXPORT_DIR = os.path.join(BASE_DIR, 'export')
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
+# CPU 核心数（用于并行处理）
+N_CPUS = min(os.cpu_count() or 1, 32)
+print(f"[系统] CPU 核心数: {N_CPUS}")
+
 
 # ============================================================
 # 1. 数据加载与预处理
 # ============================================================
 
 def load_data():
-    """加载评分数据和电影信息"""
+    """加载评分数据和电影信息（优化版：使用更高效的数据结构）"""
     print("=" * 60)
     print("[加载数据] 读取评分数据和电影信息...")
 
     import pandas as pd
 
-    # 加载评分数据
-    ratings_df = pd.read_csv(os.path.join(DATA_DIR, 'test_ratings.csv'))
+    # 加载评分数据 - 使用 dtype 指定列类型减少内存
+    ratings_df = pd.read_csv(os.path.join(DATA_DIR, 'test_ratings.csv'),
+                             dtype={'user_id': np.int32, 'movie_id': np.int32, 'rating': np.float32})
     print(f"  评分数据: {len(ratings_df)} 条, "
           f"用户 {ratings_df['user_id'].nunique()} 个, "
           f"电影 {ratings_df['movie_id'].nunique()} 部")
@@ -60,14 +77,15 @@ def load_data():
     movies_df = pd.read_csv(os.path.join(DATA_DIR, 'test_movies.csv'))
     print(f"  电影信息: {len(movies_df)} 部电影")
 
-    # 用户映射: 原始 user_id -> 0-based 连续索引
-    unique_users = sorted(ratings_df['user_id'].unique())
-    unique_movies = sorted(ratings_df['movie_id'].unique())
+    # 用户/电影映射: 原始 id -> 0-based 连续索引
+    # 使用 numpy 的 unique + searchsorted 加速
+    unique_users = np.sort(ratings_df['user_id'].unique())
+    unique_movies = np.sort(ratings_df['movie_id'].unique())
 
-    user2idx = {uid: i for i, uid in enumerate(unique_users)}
-    movie2idx = {mid: i for i, mid in enumerate(unique_movies)}
-    idx2user = {i: uid for uid, i in user2idx.items()}
-    idx2movie = {i: mid for mid, i in movie2idx.items()}
+    user2idx = {int(uid): i for i, uid in enumerate(unique_users)}
+    movie2idx = {int(mid): i for i, mid in enumerate(unique_movies)}
+    idx2user = {i: int(uid) for uid, i in user2idx.items()}
+    idx2movie = {i: int(mid) for mid, i in movie2idx.items()}
 
     print(f"  用户映射: {len(user2idx)} 个, 电影映射: {len(movie2idx)} 个")
 
@@ -75,33 +93,28 @@ def load_data():
 
 
 def train_test_split(ratings_df, test_ratio=0.2, random_state=42):
-    """按用户划分训练集和测试集，确保每个用户在训练集中至少有一条记录"""
+    """按用户划分训练集和测试集（优化版：向量化操作）"""
     print(f"\n[数据划分] 测试集比例: {test_ratio}")
 
-    random.seed(random_state)
-    train_data = []
-    test_data = []
+    rng = np.random.default_rng(random_state)
+    train_indices = []
+    test_indices = []
 
-    for user_id, group in ratings_df.groupby('user_id'):
-        group = group.reset_index(drop=True)
-        indices = list(range(len(group)))
-        random.shuffle(indices)
-
-        # 至少保留一条给训练集
-        n_test = max(1, int(len(group) * test_ratio))
-        if n_test >= len(group):
-            n_test = len(group) - 1
-
-        test_indices = set(indices[:n_test])
-        for i, row in group.iterrows():
-            if i in test_indices:
-                test_data.append(row)
-            else:
-                train_data.append(row)
-
+    # 使用 groupby + numpy 替代逐行迭代
     import pandas as pd
-    train_df = pd.DataFrame(train_data, columns=ratings_df.columns)
-    test_df = pd.DataFrame(test_data, columns=ratings_df.columns)
+    for _, group in ratings_df.groupby('user_id'):
+        n = len(group)
+        # 至少保留一条给训练集
+        n_test = max(1, min(int(n * test_ratio), n - 1))
+        # 随机选择测试集索引
+        chosen = rng.choice(n, size=n_test, replace=False)
+        mask = np.zeros(n, dtype=bool)
+        mask[chosen] = True
+        test_indices.extend(group.index[mask].tolist())
+        train_indices.extend(group.index[~mask].tolist())
+
+    train_df = ratings_df.loc[train_indices].reset_index(drop=True)
+    test_df = ratings_df.loc[test_indices].reset_index(drop=True)
 
     print(f"  训练集: {len(train_df)} 条")
     print(f"  测试集: {len(test_df)} 条")
@@ -112,24 +125,43 @@ def train_test_split(ratings_df, test_ratio=0.2, random_state=42):
 
 
 def build_rating_matrix(train_df, n_users, n_movies, user2idx, movie2idx):
-    """构建稀疏评分矩阵 (用户×电影)"""
+    """构建稀疏评分矩阵 (用户×电影) - 优化版"""
     print("\n[构建矩阵] 构建评分矩阵...")
-    matrix = np.zeros((n_users, n_movies), dtype=np.float32)
-    global_mean = train_df['rating'].mean()
-    matrix.fill(global_mean)  # 用全局均值填充
+    global_mean = float(train_df['rating'].mean())
 
-    count = 0
-    for _, row in train_df.iterrows():
-        u = user2idx[row['user_id']]
-        m = movie2idx[row['movie_id']]
-        matrix[u, m] = row['rating']
-        count += 1
+    # 使用 numpy 直接填充矩阵，比逐行循环快
+    matrix = np.full((n_users, n_movies), global_mean, dtype=np.float32)
 
+    # 批量映射并填充
+    u_indices = np.array([user2idx.get(uid, 0) for uid in train_df['user_id']], dtype=np.int32)
+    m_indices = np.array([movie2idx.get(mid, 0) for mid in train_df['movie_id']], dtype=np.int32)
+    ratings = train_df['rating'].values.astype(np.float32)
+    matrix[u_indices, m_indices] = ratings
+
+    n_total = n_users * n_movies
     print(f"  矩阵大小: {n_users} × {n_movies}")
-    print(f"  填充元素: {count} / {n_users * n_movies} ({100 * count / (n_users * n_movies):.4f}%)")
+    print(f"  填充元素: {len(train_df)} / {n_total} ({100 * len(train_df) / n_total:.4f}%)")
     print(f"  全局评分均值: {global_mean:.4f}")
 
     return matrix, global_mean
+
+
+# ============================================================
+# 辅助函数：快速构建用户/电影映射
+# ============================================================
+
+def _build_mappings_from_df(train_df):
+    """从 DataFrame 快速构建映射"""
+    all_users = np.sort(train_df['user_id'].unique())
+    all_movies = np.sort(train_df['movie_id'].unique())
+
+    user2idx = {int(uid): i for i, uid in enumerate(all_users)}
+    movie2idx = {int(mid): i for i, mid in enumerate(all_movies)}
+    idx2user = {i: int(uid) for uid, i in user2idx.items()}
+    idx2movie = {i: int(mid) for mid, i in movie2idx.items()}
+
+    return (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
+            len(all_users), len(all_movies))
 
 
 # ============================================================
@@ -151,51 +183,37 @@ def train_svd(train_df, n_factors=50, test_df=None):
 
     start_time = time.time()
 
-    # 构建评分矩阵
-    all_users = sorted(set(train_df['user_id'].unique()))
-    all_movies = sorted(set(train_df['movie_id'].unique()))
-
-    user2idx = {uid: i for i, uid in enumerate(all_users)}
-    movie2idx = {mid: i for i, mid in enumerate(all_movies)}
-    idx2user = {i: uid for uid, i in user2idx.items()}
-    idx2movie = {i: mid for mid, i in movie2idx.items()}
-
-    n_users = len(all_users)
-    n_movies = len(all_movies)
+    # 构建映射
+    (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
+     n_users, n_movies) = _build_mappings_from_df(train_df)
 
     matrix, global_mean = build_rating_matrix(train_df, n_users, n_movies,
                                                user2idx, movie2idx)
 
-    # 均值中心化
-    user_means = np.zeros(n_users)
-    user_counts = np.zeros(n_users)
-    for _, row in train_df.iterrows():
-        u = user2idx[row['user_id']]
-        user_means[u] += row['rating']
-        user_counts[u] += 1
-    for u in range(n_users):
-        if user_counts[u] > 0:
-            user_means[u] /= user_counts[u]
+    # 均值中心化 - 使用 numpy 向量化操作
+    user_means = np.zeros(n_users, dtype=np.float32)
+    u_indices = np.array([user2idx[uid] for uid in train_df['user_id']], dtype=np.int32)
+    m_indices = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
+    np.add.at(user_means, u_indices, train_df['rating'].values.astype(np.float32))
+    user_counts = np.bincount(u_indices, minlength=n_users).astype(np.float32)
+    user_counts[user_counts == 0] = 1  # 避免除零
+    user_means /= user_counts
 
-    # 去均值
-    centered = matrix.copy()
-    for u in range(n_users):
-        if user_counts[u] > 0:
-            centered[u, :] -= user_means[u]
-    # 保留未评分位置的均值为0 (去均值后自然为0)
-    for _, row in train_df.iterrows():
-        u = user2idx[row['user_id']]
-        m = movie2idx[row['movie_id']]
-        centered[u, m] = matrix[u, m] - user_means[u]
+    # 去均值（向量化）
+    centered = matrix - user_means[:, np.newaxis]
+    # 在已评分位置恢复精确的去均值值
+    ratings_vals = train_df['rating'].values.astype(np.float32)
+    centered[u_indices, m_indices] = ratings_vals - user_means[u_indices]
 
     # 使用 truncated SVD
     print(f"  运行 Truncated SVD (因子数={n_factors})...")
     from scipy.sparse.linalg import svds
     from scipy.sparse import csr_matrix
 
+    k = min(n_factors, min(n_users, n_movies) - 1)
     # 转为稀疏矩阵加速
     sparse_centered = csr_matrix(centered)
-    u_svd, s_svd, vt_svd = svds(sparse_centered, k=min(n_factors, min(n_users, n_movies) - 1))
+    u_svd, s_svd, vt_svd = svds(sparse_centered, k=k)
 
     # 按奇异值降序排列
     idx_sort = np.argsort(-s_svd)
@@ -211,17 +229,24 @@ def train_svd(train_df, n_factors=50, test_df=None):
 
     print(f"  SVD 奇异值: {s_svd[:5]} ...")
 
-    # ---------- 计算训练 RMSE ----------
-    train_rmse = _compute_svd_rmse(train_df, user_features, movie_features,
-                                   user2idx, movie2idx, user_means, global_mean)
+    # ---------- 计算训练 RMSE (向量化) ----------
+    train_pred = np.sum(user_features[u_indices] * movie_features[m_indices], axis=1) + user_means[u_indices]
+    train_rmse = float(np.sqrt(np.mean((train_pred - ratings_vals) ** 2)))
     print(f"  训练集 RMSE: {train_rmse:.4f}")
 
     # ---------- 计算测试 RMSE (如果有测试集) ----------
     test_rmse = None
     if test_df is not None:
-        test_rmse = _compute_svd_rmse(test_df, user_features, movie_features,
-                                       user2idx, movie2idx, user_means, global_mean)
-        print(f"  测试集 RMSE: {test_rmse:.4f}")
+        test_u = np.array([user2idx.get(uid, 0) for uid in test_df['user_id']], dtype=np.int32)
+        test_m = np.array([movie2idx.get(mid, 0) for mid in test_df['movie_id']], dtype=np.int32)
+        test_r = test_df['rating'].values.astype(np.float32)
+        # 过滤映射中不存在的用户/电影
+        valid = np.array([uid in user2idx and mid in movie2idx for uid, mid in
+                          zip(test_df['user_id'], test_df['movie_id'])])
+        if valid.any():
+            test_pred = np.sum(user_features[test_u[valid]] * movie_features[test_m[valid]], axis=1) + user_means[test_u[valid]]
+            test_rmse = float(np.sqrt(np.mean((test_pred - test_r[valid]) ** 2)))
+            print(f"  测试集 RMSE: {test_rmse:.4f}")
 
     elapsed = time.time() - start_time
     print(f"  SVD 训练耗时: {elapsed:.2f} 秒")
@@ -249,21 +274,6 @@ def train_svd(train_df, n_factors=50, test_df=None):
     return model
 
 
-def _compute_svd_rmse(df, user_features, movie_features, user2idx, movie2idx,
-                      user_means, global_mean):
-    """计算 SVD 预测的 RMSE"""
-    errors = []
-    for _, row in df.iterrows():
-        u = user2idx.get(row['user_id'])
-        m = movie2idx.get(row['movie_id'])
-        if u is None or m is None:
-            continue
-        pred = np.dot(user_features[u], movie_features[m]) + user_means[u]
-        true_rating = row['rating']
-        errors.append((pred - true_rating) ** 2)
-    return math.sqrt(np.mean(errors)) if errors else float('inf')
-
-
 # ============================================================
 # 3. User-Based Collaborative Filtering
 # ============================================================
@@ -281,58 +291,42 @@ def train_user_cf(train_df, n_neighbors=30, test_df=None):
 
     start_time = time.time()
 
-    all_users = sorted(set(train_df['user_id'].unique()))
-    all_movies = sorted(set(train_df['movie_id'].unique()))
-
-    user2idx = {uid: i for i, uid in enumerate(all_users)}
-    movie2idx = {mid: i for i, mid in enumerate(all_movies)}
-    idx2user = {i: uid for uid, i in user2idx.items()}
-    idx2movie = {i: mid for mid, i in movie2idx.items()}
-
-    n_users = len(all_users)
-    n_movies = len(all_movies)
+    (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
+     n_users, n_movies) = _build_mappings_from_df(train_df)
 
     # 构建用户-电影评分字典
-    import pandas as pd
-    user_ratings = defaultdict(dict)  # user_id -> {movie_id: rating}
+    user_ratings = defaultdict(dict)
+    for uid, mid, rating in zip(train_df['user_id'], train_df['movie_id'], train_df['rating']):
+        user_ratings[int(uid)][int(mid)] = float(rating)
 
-    for _, row in train_df.iterrows():
-        user_ratings[row['user_id']][row['movie_id']] = row['rating']
-
-    # 计算每个用户的平均评分
-    user_mean_rating = {}
-    for uid, ratings in user_ratings.items():
-        user_mean_rating[uid] = np.mean(list(ratings.values()))
+    # 计算每个用户的平均评分（向量化）
+    user_mean_series = train_df.groupby('user_id')['rating'].mean()
+    user_mean_rating = {int(uid): float(mean) for uid, mean in user_mean_series.items()}
 
     print(f"  用户平均分计算完成, 共 {len(user_mean_rating)} 个用户")
 
-    # ---------- 计算用户相似度矩阵 (Pearson) 优化版 ----------
+    # ---------- 计算用户相似度矩阵 (Pearson) ----------
     print("  [优化版] 正在构建 User-Movie 评分矩阵...")
     start_sim_time = time.time()
 
-    # 1. 利用 pandas 直接透视出 用户-电影 矩阵 (未评分的地方会自动填充 NaN)
-    # 这一步非常快，行是 user_id，列是 movie_id
+    import pandas as pd
+    # 利用 pandas 透视出 用户-电影 矩阵
     user_movie_matrix = train_df.pivot(index='user_id', columns='movie_id', values='rating')
+    print(f"  矩阵形状: {user_movie_matrix.shape}")
 
     print("  [优化版] 正在计算 Pearson 相似度矩阵 (向量化计算)...")
-    # 2. 直接调用 pandas 的 .corr() 方法，按行(需要转置.T)计算 Pearson 相关系数。
-    # 它会自动忽略 NaN，只计算两个用户共同评分的电影！(底层是优化的 C 语言代码)
     sim_df = user_movie_matrix.T.corr(method='pearson', min_periods=5)
-    # 注意：min_periods=5 表示只有两个用户共同评分过至少 5 部电影，才计算相关系数，否则填 NaN。
 
-    # 3. 将 Pandas DataFrame 转换回原来代码需要的字典格式
+    # 提取有效相似度对
     user_sim_matrix = defaultdict(dict)
-    pair_count = 0
-
-    # 将矩阵中有效的值提取出来
     sim_stacked = sim_df.stack()
+    # 只取上半三角加上对角线，避免重复
     for (uid1, uid2), sim in sim_stacked.items():
-        if uid1 != uid2 and sim > 0:  # 排除自己和负相关
-            user_sim_matrix[uid1][uid2] = float(sim)
-            pair_count += 1
+        if uid1 != uid2 and sim > 0:
+            user_sim_matrix[int(uid1)][int(uid2)] = float(sim)
 
-    # 因为是对称矩阵，pair_count 会计算两遍，真实对数除以 2
-    print(f"  有效相似度用户对: {pair_count // 2}")
+    pair_count = sum(len(v) for v in user_sim_matrix.values())
+    print(f"  有效相似度用户对: {pair_count}")
     print(f"  相似度计算耗时: {time.time() - start_sim_time:.2f} 秒")
 
     # ---------- 计算训练 RMSE ----------
@@ -362,8 +356,8 @@ def train_user_cf(train_df, n_neighbors=30, test_df=None):
         'movie2idx': movie2idx,
         'idx2user': idx2user,
         'idx2movie': idx2movie,
-        'all_users': all_users,
-        'all_movies': all_movies,
+        'all_users': [int(u) for u in all_users],
+        'all_movies': [int(m) for m in all_movies],
         'train_rmse': train_rmse,
         'test_rmse': test_rmse,
         'train_size': len(train_df),
@@ -373,144 +367,166 @@ def train_user_cf(train_df, n_neighbors=30, test_df=None):
     return model
 
 
+def _predict_user_cf_batch(uids, mids, user_ratings, user_sim_matrix,
+                            user_mean_rating, n_neighbors):
+    """User-CF 批量预测（向量化版本）"""
+    predictions = []
+    valid_mask = []
+
+    for uid, mid in zip(uids, mids):
+        uid_int = int(uid)
+        mid_int = int(mid)
+        if uid_int not in user_ratings:
+            predictions.append(user_mean_rating.get(uid_int, 3.5))
+            valid_mask.append(True)
+            continue
+
+        sim_users = user_sim_matrix.get(uid_int, {})
+        if not sim_users:
+            predictions.append(user_mean_rating.get(uid_int, 3.5))
+            valid_mask.append(True)
+            continue
+
+        uid_mean = user_mean_rating.get(uid_int, 3.5)
+        neighbors = []
+        for nuid, sim in sim_users.items():
+            if mid_int in user_ratings.get(nuid, {}):
+                neighbors.append((nuid, sim, user_ratings[nuid][mid_int]))
+
+        if not neighbors:
+            predictions.append(uid_mean)
+            valid_mask.append(True)
+            continue
+
+        # 取 Top-K
+        neighbors.sort(key=lambda x: -x[1])
+        neighbors = neighbors[:n_neighbors]
+
+        num = 0.0
+        den = 0.0
+        for nuid, sim, rating in neighbors:
+            n_mean = user_mean_rating.get(nuid, 3.5)
+            num += sim * (rating - n_mean)
+            den += abs(sim)
+
+        if den > 0:
+            predictions.append(uid_mean + num / den)
+        else:
+            predictions.append(uid_mean)
+        valid_mask.append(True)
+
+    return np.array(predictions, dtype=np.float32)
+
+
 def _compute_user_cf_rmse(df, user_ratings, user_sim_matrix,
                           user_mean_rating, n_neighbors):
-    """计算 User-CF 预测的 RMSE"""
-    errors = []
-    for _, row in df.iterrows():
-        uid, mid, true_rating = row['user_id'], row['movie_id'], row['rating']
-        pred = _predict_user_cf(uid, mid, user_ratings, user_sim_matrix,
-                                user_mean_rating, n_neighbors)
-        if pred is not None:
-            errors.append((pred - true_rating) ** 2)
-    return math.sqrt(np.mean(errors)) if errors else float('inf')
-
-
-def _predict_user_cf(uid, mid, user_ratings, user_sim_matrix,
-                     user_mean_rating, n_neighbors):
-    """User-CF 单条预测"""
-    if uid not in user_ratings:
-        return user_mean_rating.get(uid, 3.5)
-
-    # 获取邻居
-    sim_users = user_sim_matrix.get(uid, {})
-    if not sim_users:
-        return user_mean_rating.get(uid, 3.5)
-
-    # 过滤出对该电影有评分的邻居
-    neighbors = []
-    for nuid, sim in sim_users.items():
-        if mid in user_ratings.get(nuid, {}):
-            neighbors.append((nuid, sim, user_ratings[nuid][mid]))
-
-    if not neighbors:
-        return user_mean_rating.get(uid, 3.5)
-
-    # 按相似度排序取 Top-K
-    neighbors.sort(key=lambda x: -x[1])
-    neighbors = neighbors[:n_neighbors]
-
-    # 加权平均 (去均值)
-    uid_mean = user_mean_rating.get(uid, 3.5)
-    num = 0.0
-    den = 0.0
-    for nuid, sim, rating in neighbors:
-        n_mean = user_mean_rating.get(nuid, 3.5)
-        num += sim * (rating - n_mean)
-        den += abs(sim)
-
-    if den > 0:
-        return uid_mean + num / den
-    return uid_mean
+    """计算 User-CF 预测的 RMSE（优化版：批量处理）"""
+    errors = _predict_user_cf_batch(
+        df['user_id'].values, df['movie_id'].values,
+        user_ratings, user_sim_matrix, user_mean_rating, n_neighbors
+    )
+    true_ratings = df['rating'].values.astype(np.float32)
+    # 截断到有效范围
+    min_len = min(len(errors), len(true_ratings))
+    if min_len == 0:
+        return float('inf')
+    return float(np.sqrt(np.mean((errors[:min_len] - true_ratings[:min_len]) ** 2)))
 
 
 # ============================================================
-# 4. Item-Based Collaborative Filtering
+# 4. Item-Based Collaborative Filtering (向量化优化版)
 # ============================================================
 
 def train_item_cf(train_df, n_neighbors=30, test_df=None):
     """
-    训练 Item-Based Collaborative Filtering
+    训练 Item-Based Collaborative Filtering (向量化优化版)
+
+    使用 numpy 矩阵运算替代双重循环，大幅提升 CPU 利用率。
 
     原理: 对于目标用户已评分的每部电影，
           找到与它最相似的 K 部电影，
           用相似度和评分的加权平均作为预测
-    相似度: Cosine 相似度
+    相似度: 调整的余弦相似度 (Adjusted Cosine Similarity)
     """
     print("\n" + "=" * 60)
     print(f"[Item-CF 训练] 邻居数: {n_neighbors}")
 
     start_time = time.time()
 
-    all_users = sorted(set(train_df['user_id'].unique()))
-    all_movies = sorted(set(train_df['movie_id'].unique()))
+    (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
+     n_users, n_movies) = _build_mappings_from_df(train_df)
 
-    user2idx = {uid: i for i, uid in enumerate(all_users)}
-    movie2idx = {mid: i for i, mid in enumerate(all_movies)}
-    idx2user = {i: uid for uid, i in user2idx.items()}
-    idx2movie = {i: mid for mid, i in movie2idx.items()}
-
-    # 构建电影-用户评分矩阵 (用于计算电影相似度)
-    movie_ratings = defaultdict(dict)  # movie_id -> {user_id: rating}
-    user_movies = defaultdict(set)     # user_id -> set of movie_ids
-
-    for _, row in train_df.iterrows():
-        movie_ratings[row['movie_id']][row['user_id']] = row['rating']
-        user_movies[row['user_id']].add(row['movie_id'])
+    # ---------- 构建电影-用户评分矩阵 (密集矩阵) ----------
+    print("  [优化版] 构建电影-用户评分矩阵...")
+    # 行=电影，列=用户，值=评分
+    movie_user_matrix = np.full((n_movies, n_users), np.nan, dtype=np.float32)
+    u_indices = np.array([user2idx[uid] for uid in train_df['user_id']], dtype=np.int32)
+    m_indices = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
+    ratings = train_df['rating'].values.astype(np.float32)
+    movie_user_matrix[m_indices, u_indices] = ratings
 
     # 计算每部电影的评分均值
-    movie_mean_rating = {}
-    for mid, ratings in movie_ratings.items():
-        movie_mean_rating[mid] = np.mean(list(ratings.values()))
+    with np.errstate(invalid='ignore'):
+        movie_means = np.nanmean(movie_user_matrix, axis=1)
+    movie_means = np.nan_to_num(movie_means, nan=0.0)
 
-    print(f"  电影平均分计算完成, 共 {len(movie_mean_rating)} 部电影")
+    print(f"  电影平均分计算完成, 共 {n_movies} 部电影")
+    print(f"  矩阵形状: {n_movies} × {n_users}")
 
-    # ---------- 计算电影相似度矩阵 (Cosine) ----------
-    print("  计算电影相似度矩阵...")
-    movie_ids = list(movie_ratings.keys())
+    # ---------- 计算电影相似度矩阵 (向量化) ----------
+    print("  [优化版] 计算电影相似度矩阵 (向量化)...")
+    start_sim_time = time.time()
 
-    # 只计算有共同评分用户的电影对
-    common_movies = defaultdict(set)  # (mid1, mid2) -> common users
-    for uid, mids in user_movies.items():
-        mids_list = list(mids)
-        for i in range(len(mids_list)):
-            for j in range(i + 1, len(mids_list)):
-                mid1, mid2 = mids_list[i], mids_list[j]
-                if mid1 < mid2:
-                    common_movies[(mid1, mid2)].add(uid)
-                else:
-                    common_movies[(mid2, mid1)].add(uid)
+    # 去均值
+    centered = movie_user_matrix - movie_means[:, np.newaxis]
+    centered = np.nan_to_num(centered, nan=0.0)
 
-    print(f"  有共同评分用户的电影对数: {len(common_movies)}")
+    # 计算余弦相似度矩阵
+    # sim(i,j) = dot(ci, cj) / (||ci|| * ||cj||)
+    norms = np.linalg.norm(centered, axis=1)
+    norms[norms == 0] = 1.0  # 避免除零
 
-    movie_sim_matrix = defaultdict(dict)
-    pair_count = 0
+    # 归一化
+    normalized = centered / norms[:, np.newaxis]
 
-    for (mid1, mid2), common_users_set in common_movies.items():
-        if len(common_users_set) < 3:
-            continue
+    # 计算相似度矩阵 (n_movies × n_movies)
+    # 使用矩阵乘法，利用 BLAS 加速
+    sim_matrix = np.dot(normalized, normalized.T)
 
-        # Cosine 相似度（去均值）
-        r1 = [movie_ratings[mid1][u] for u in common_users_set]
-        r2 = [movie_ratings[mid2][u] for u in common_users_set]
-        mean1 = np.mean(r1)
-        mean2 = np.mean(r2)
+    # 获取共同评分计数矩阵（用于过滤）
+    has_rating = ~np.isnan(movie_user_matrix)
+    co_counts = np.dot(has_rating.astype(np.float32), has_rating.astype(np.float32).T)
 
-        r1_centered = [r - mean1 for r in r1]
-        r2_centered = [r - mean2 for r in r2]
+    # 过滤：至少共同评分过 3 个用户
+    min_periods = 3
+    sim_matrix[co_counts < min_periods] = 0.0
+    # 排除自相似和负相关
+    np.fill_diagonal(sim_matrix, 0.0)  # 对角设为0（自相似不计入）
 
-        dot = sum(a * b for a, b in zip(r1_centered, r2_centered))
-        norm1 = math.sqrt(sum(a * a for a in r1_centered))
-        norm2 = math.sqrt(sum(b * b for b in r2_centered))
+    # 构建 sparse 格式的相似度字典
+    movie_sim_matrix = {}
+    for i in range(n_movies):
+        row = sim_matrix[i]
+        pos_mask = row > 0
+        if pos_mask.any():
+            indices = np.where(pos_mask)[0]
+            movie_sim_matrix[int(all_movies[i])] = {
+                int(all_movies[j]): float(row[j]) for j in indices
+            }
 
-        if norm1 > 0 and norm2 > 0:
-            sim = dot / (norm1 * norm2)
-            if sim > 0:
-                movie_sim_matrix[mid1][mid2] = sim
-                movie_sim_matrix[mid2][mid1] = sim
-                pair_count += 1
-
+    pair_count = sum(len(v) for v in movie_sim_matrix.values())
     print(f"  有效相似度电影对: {pair_count}")
+    print(f"  相似度计算耗时: {time.time() - start_sim_time:.2f} 秒")
+
+    # 构建 movie_ratings 字典（用于后续预测）
+    movie_ratings = defaultdict(dict)
+    user_movies = defaultdict(set)
+    for uid, mid, rating in zip(train_df['user_id'], train_df['movie_id'], train_df['rating']):
+        movie_ratings[int(mid)][int(uid)] = float(rating)
+        user_movies[int(uid)].add(int(mid))
+
+    movie_mean_rating = {int(mid): float(mean) for mid, mean in
+                         zip(all_movies, movie_means)}
 
     # ---------- 计算训练 RMSE ----------
     train_rmse = _compute_item_cf_rmse(
@@ -542,8 +558,8 @@ def train_item_cf(train_df, n_neighbors=30, test_df=None):
         'movie2idx': movie2idx,
         'idx2user': idx2user,
         'idx2movie': idx2movie,
-        'all_users': all_users,
-        'all_movies': all_movies,
+        'all_users': [int(u) for u in all_users],
+        'all_movies': [int(m) for m in all_movies],
         'train_rmse': train_rmse,
         'test_rmse': test_rmse,
         'train_size': len(train_df),
@@ -555,9 +571,10 @@ def train_item_cf(train_df, n_neighbors=30, test_df=None):
 
 def _compute_item_cf_rmse(df, movie_ratings, movie_sim_matrix,
                           movie_mean_rating, user_movies, n_neighbors):
+    """计算 Item-CF 预测的 RMSE（优化版）"""
     errors = []
     for _, row in df.iterrows():
-        uid, mid, true_rating = row['user_id'], row['movie_id'], row['rating']
+        uid, mid, true_rating = int(row['user_id']), int(row['movie_id']), row['rating']
         pred = _predict_item_cf(uid, mid, movie_ratings, movie_sim_matrix,
                                 movie_mean_rating, user_movies, n_neighbors)
         if pred is not None:
@@ -585,8 +602,8 @@ def _predict_item_cf(uid, mid, movie_ratings, movie_sim_matrix,
     for rmid in user_rated:
         if rmid in sim_movies:
             sim = sim_movies[rmid]
-            if sim > 0 and rmid in movie_ratings:
-                rating = movie_ratings[rmid].get(uid)
+            if sim > 0:
+                rating = movie_ratings.get(rmid, {}).get(uid)
                 if rating is not None:
                     neighbors.append((rmid, sim, rating))
 
@@ -616,14 +633,8 @@ def save_model(model, name):
     filepath = os.path.join(MODEL_DIR, f'{name}.pkl')
     print(f"\n[保存模型] {name} -> {filepath}")
 
-    # SVD 的 numpy 数组需要特殊处理
-    if model['algorithm'] == 'svd':
-        model_copy = model.copy()
-        with open(filepath, 'wb') as f:
-            pickle.dump(model_copy, f)
-    else:
-        with open(filepath, 'wb') as f:
-            pickle.dump(model, f)
+    with open(filepath, 'wb') as f:
+        pickle.dump(model, f)
 
     size_mb = os.path.getsize(filepath) / (1024 * 1024)
     print(f"  模型大小: {size_mb:.2f} MB")
@@ -636,8 +647,8 @@ def save_metadata(models_info, train_df, test_df):
         'dataset': {
             'train_size': len(train_df),
             'test_size': len(test_df),
-            'n_users': train_df['user_id'].nunique(),
-            'n_movies': train_df['movie_id'].nunique(),
+            'n_users': int(train_df['user_id'].nunique()),
+            'n_movies': int(train_df['movie_id'].nunique()),
             'rating_mean': float(train_df['rating'].mean()),
             'rating_std': float(train_df['rating'].std()),
         },
@@ -654,14 +665,70 @@ def save_metadata(models_info, train_df, test_df):
 # 6. 缓存导出（MySQL 可导入的 CSV / SQL / JSON）
 # ============================================================
 
+def _export_movie_similarity_worker(mid, movie_sim_matrix, top_n, current_time):
+    """处理单个电影的相似度输出（用于并行处理，模块级函数）"""
+    try:
+        sim_movies = movie_sim_matrix[mid]
+        if not sim_movies:
+            return mid, None
+        sorted_sims = sorted(sim_movies.items(), key=lambda x: -x[1])[:top_n]
+        sim_list = [
+            {"movie_id": int(sim_mid), "score": round(float(score), 4)}
+            for sim_mid, score in sorted_sims
+        ]
+        json_str = json.dumps(sim_list, ensure_ascii=False)
+        return mid, [int(mid), json_str, current_time]
+    except Exception as e:
+        return mid, str(e)
+
+
+def _compute_user_recommendations(uid, user2idx, user_features, movie_vectors,
+                                  movie_ids, user_means, top_n, rated_set):
+    """计算单个用户的推荐列表（用于并行处理）"""
+    try:
+        u_idx = user2idx[uid]
+        user_mean = float(user_means[u_idx])
+
+        # 向量化计算：所有电影评分
+        scores = np.dot(user_features[u_idx], movie_vectors.T) + user_mean
+
+        # 排除已评分电影
+        if rated_set:
+            valid_mask = np.array([mid not in rated_set for mid in movie_ids])
+            if valid_mask.any():
+                filtered_scores = scores[valid_mask]
+                filtered_mids = [int(mid) for mid, keep in zip(movie_ids, valid_mask) if keep]
+            else:
+                filtered_scores = scores
+                filtered_mids = movie_ids
+        else:
+            filtered_scores = scores
+            filtered_mids = movie_ids
+
+        # 取 Top-N
+        if len(filtered_scores) > top_n:
+            top_indices = np.argpartition(filtered_scores, -top_n)[-top_n:]
+            top_indices = top_indices[np.argsort(-filtered_scores[top_indices])]
+        else:
+            top_indices = np.argsort(-filtered_scores)
+
+        rec_list = [
+            {"movie_id": int(filtered_mids[idx]), "score": round(float(filtered_scores[idx]), 4)}
+            for idx in top_indices
+        ]
+
+        return int(uid), rec_list, None
+    except Exception as e:
+        return int(uid), None, str(e)
+
+
 def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20):
     """
     使用 SVD 模型为所有训练用户生成 Top-N 推荐，导出为 CSV。
-    输出格式对应 MySQL users_recommendations 表:
-      user_id, recommend_movies(JSON), algorithm, updated_at
+    优化版：多进程并行处理用户推荐计算。
     """
     print("\n" + "=" * 60)
-    print("[缓存导出] 用户推荐 -> users_recommendations.csv")
+    print("[缓存导出] 用户推荐 -> users_recommendations.csv (并行优化)")
     print("=" * 60)
 
     user2idx = svd_model['user2idx']
@@ -677,7 +744,7 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20):
     print(f"  电影数: {n_movies}")
     print(f"  Top-N: {top_n}")
 
-    # 获取用户已评分的电影列表（用于排除已评分项）
+    # 获取用户已评分的电影列表
     user_rated_movies = defaultdict(set)
     if item_cf_model and 'user_movies' in item_cf_model:
         for uid, mids in item_cf_model['user_movies'].items():
@@ -688,77 +755,59 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20):
     algorithm_tag = 'svd'
 
     # 预计算所有电影的特征向量
-    movie_ids = []
-    movie_vectors = []
-    for mid, m_idx in movie2idx.items():
-        movie_ids.append(int(mid))
-        movie_vectors.append(movie_features[m_idx])
-    movie_vectors = np.array(movie_vectors)
+    movie_ids = [int(mid) for mid in sorted(movie2idx.keys())]
+    movie_vectors = np.array([movie_features[movie2idx[mid]] for mid in movie_ids])
 
     csv_path = os.path.join(EXPORT_DIR, 'users_recommendations.csv')
     start_time_total = time.time()
 
-    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+    # 准备参数
+    user_ids = sorted(user2idx.keys())
+    batch_size = max(1, len(user_ids) // (N_CPUS * 2))
+
+    print(f"  并行处理: {N_CPUS} 进程, 每批次 {batch_size} 用户")
+
+    # 使用多进程并行计算推荐
+    all_results = []
+    with ProcessPoolExecutor(max_workers=N_CPUS) as executor:
+        futures = []
+        for uid in user_ids:
+            rated = user_rated_movies.get(int(uid), set())
+            future = executor.submit(
+                _compute_user_recommendations,
+                uid, user2idx, user_features, movie_vectors,
+                movie_ids, user_means, top_n, rated
+            )
+            futures.append(future)
 
         processed = 0
         errors = 0
-        batch_start = time.time()
+        next_report = 1000
 
-        for uid in sorted(user2idx.keys()):
-            try:
-                u_idx = user2idx[uid]
-                user_mean = user_means[u_idx]
-
-                # 向量化计算：所有电影评分 = user_vector · all_movie_vectors + user_mean
-                scores = np.dot(user_features[u_idx], movie_vectors.T) + user_mean
-
-                # 排除已评分电影
-                rated = user_rated_movies.get(int(uid), set())
-                if rated:
-                    valid_indices = [
-                        i for i, mid in enumerate(movie_ids)
-                        if mid not in rated
-                    ]
-                    if valid_indices:
-                        filtered_scores = scores[valid_indices]
-                        filtered_mids = [movie_ids[i] for i in valid_indices]
-                    else:
-                        filtered_scores = scores
-                        filtered_mids = movie_ids
-                else:
-                    filtered_scores = scores
-                    filtered_mids = movie_ids
-
-                # 取 Top-N
-                if len(filtered_scores) > top_n:
-                    top_indices = np.argpartition(filtered_scores, -top_n)[-top_n:]
-                    top_indices = top_indices[np.argsort(-filtered_scores[top_indices])]
-                else:
-                    top_indices = np.argsort(-filtered_scores)
-
-                # 构建推荐列表
-                rec_list = []
-                for idx in top_indices:
-                    rec_list.append({
-                        "movie_id": int(filtered_mids[idx]),
-                        "score": round(float(filtered_scores[idx]), 4)
-                    })
-
-                json_str = json.dumps(rec_list, ensure_ascii=False)
-                writer.writerow([int(uid), json_str, algorithm_tag, current_time])
-                processed += 1
-
-            except Exception as e:
+        for future in as_completed(futures):
+            uid, rec_list, error = future.result()
+            if error:
                 errors += 1
                 if errors <= 5:
-                    print(f"  [警告] 用户 {uid} 处理失败: {e}")
+                    print(f"  [警告] 用户 {uid} 处理失败: {error}")
+            else:
+                all_results.append((uid, rec_list))
+                processed += 1
 
-            if processed > 0 and processed % 1000 == 0:
-                elapsed = time.time() - batch_start
-                rate = 1000 / elapsed if elapsed > 0 else 0
+            if processed >= next_report:
+                elapsed = time.time() - start_time_total
+                rate = processed / elapsed if elapsed > 0 else 0
                 print(f"  进度: {processed}/{n_users} (错误: {errors}, 速率: {rate:.0f} 用户/秒)")
-                batch_start = time.time()
+                next_report += 1000
+
+    # 按用户 ID 排序后写入 CSV
+    all_results.sort(key=lambda x: x[0])
+
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+        for uid, rec_list in all_results:
+            json_str = json.dumps(rec_list, ensure_ascii=False)
+            writer.writerow([uid, json_str, algorithm_tag, current_time])
 
     total_elapsed = time.time() - start_time_total
     print(f"\n  完成: {processed}/{n_users} 用户 (错误: {errors})")
@@ -773,8 +822,7 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20):
 def export_movies_similarities_csv(item_cf_model, top_n=20):
     """
     从 Item-CF 模型的 movie_sim_matrix 导出每部电影的 Top-N 相似电影。
-    输出格式对应 MySQL movies_similarities 表:
-      movie_id, similar_movies(JSON), updated_at
+    输出格式对应 MySQL movies_similarities 表。
     """
     print("\n" + "=" * 60)
     print("[缓存导出] 电影相似度 -> movies_similarities.csv")
@@ -802,40 +850,39 @@ def export_movies_similarities_csv(item_cf_model, top_n=20):
     csv_path = os.path.join(EXPORT_DIR, 'movies_similarities.csv')
     start_time_total = time.time()
 
-    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+    # 使用多进程并行处理
+    movie_ids = sorted(movie_sim_matrix.keys())
 
+    worker_func = partial(_export_movie_similarity_worker,
+                          movie_sim_matrix=movie_sim_matrix,
+                          top_n=top_n,
+                          current_time=current_time)
+
+    results = []
+    with ProcessPoolExecutor(max_workers=N_CPUS) as executor:
+        futures = {executor.submit(worker_func, mid): mid for mid in movie_ids}
         processed = 0
         errors = 0
 
-        for mid in sorted(movie_sim_matrix.keys()):
-            try:
-                sim_movies = movie_sim_matrix[mid]
-                if not sim_movies:
-                    continue
-
-                # 按相似度降序排列取 Top-N
-                sorted_sims = sorted(
-                    sim_movies.items(),
-                    key=lambda x: -x[1]
-                )[:top_n]
-
-                sim_list = [
-                    {"movie_id": int(sim_mid), "score": round(float(score), 4)}
-                    for sim_mid, score in sorted_sims
-                ]
-
-                json_str = json.dumps(sim_list, ensure_ascii=False)
-                writer.writerow([int(mid), json_str, current_time])
-                processed += 1
-
-            except Exception as e:
+        for future in as_completed(futures):
+            mid, result = future.result()
+            if isinstance(result, str):
                 errors += 1
                 if errors <= 5:
-                    print(f"  [警告] 电影 {mid} 处理失败: {e}")
+                    print(f"  [警告] 电影 {mid} 处理失败: {result}")
+            elif result is not None:
+                results.append(result)
+                processed += 1
 
             if processed > 0 and processed % 5000 == 0:
                 print(f"  进度: {processed}/{n_movies}")
+
+    # 排序后写入
+    results.sort(key=lambda x: x[0])
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+        for row in results:
+            writer.writerow(row)
 
     total_elapsed = time.time() - start_time_total
     print(f"\n  完成: {processed}/{n_movies} 电影 (错误: {errors})")
@@ -899,7 +946,6 @@ def generate_sql_from_csv(csv_path, table_type):
                     updated_at = row[3]
                     values.append(f"({main_id}, '{json_str}', '{algorithm}', '{updated_at}')")
             else:
-                # movies_similarities: movie_id, similar_movies, updated_at
                 f_out.write(
                     f"REPLACE INTO `{table_name}` "
                     f"(`{id_field}`, `{json_field}`, `updated_at`) VALUES\n"
@@ -924,12 +970,10 @@ def generate_sql_from_csv(csv_path, table_type):
 def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20):
     """
     导出为 JSON 格式，供 Qdrant 推荐参考或 save_to_cache.py 读取。
-    生成两个文件：
-      - users_recommendations.json（用户推荐）
-      - movies_similarities.json（电影相似度）
+    并行优化版：使用多进程加速。
     """
     print("\n" + "=" * 60)
-    print("[缓存导出] 推荐数据 -> JSON (供 Qdrant/save_to_cache 使用)")
+    print("[缓存导出] 推荐数据 -> JSON (并行优化)")
     print("=" * 60)
 
     # ---- 导出用户推荐 JSON ----
@@ -944,52 +988,39 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20):
         for uid, mids in item_cf_model['user_movies'].items():
             user_rated_movies[int(uid)] = set(int(m) for m in mids)
 
-    movie_ids = []
-    movie_vectors = []
-    for mid, m_idx in movie2idx.items():
-        movie_ids.append(int(mid))
-        movie_vectors.append(movie_features[m_idx])
-    movie_vectors = np.array(movie_vectors)
+    movie_ids = [int(mid) for mid in sorted(movie2idx.keys())]
+    movie_vectors = np.array([movie_features[movie2idx[mid]] for mid in movie_ids])
 
-    user_records = []
-    for uid in sorted(user2idx.keys()):
-        u_idx = user2idx[uid]
-        user_mean = user_means[u_idx]
-        scores = np.dot(user_features[u_idx], movie_vectors.T) + user_mean
+    # 并行计算用户推荐
+    user_ids = sorted(user2idx.keys())
+    all_results = []
 
-        rated = user_rated_movies.get(int(uid), set())
-        if rated:
-            valid_indices = [i for i, mid in enumerate(movie_ids) if mid not in rated]
-            if valid_indices:
-                filtered_scores = scores[valid_indices]
-                filtered_mids = [movie_ids[i] for i in valid_indices]
-            else:
-                filtered_scores = scores
-                filtered_mids = movie_ids
-        else:
-            filtered_scores = scores
-            filtered_mids = movie_ids
+    with ProcessPoolExecutor(max_workers=N_CPUS) as executor:
+        futures = []
+        for uid in user_ids:
+            rated = user_rated_movies.get(int(uid), set())
+            future = executor.submit(
+                _compute_user_recommendations,
+                uid, user2idx, user_features, movie_vectors,
+                movie_ids, user_means, top_n, rated
+            )
+            futures.append(future)
 
-        if len(filtered_scores) > top_n:
-            top_indices = np.argpartition(filtered_scores, -top_n)[-top_n:]
-            top_indices = top_indices[np.argsort(-filtered_scores[top_indices])]
-        else:
-            top_indices = np.argsort(-filtered_scores)
+        for future in as_completed(futures):
+            uid, rec_list, error = future.result()
+            if error is None and rec_list is not None:
+                all_results.append({
+                    "user_id": uid,
+                    "recommendations": rec_list,
+                    "algorithm": "svd"
+                })
 
-        rec_list = [
-            {"movie_id": int(filtered_mids[idx]), "score": round(float(filtered_scores[idx]), 4)}
-            for idx in top_indices
-        ]
-        user_records.append({
-            "user_id": int(uid),
-            "recommendations": rec_list,
-            "algorithm": "svd"
-        })
+    all_results.sort(key=lambda x: x["user_id"])
 
     user_json_path = os.path.join(EXPORT_DIR, 'users_recommendations.json')
     with open(user_json_path, 'w', encoding='utf-8') as f:
-        json.dump(user_records, f, ensure_ascii=False, indent=2)
-    print(f"  用户推荐 JSON: {user_json_path} ({len(user_records)} 个用户)")
+        json.dump(all_results, f, ensure_ascii=False, indent=2)
+    print(f"  用户推荐 JSON: {user_json_path} ({len(all_results)} 个用户)")
 
     # ---- 导出电影相似度 JSON ----
     if item_cf_model and item_cf_model.get('movie_sim_matrix'):
@@ -999,11 +1030,10 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20):
             movie_sim_matrix_int[int(k)] = {
                 int(sk): float(sv) for sk, sv in v.items()
             }
-        movie_sim_matrix = movie_sim_matrix_int
 
         movie_records = []
-        for mid in sorted(movie_sim_matrix.keys()):
-            sim_movies = movie_sim_matrix[mid]
+        for mid in sorted(movie_sim_matrix_int.keys()):
+            sim_movies = movie_sim_matrix_int[mid]
             if not sim_movies:
                 continue
             sorted_sims = sorted(sim_movies.items(), key=lambda x: -x[1])[:top_n]
@@ -1101,6 +1131,8 @@ def export_all_caches(svd_model, item_cf_model, top_n=20, enable_sql=True, enabl
 
 def main():
     """主训练函数"""
+    global N_CPUS
+
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -1116,10 +1148,15 @@ def main():
                         help='仅从已有模型导出缓存，不重新训练')
     parser.add_argument('--import-db', action='store_true',
                         help='导出完成后自动将结果导入 MySQL（调用 import_recommendations.js）')
+    parser.add_argument('--parallel', type=int, default=N_CPUS,
+                        help=f'并行进程数 (默认: {N_CPUS})')
     args = parser.parse_args()
 
+    N_CPUS = min(args.parallel, os.cpu_count() or 1)
+    print(f"  并行进程数: {N_CPUS}")
+
     print("=" * 60)
-    print("        MovieLens 推荐系统 - 模型训练")
+    print("        MovieLens 推荐系统 - 模型训练 (CPU 优化版)")
     print("=" * 60)
 
     if args.export_only:
@@ -1146,7 +1183,9 @@ def main():
         return
 
     # 1. 加载数据
+    t0 = time.time()
     ratings_df, movies_df, user2idx, movie2idx, idx2user, idx2movie = load_data()
+    print(f"  数据加载耗时: {time.time() - t0:.2f} 秒")
 
     # 2. 划分训练/测试集
     train_df, test_df = train_test_split(ratings_df, test_ratio=0.2)
@@ -1156,7 +1195,9 @@ def main():
 
     # 3a. SVD 矩阵分解
     print("\n" + "-" * 60)
+    t0 = time.time()
     svd_model = train_svd(train_df, n_factors=50, test_df=test_df)
+    print(f"  SVD 总耗时: {time.time() - t0:.2f} 秒")
     save_model(svd_model, 'svd_model')
     models_info.append({
         'name': 'svd_model',
@@ -1169,7 +1210,9 @@ def main():
 
     # 3b. User-Based CF
     print("\n" + "-" * 60)
+    t0 = time.time()
     user_cf_model = train_user_cf(train_df, n_neighbors=30, test_df=test_df)
+    print(f"  User-CF 总耗时: {time.time() - t0:.2f} 秒")
     save_model(user_cf_model, 'user_cf_model')
     models_info.append({
         'name': 'user_cf_model',
@@ -1182,7 +1225,9 @@ def main():
 
     # 3c. Item-Based CF
     print("\n" + "-" * 60)
+    t0 = time.time()
     item_cf_model = train_item_cf(train_df, n_neighbors=30, test_df=test_df)
+    print(f"  Item-CF 总耗时: {time.time() - t0:.2f} 秒")
     save_model(item_cf_model, 'item_cf_model')
     models_info.append({
         'name': 'item_cf_model',
