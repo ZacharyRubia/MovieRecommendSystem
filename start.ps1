@@ -9,7 +9,7 @@ Write-Host ""
 try {
     $nodeVersion = node --version 2>$null
     if ($LASTEXITCODE -ne 0) { throw }
-    Write-Host "[1/5] Node.js detected" -ForegroundColor Green
+    Write-Host "[1/4] Node.js detected" -ForegroundColor Green
     Write-Host "      Version: $nodeVersion" -ForegroundColor Gray
 } catch {
     Write-Host "[ERROR] Node.js not found. Please install Node.js first." -ForegroundColor Red
@@ -22,7 +22,7 @@ Write-Host ""
 try {
     $npmVersion = npm --version 2>$null
     if ($LASTEXITCODE -ne 0) { throw }
-    Write-Host "[2/5] npm detected" -ForegroundColor Green
+    Write-Host "[2/4] npm detected" -ForegroundColor Green
     Write-Host "      Version: $npmVersion" -ForegroundColor Gray
 } catch {
     Write-Host "[ERROR] npm not found." -ForegroundColor Red
@@ -31,22 +31,9 @@ try {
 }
 Write-Host ""
 
-# Check if Python is installed
-try {
-    $pythonVersion = python --version 2>&1
-    if ($LASTEXITCODE -ne 0) { throw }
-    Write-Host "[3/5] Python detected" -ForegroundColor Green
-    Write-Host "      Version: $pythonVersion" -ForegroundColor Gray
-} catch {
-    Write-Host "[ERROR] Python not found. Please install Python first (AI recommend service required)." -ForegroundColor Red
-    Read-Host "Press Enter to exit"
-    exit 1
-}
-Write-Host ""
-
 # Check if root dependencies are installed
 if (-not (Test-Path "node_modules")) {
-    Write-Host "[4/5] Installing root dependencies..." -ForegroundColor Yellow
+    Write-Host "[3/4] Installing root dependencies..." -ForegroundColor Yellow
     npm install
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Failed to install root dependencies" -ForegroundColor Red
@@ -54,7 +41,7 @@ if (-not (Test-Path "node_modules")) {
         exit 1
     }
 } else {
-    Write-Host "[4/5] Root dependencies already installed" -ForegroundColor Green
+    Write-Host "[3/4] Root dependencies already installed" -ForegroundColor Green
 }
 Write-Host ""
 
@@ -88,20 +75,19 @@ if (-not (Test-Path "frontend\node_modules")) {
 }
 Write-Host ""
 
-Write-Host "[5/5] Starting services..." -ForegroundColor Green
+Write-Host "[4/4] Starting services..." -ForegroundColor Green
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " Services are starting, please wait..." -ForegroundColor Yellow
 Write-Host ""
 Write-Host " Backend:     http://localhost:3000" -ForegroundColor White
 Write-Host " Frontend:    http://localhost:8080" -ForegroundColor White
-Write-Host " AI Service:  http://localhost:5100" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host " Press Ctrl+C to stop all services" -ForegroundColor Gray
 Write-Host ""
 
-# Start backend, frontend and AI recommendation service using concurrently
+# Start backend and frontend using concurrently
 npm run dev
 
 Read-Host "Press Enter to exit"

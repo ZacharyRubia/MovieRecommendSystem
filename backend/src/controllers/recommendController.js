@@ -11,9 +11,14 @@
  * 7. trendingRecommend   - 趋势推荐
  * 8. contentBasedRecommend - 基于内容推荐（Qdrant）
  * 9. clearCache          - 清除缓存
+ * 
+ * AI 模型推荐（原 Python 代理）已集成到 Node.js：
+ * - /api/recommend/ai -> 使用预训练模型的推荐引擎
+ * - /api/recommend/ai/models -> 列出可用算法
+ * - /api/recommend/ai/health -> 健康检查
  */
 const recommendService = require('../services/recommendService');
-const http = require('http');
+const recommendEngine = require('../services/recommendEngine');
 
 // =============================================
 // 配置常量
@@ -22,6 +27,15 @@ const REQUEST_TIMEOUT = 120000; // 120秒超时
 const MAX_PAGE_SIZE = 100;      // 单页最大条数
 const MAX_K = 200;              // 邻居数量上限
 const MAX_TOP_N = 200;          // 推荐数上限
+
+// 可用算法列表
+const AVAILABLE_ALGORITHMS = {
+  'hybrid': { name: '混合推荐 (Hybrid CF)', description: '融合 User-Based CF 与 Item-Based CF，支持自适应权重' },
+  'user_cf': { name: '基于用户的协同过滤 (User-Based CF)', description: '基于相似用户的评分预测' },
+  'item_cf': { name: '基于物品的协同过滤 (Item-Based CF)', description: '基于相似物品的评分预测' },
+  'popular': { name: '热门推荐 (Popular)', description: '基于评分数量和均值的全局热门' },
+  'content_based': { name: '基于内容的推荐 (Content-Based)', description: '基于 Qdrant 向量的内容相似度推荐' }
+};
 
 // =============================================
 // 超时保护
@@ -403,123 +417,167 @@ async function clearCache(req, res) {
 }
 
 // =============================================
-// Python AI 模型推荐（代理到 Python Flask 服务）
+// AI 模型推荐（已集成到 Node.js，移除 Python 代理）
 // =============================================
 
 /**
- * AI 推荐服务配置
+ * 将算法的 Python 命名（user_cf/item_cf/hybrid）映射到 recommendService 方法
+ * 
+ * 注意：hybrid 分别调用 User-CF 和 Item-CF，各自带独立超时：
+ * - User-CF: 首次较慢（约 60-90s），后续有缓存很快（<100ms）
+ * - Item-CF: 数据量大时较慢，超时后降级为只用 User-CF
  */
-const AI_RECOMMEND_HOST = process.env.AI_RECOMMEND_HOST || '127.0.0.1';
-const AI_RECOMMEND_PORT = parseInt(process.env.AI_RECOMMEND_PORT || '5100');
-const AI_REQUEST_TIMEOUT = 60000; // 60秒超时
-
-/**
- * 调用 Python AI 推荐 API
- */
-function callAiRecommendApi(endpoint, params) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(`/api/recommend/${endpoint}`, `http://${AI_RECOMMEND_HOST}:${AI_RECOMMEND_PORT}`);
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        url.searchParams.append(key, value);
-      });
-    }
-
-    const req = http.get(url, (res) => {
-      let data = '';
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          resolve(parsed);
-        } catch (e) {
-          reject(new Error(`解析 Python API 响应失败: ${e.message}`));
-        }
-      });
-    });
-
-    req.on('error', (e) => {
-      reject(new Error(`连接 Python AI 服务失败 (${AI_RECOMMEND_HOST}:${AI_RECOMMEND_PORT}): ${e.message}。请确保已启动 recommend_api.py`));
-    });
-
-    req.setTimeout(AI_REQUEST_TIMEOUT, () => {
-      req.destroy();
-      reject(new Error('Python AI 服务请求超时'));
-    });
-  });
-}
-
 /**
  * GET /api/recommend/ai?userId=1&algorithm=hybrid&topN=10
- * AI 模型推荐（代理到 Python Flask 服务）
+ * 
+ * 使用预训练模型文件（JSON）进行快速推荐：
+ * - algorithm: hybrid | svd | user_cf | item_cf (默认: hybrid)
+ * - 支持 MySQL 缓存，减少重复计算
+ * - 无用户数据时自动降级为热门推荐
+ * - 响应格式兼容原前端
  */
 async function aiModelRecommend(req, res) {
   try {
     const { userId, algorithm, topN } = req.query;
+
     if (!userId) {
       return res.status(400).json({ success: false, message: '缺少 userId 参数' });
     }
 
-    // 注意：Python API 使用 user_id / top_n 参数名
-    const params = { 
-      user_id: userId, 
-      algorithm: algorithm || 'hybrid', 
-      top_n: topN || '10' 
-    };
-    const result = await callAiRecommendApi('ai', params);
-
-    if (!result.success) {
-      return res.status(500).json({ success: false, message: result.message });
+    const uid = parseInt(userId);
+    if (isNaN(uid) || uid <= 0) {
+      return res.status(400).json({ success: false, message: '无效的 userId' });
     }
 
-    // 将 Python 返回的数据透传给前端
-    res.json({
-      success: true,
-      source: 'ai-model',
-      data: result.data
-    });
+    const algo = (algorithm || 'hybrid').toLowerCase();
+    const n = parseInt(topN) || 10;
+
+    // 支持的算法列表
+    const supportedAlgorithms = ['hybrid', 'svd', 'user_cf', 'item_cf'];
+    const effectiveAlgo = supportedAlgorithms.includes(algo) ? algo : 'hybrid';
+
+    console.log(`[AI 推荐] 用户 ${uid}, 算法 ${effectiveAlgo}, Top-N ${n}`);
+
+  // 使用预训练模型引擎进行快速推荐
+  // 引擎通过 JSON 模型文件预测，无需 SQL 计算，速度 < 1s
+  const result = await recommendEngine.getRecommendations(uid, effectiveAlgo, n);
+
+  let recommendations = result.recommendations.map(r => ({
+    movieId: r.movieId,
+    predictedRating: r.predictedRating
+  }));
+
+  // 补充电影元信息
+  let enriched = await recommendService.enrichRecommendations(recommendations);
+
+  // AI 引擎无结果时，自动降级为热门推荐
+  let degraded = false;
+  let effectiveAlgoDisplay = effectiveAlgo;
+  if (enriched.length === 0) {
+    console.log(`[AI 推荐] 用户 ${uid} 无 AI 结果，降级到热门推荐`);
+    const fallbackTopN = Math.max(n, 10);
+    const popular = await recommendService.getPopularRecommendations(1, fallbackTopN);
+    enriched = await recommendService.enrichRecommendations(
+      popular.map(r => ({ movieId: r.movieId, predictedRating: r.predictedRating }))
+    );
+    degraded = true;
+    effectiveAlgoDisplay = 'popular';
+  }
+
+  // 返回格式兼容前端（含 source: 'ai-model' 标识）
+  res.json({
+    success: true,
+    source: 'ai-model',
+    elapsed: result.elapsed,
+    fromCache: result.fromCache,
+    data: {
+      userId: uid,
+      algorithm: effectiveAlgoDisplay,
+      topN: n,
+      total: enriched.length,
+      recommendations: enriched,
+      degraded
+    }
+  });
   } catch (error) {
-    console.error('[AI 模型推荐] 失败:', error.message);
-    // 如果 Python 服务不可用，降级返回友好提示
-    res.status(503).json({
-      success: false,
-      source: 'ai-model',
-      message: 'AI 推荐引擎暂不可用，请确认 recommend_api.py 已启动。',
-      detail: error.message
-    });
+    console.error('[AI 推荐] 失败:', error.message);
+
+    // 尝试返回热门推荐作为最终降级
+    try {
+      const topN = parseInt(req.query.topN) || 10;
+      const popular = await recommendService.getPopularRecommendations(1, topN);
+      const enriched = await recommendService.enrichRecommendations(
+        popular.map(r => ({ movieId: r.movieId, predictedRating: r.predictedRating }))
+      );
+
+      return res.json({
+        success: true,
+        source: 'ai-model',
+        message: 'AI 推荐已降级为热门推荐（原始错误: ' + error.message + '）',
+        data: {
+          userId: parseInt(req.query.userId) || 0,
+          algorithm: 'popular',
+          topN: topN,
+          total: enriched.length,
+          recommendations: enriched,
+          degraded: true
+        }
+      });
+    } catch (fallbackErr) {
+      res.status(500).json({
+        success: false,
+        source: 'ai-model',
+        message: '推荐失败，降级也失败: ' + error.message
+      });
+    }
   }
 }
 
 /**
  * GET /api/recommend/ai/models
- * 列出可用 AI 模型
+ * 列出可用 AI 模型（算法）
  */
 async function aiModelList(req, res) {
   try {
-    const result = await callAiRecommendApi('models', null);
-    if (!result.success) {
-      return res.status(500).json({ success: false, message: result.message });
-    }
-    res.json(result);
+    const models = Object.entries(AVAILABLE_ALGORITHMS).map(([id, info]) => ({
+      id,
+      name: info.name,
+      description: info.description,
+      type: 'nodejs-native'
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        total: models.length,
+        models
+      }
+    });
   } catch (error) {
-    console.error('[AI 模型列表] 失败:', error.message);
-    res.status(503).json({ success: false, message: 'AI 推荐引擎暂不可用', detail: error.message });
+    res.status(500).json({ success: false, message: '获取算法列表失败: ' + error.message });
   }
 }
 
 /**
  * GET /api/recommend/ai/health
- * AI 服务健康检查
+ * AI 服务健康检查 - 检查数据库连接
  */
 async function aiHealthCheck(req, res) {
   try {
-    const result = await callAiRecommendApi('health', null);
-    if (!result.success) {
-      return res.status(500).json({ success: false, message: result.message });
-    }
-    res.json(result);
+    const { query } = require('../config/db');
+    await query('SELECT 1');
+    res.json({
+      success: true,
+      message: 'AI 推荐引擎运行中（Node.js 原生实现）',
+      status: 'healthy',
+      availableAlgorithms: Object.keys(AVAILABLE_ALGORITHMS)
+    });
   } catch (error) {
-    res.status(503).json({ success: false, message: 'AI 推荐引擎暂不可用', detail: error.message });
+    res.status(503).json({
+      success: false,
+      message: 'AI 推荐引擎异常: ' + error.message,
+      status: 'unhealthy'
+    });
   }
 }
 

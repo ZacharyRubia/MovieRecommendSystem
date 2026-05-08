@@ -14,7 +14,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [1/5] Node.js detected
+echo [1/4] Node.js detected
 node --version
 echo.
 
@@ -26,25 +26,13 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [2/5] npm detected
+echo [2/4] npm detected
 npm --version
-echo.
-
-:: Check if Python is installed (required for AI recommend service)
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Python not found. Please install Python first (AI recommend service required).
-    pause
-    exit /b 1
-)
-
-echo [3/5] Python detected
-python --version
 echo.
 
 :: Check if root dependencies are installed
 if not exist "node_modules" (
-    echo [4/5] Installing root dependencies...
+    echo [3/4] Installing root dependencies...
     call npm install
     if %errorlevel% neq 0 (
         echo [ERROR] Failed to install root dependencies.
@@ -52,7 +40,7 @@ if not exist "node_modules" (
         exit /b 1
     )
 ) else (
-    echo [4/5] Root dependencies already installed
+    echo [3/4] Root dependencies already installed
 )
 echo.
 
@@ -84,20 +72,19 @@ if not exist "frontend\node_modules" (
 )
 echo.
 
-echo [5/5] Starting services...
+echo [4/4] Starting services...
 echo.
 echo ========================================
 echo  Services are starting, please wait...
 echo.
 echo  Backend:     http://localhost:3000
 echo  Frontend:    http://localhost:8080
-echo  AI Service:  http://localhost:5100
 echo ========================================
 echo.
 echo  Press Ctrl+C to stop all services
 echo.
 
-:: Start backend, frontend and AI recommendation service using concurrently
+:: Start backend and frontend using concurrently
 call npm run dev
 
 pause

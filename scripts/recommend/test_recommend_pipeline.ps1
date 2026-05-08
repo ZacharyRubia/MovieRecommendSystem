@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   推荐系统端到端测试脚本
-  验证: Python AI 推荐服务 -> Node.js 后端代理 -> 前端 API 的完整链路
+  验证: Node.js 后端直接调用 AI 推荐引擎
 .DESCRIPTION
   测试训练好的 SVD / User-CF / Item-CF / Hybrid 模型是否能正确返回推荐结果
 #>
@@ -14,7 +14,6 @@ Write-Host "============================================`n" -ForegroundColor Cya
 # ============================================
 # 配置
 # ============================================
-$AI_PORT = 5100
 $NODE_PORT = 3000
 $TEST_USER_IDS = @(28, 188, 265)
 $ALGORITHMS = @('svd', 'user_cf', 'item_cf', 'hybrid')
@@ -74,14 +73,7 @@ function Test-Recommend {
 # ============================================
 Write-Host "-------- Step 1: 服务健康检查 --------" -ForegroundColor Magenta
 
-$aiHealth = Test-Health -Name "Python AI 服务" -Url "http://127.0.0.1:$AI_PORT/api/recommend/health"
 $nodeHealth = Test-Health -Name "Node.js 后端" -Url "http://127.0.0.1:$NODE_PORT/api/recommend/ai/health"
-
-if (-not $aiHealth) {
-    Write-Host "`n[错误] Python AI 服务未运行！请先启动:" -ForegroundColor Red
-    Write-Host "  cd scripts/recommend; python recommend_api.py --port $AI_PORT" -ForegroundColor Yellow
-    exit 1
-}
 
 if (-not $nodeHealth) {
     Write-Host "`n[错误] Node.js 后端未运行！请先启动:" -ForegroundColor Red
@@ -98,7 +90,7 @@ try {
     if ($models.success) {
         Write-Host "  可用模型:" -ForegroundColor Green
         foreach ($m in $models.data.models) {
-            Write-Host "    - $($m.name) ($($m.algorithm))" -ForegroundColor Gray
+            Write-Host "    - $($m.algorithm) ($($m.file))" -ForegroundColor Gray
         }
         Write-Host "  数据集: $($models.data.dataset.n_users) 用户 x $($models.data.dataset.n_movies) 电影" -ForegroundColor Gray
     }
@@ -107,22 +99,9 @@ try {
 }
 
 # ============================================
-# Step 3: 测试 Python AI 服务（直接）
+# Step 3: 测试 Node.js 后端 AI 推荐
 # ============================================
-Write-Host "`n-------- Step 3: Python AI 服务推荐测试（直接调用）--------" -ForegroundColor Magenta
-
-foreach ($userId in $TEST_USER_IDS) {
-    Write-Host "`n--- 用户 #$userId ---" -ForegroundColor Yellow
-    foreach ($algo in $ALGORITHMS) {
-        $url = "http://127.0.0.1:$AI_PORT/api/recommend/ai?user_id=$userId&algorithm=$algo&top_n=$TOP_N"
-        Test-Recommend -Name "[AI] $algo" -Url $url | Out-Null
-    }
-}
-
-# ============================================
-# Step 4: 测试 Node.js 后端代理
-# ============================================
-Write-Host "`n-------- Step 4: Node.js 后端代理测试（通过后端调用）--------" -ForegroundColor Magenta
+Write-Host "`n-------- Step 3: AI 推荐测试（直接调用 Node.js 后端）--------" -ForegroundColor Magenta
 
 foreach ($userId in $TEST_USER_IDS) {
     Write-Host "`n--- 用户 #$userId ---" -ForegroundColor Yellow
@@ -133,9 +112,9 @@ foreach ($userId in $TEST_USER_IDS) {
 }
 
 # ============================================
-# Step 5: 性能评估
+# Step 4: 性能评估
 # ============================================
-Write-Host "`n-------- Step 5: 性能基准测试 --------" -ForegroundColor Magenta
+Write-Host "`n-------- Step 4: 性能基准测试 --------" -ForegroundColor Magenta
 
 $PERF_TEST_USER = 28
 $PERF_ALGO = 'hybrid'
@@ -167,9 +146,6 @@ Write-Host "`n============================================" -ForegroundColor Cya
 Write-Host "  测试完成！" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "`n验证要点:" -ForegroundColor White
-Write-Host "  [OK] Python AI 推荐服务 (127.0.0.1:$AI_PORT)   - 使用训练的模型生成推荐" -ForegroundColor White
-Write-Host "  [OK] Node.js 后端代理 (127.0.0.1:$NODE_PORT)   - 将请求转发到 Python 服务" -ForegroundColor White
-Write-Host "  [OK] 前端 user-dashboard.html                   - 调用 Node.js API 展示推荐" -ForegroundColor White
+Write-Host "  [OK] Node.js 后端 AI 推荐引擎 (127.0.0.1:$NODE_PORT)   - 直接加载模型生成推荐，无 Python 依赖" -ForegroundColor White
 Write-Host "  [OK] SVD / User-CF / Item-CF / Hybrid 四种算法" -ForegroundColor White
 Write-Host "`n前端访问地址: http://localhost:3000/user-dashboard.html" -ForegroundColor Yellow
-Write-Host "`n如果 AI 推荐区域提示离线，请确认 recommend_api.py 已在端口 $AI_PORT 运行" -ForegroundColor Yellow

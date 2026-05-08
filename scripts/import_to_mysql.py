@@ -462,6 +462,7 @@ def main():
         sys.exit(1)
 
     # ---- 连接数据库 ----
+    conn = None
     if args.dry_run:
         print("\n[DRY RUN] 跳过数据库连接")
     else:

@@ -6,6 +6,7 @@
 
 ```
 scripts/
+├── extract_test_subset.py     # [活跃] 从 MySQL 全量导出评分/电影/评论数据到 CSV（供 train_recommend.py 使用）
 ├── run_import_movies.py       # [活跃] 导入电影数据（MySQL pymysql）
 ├── run_import_ratings.py      # [活跃] 导入评分数据（MySQL pymysql）
 ├── run_import_tags.py         # [活跃] 导入标签数据（MySQL pymysql）
@@ -154,8 +155,7 @@ scripts/
 | `add_request_id_column.py` | 一次性 DDL 迁移脚本，已执行完毕 |
 | `check_db_status.py` | 调试诊断脚本，使用旧的 `mysql.connector`，无维护价值 |
 | `check_schema.py` | 仅查看单表结构的极小诊断脚本，使用频率低 |
-| `extract_test_subset.py` | 与 `recommend/extract_test_subset.py` 重复，且使用旧的 `mysql.connector` |
-| `recommend/extract_test_subset.py` | 使用 `mysql.connector`，数据抽取逻辑与业务耦合低 |
+| `recommend/extract_test_subset.py` | 使用 `mysql.connector`，功能已整合到 `extract_test_subset.py` |
 
 <task_progress>
 - [x] 读取并分析所有 scripts 目录下的脚本

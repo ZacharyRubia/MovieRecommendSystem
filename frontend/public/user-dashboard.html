@@ -499,7 +499,7 @@
         // 步骤 1: 优先调用 AI 混合推荐（响应快，~0.5~3s）
         const aiResult = await tryAiRecommendation(userId, 'hybrid', 10, 10000);
         if (aiResult && aiResult.length > 0) {
-          // AI 推荐成功，将 Python 返回的 movieId 映射为电影信息
+          // AI 推荐成功，将返回的 movieId 映射为电影信息
           await renderSimpleRecommendCards(container, aiResult, 'AI 混合推荐');
           return;
         }
@@ -730,7 +730,7 @@
         if (error.name === 'AbortError') {
           container.innerHTML = '<div class="recommend-error">⏰ AI 推荐请求超时，请稍后再试</div>';
         } else {
-          container.innerHTML = '<div class="recommend-error">😿 AI 推荐服务暂不可用，请确认 recommend_api.py 已启动</div>';
+          container.innerHTML = '<div class="recommend-error">😿 AI 推荐服务暂不可用，请稍后再试</div>';
         }
       }
     }
