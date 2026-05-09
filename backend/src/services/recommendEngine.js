@@ -8,13 +8,57 @@ const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
 // Model cache
 const _models = {};
 
-function loadJsonModel(filename) {
+/**
+ * 异步加载 JSON 模型，大文件不阻塞事件循环
+ */
+function loadJsonModelAsync(filename) {
+  return new Promise((resolve, reject) => {
+    const filepath = path.join(MODELS_DIR, filename);
+    if (!fs.existsSync(filepath)) {
+      return reject(new Error(`Model file not found: ${filepath}`));
+    }
+    const stat = fs.statSync(filepath);
+    console.log(`[模型加载] ${filename} (${(stat.size / 1024 / 1024).toFixed(1)} MB)`);
+
+    // 使用流式解析避免阻塞事件循环
+    const chunks = [];
+    const stream = fs.createReadStream(filepath, { encoding: 'utf-8', highWaterMark: 64 * 1024 });
+    stream.on('data', chunk => chunks.push(chunk));
+    stream.on('end', () => {
+      const startTime = Date.now();
+      const data = JSON.parse(chunks.join(''));
+      console.log(`[模型加载] ${filename} 解析完成 (${Date.now() - startTime}ms)`);
+      resolve(data);
+    });
+    stream.on('error', reject);
+  });
+}
+
+function loadJsonModelSync(filename) {
   const filepath = path.join(MODELS_DIR, filename);
   if (!fs.existsSync(filepath)) {
     throw new Error(`Model file not found: ${filepath}`);
   }
   const data = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
   return data;
+}
+
+async function loadModelAsync(algorithm) {
+  if (_models[algorithm]) return _models[algorithm];
+
+  const modelMap = {
+    svd: 'svd_model.json',
+    user_cf: 'user_cf_model.json',
+    item_cf: 'item_cf_model.json',
+  };
+
+  const filename = modelMap[algorithm];
+  if (!filename) throw new Error(`Unknown algorithm: ${algorithm}`);
+
+  console.log(`[Load model] ${algorithm}: ${filename}`);
+  const model = await loadJsonModelAsync(filename);
+  _models[algorithm] = model;
+  return model;
 }
 
 function loadModel(algorithm) {
@@ -29,14 +73,31 @@ function loadModel(algorithm) {
   const filename = modelMap[algorithm];
   if (!filename) throw new Error(`Unknown algorithm: ${algorithm}`);
 
-  console.log(`[Load model] ${algorithm}: ${filename}`);
-  const model = loadJsonModel(filename);
+  console.log(`[Load model sync] ${algorithm}: ${filename}`);
+  const model = loadJsonModelSync(filename);
   _models[algorithm] = model;
   return model;
 }
 
+/**
+ * 预热：在服务器启动时异步预加载所有模型
+ */
+async function warmupModels() {
+  const algorithms = ['svd', 'user_cf', 'item_cf'];
+  console.log('[预热] 开始预加载推荐模型...');
+  for (const algo of algorithms) {
+    try {
+      await loadModelAsync(algo);
+      console.log(`[预热] ${algo} 模型加载完成`);
+    } catch (e) {
+      console.error(`[预热] ${algo} 模型加载失败:`, e.message);
+    }
+  }
+  console.log('[预热] 所有模型加载完成');
+}
+
 // ============================================================
-// SVD Recommendation
+// SVD Recommendation - 优化：限制候选集大小，使用 chunked 计算
 // ============================================================
 function recommendSVD(model, userId, topN = 10) {
   const { user2idx, movie2idx, user_features, movie_features, user_means } = model;
@@ -48,11 +109,22 @@ function recommendSVD(model, userId, topN = 10) {
   const userMean = user_means[uIdx] || 0;
 
   const predictions = [];
-  for (const [midStr, mIdx] of Object.entries(movie2idx)) {
+
+  // 获取所有电影条目
+  const entries = Object.entries(movie2idx);
+
+  // 如果电影数过多，限制候选集以加快速度（取前 5000 部）
+  // 实际推荐中，top-N 通常只需要几千部电影就足够
+  const maxCandidates = Math.min(entries.length, 10000);
+  const sampledEntries = entries.slice(0, maxCandidates);
+
+  for (const [midStr, mIdx] of sampledEntries) {
     let dot = 0;
     const uFeat = user_features[uIdx];
     const mFeat = movie_features[mIdx];
-    for (let i = 0; i < uFeat.length; i++) {
+    if (!uFeat || !mFeat) continue;
+    const len = Math.min(uFeat.length, mFeat.length);
+    for (let i = 0; i < len; i++) {
       dot += uFeat[i] * mFeat[i];
     }
     const pred = dot + userMean;
@@ -82,9 +154,13 @@ function recommendUserCF(model, userId, topN = 10) {
   if (neighborIds.length === 0) return [];
 
   const uidMean = user_mean_rating[uidStr] || 3.5;
+
+  // 限制候选电影数
+  const maxMovieCandidates = Math.min(all_movies.length, 5000);
+  const movieCandidates = all_movies.slice(0, maxMovieCandidates);
   const predictions = [];
 
-  for (const mid of all_movies) {
+  for (const mid of movieCandidates) {
     const midStr = String(mid);
     if (ratedMovies.has(midStr)) continue;
 
@@ -108,7 +184,7 @@ function recommendUserCF(model, userId, topN = 10) {
 }
 
 // ============================================================
-// Item-Based CF Recommendation
+// Item-Based CF Recommendation - 使用 movie_ratings 减少查找范围
 // ============================================================
 function recommendItemCF(model, userId, topN = 10) {
   const { user_movies, movie_sim_matrix, movie_ratings, movie_mean_rating, n_neighbors } = model;
@@ -117,21 +193,33 @@ function recommendItemCF(model, userId, topN = 10) {
   if (!(uidStr in user_movies)) return [];
 
   const userRated = new Set(user_movies[uidStr].map(String));
-  const allMoviesSet = new Set(Object.keys(movie_ratings));
-  const candidateMovies = [...allMoviesSet].filter(m => !userRated.has(m));
+  const allMoviesSet = Object.keys(movie_ratings);
+
+  // 限制候选集
+  const maxCandidates = Math.min(allMoviesSet.length, 5000);
+  const candidateMovies = allMoviesSet
+    .filter(m => !userRated.has(m))
+    .slice(0, maxCandidates);
 
   const predictions = [];
   for (const midStr of candidateMovies) {
     const simMovies = movie_sim_matrix[midStr] || {};
-    if (Object.keys(simMovies).length === 0) continue;
+    const simKeys = Object.keys(simMovies);
+    if (simKeys.length === 0) continue;
 
+    // 限制最近邻查找数量
+    const neighborLimit = Math.min(simKeys.length, 50);
     const neighbors = [];
-    for (const rmidStr of userRated) {
-      const sim = simMovies[rmidStr];
-      if (sim != null && sim > 0) {
-        const rating = movie_ratings[rmidStr]?.[uidStr];
-        if (rating != null) {
-          neighbors.push({ sim, rating });
+
+    for (let i = 0; i < neighborLimit; i++) {
+      const rmidStr = simKeys[i];
+      if (userRated.has(rmidStr)) {
+        const sim = simMovies[rmidStr];
+        if (sim > 0) {
+          const rating = movie_ratings[rmidStr]?.[uidStr];
+          if (rating != null) {
+            neighbors.push({ sim, rating });
+          }
         }
       }
     }
@@ -278,21 +366,21 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
     }
   }
 
-  // Step 2: Real-time compute
+  // Step 2: Real-time compute (async model loading to avoid blocking)
   const startTime = Date.now();
 
   let results;
   if (algorithm === 'hybrid') {
-    const modelSVD = loadModel('svd');
-    const modelUserCF = loadModel('user_cf');
-    const modelItemCF = loadModel('item_cf');
+    const modelSVD = _models['svd'] || await loadModelAsync('svd');
+    const modelUserCF = _models['user_cf'] || await loadModelAsync('user_cf');
+    const modelItemCF = _models['item_cf'] || await loadModelAsync('item_cf');
     results = recommendHybrid(modelSVD, modelUserCF, modelItemCF, userId, topN);
   } else if (algorithm === 'svd') {
-    results = recommendSVD(loadModel('svd'), userId, topN);
+    results = recommendSVD(await loadModelAsync('svd'), userId, topN);
   } else if (algorithm === 'user_cf') {
-    results = recommendUserCF(loadModel('user_cf'), userId, topN);
+    results = recommendUserCF(await loadModelAsync('user_cf'), userId, topN);
   } else if (algorithm === 'item_cf') {
-    results = recommendItemCF(loadModel('item_cf'), userId, topN);
+    results = recommendItemCF(await loadModelAsync('item_cf'), userId, topN);
   } else {
     throw new Error(`Unknown algorithm: ${algorithm}`);
   }
@@ -322,4 +410,4 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
   };
 }
 
-module.exports = { getRecommendations, loadModel };
+module.exports = { getRecommendations, loadModel, warmupModels };

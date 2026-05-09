@@ -488,15 +488,15 @@ async function aiModelRecommend(req, res) {
   res.json({
     success: true,
     source: 'ai-model',
-    elapsed: result.elapsed,
-    fromCache: result.fromCache,
     data: {
       userId: uid,
       algorithm: effectiveAlgoDisplay,
       topN: n,
       total: enriched.length,
       recommendations: enriched,
-      degraded
+      degraded,
+      elapsed: result.elapsed,
+      fromCache: result.fromCache
     }
   });
   } catch (error) {

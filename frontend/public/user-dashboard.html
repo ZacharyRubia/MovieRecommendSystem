@@ -673,18 +673,9 @@
       if (models && models.length > 0) {
         html = models.map(m => {
           let metrics = '';
-          if (m.test_rmse) metrics += `<span class="ai-metric"><span class="ai-metric-label">RMSE</span> <span class="ai-metric-value">${m.test_rmse.toFixed(4)}</span></span>`;
-          if (m.n_factors) metrics += `<span class="ai-metric"><span class="ai-metric-label">Factors</span> <span class="ai-metric-value">${m.n_factors}</span></span>`;
-          if (m.n_neighbors) metrics += `<span class="ai-metric"><span class="ai-metric-label">Neighbors</span> <span class="ai-metric-value">${m.n_neighbors}</span></span>`;
-          if (m.train_time_sec) metrics += `<span class="ai-metric"><span class="ai-metric-label">训练耗时</span> <span class="ai-metric-value">${m.train_time_sec}s</span></span>`;
-          return `<div style="margin-bottom:6px;"><strong>${m.algorithm}</strong> ${metrics}</div>`;
+          if (m.type) metrics += `<span class="ai-metric"><span class="ai-metric-label">类型</span> <span class="ai-metric-value">${m.type}</span></span>`;
+          return `<div style="margin-bottom:6px;"><strong>${m.name || m.id}</strong> ${metrics}</div>`;
         }).join('');
-      }
-      
-      if (dataset) {
-        html += `<div style="margin-top:6px;color:#999;">
-          数据集: ${dataset.n_users || '?'} 用户 × ${dataset.n_movies || '?'} 电影
-        </div>`;
       }
 
       infoDiv.innerHTML = html;
@@ -708,7 +699,9 @@
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        // 首次请求可能遇到模型正在预热加载，放宽超时到 60 秒
+        const timeoutMs = (aiModelMeta && aiModelMeta.models) ? 30000 : 60000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         const response = await fetch(
           `${API_BASE}/recommend/ai?userId=${userId}&algorithm=${currentAiAlgorithm}&topN=12`,

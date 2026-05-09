@@ -101,6 +101,12 @@ app.use('/api/admin', adminRouter);
 const recommendRouter = require('./src/routes/recommend');
 app.use('/api/recommend', recommendRouter);
 
+// 异步预加载 AI 推荐模型（不阻塞启动）
+const { warmupModels } = require('./src/services/recommendEngine');
+setTimeout(() => {
+  warmupModels().catch(err => console.error('[预热] 模型预加载失败:', err.message));
+}, 1000);
+
 // 缓存状态接口（仅用于调试/监控）
 app.get('/api/cache/status', async (req, res) => {
   try {
