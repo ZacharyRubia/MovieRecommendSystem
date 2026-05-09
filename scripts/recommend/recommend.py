@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-recommend.py - 推荐引擎
+recommend.py - 推荐引擎（兼容新用户 CF / Item-CF 内存优化版模型格式）
 
 加载训练好的模型（SVD / User-CF / Item-CF），
 为指定用户生成 Top-N 电影推荐。
@@ -27,11 +27,30 @@ MODEL_DIR = os.path.join(BASE_DIR, 'models')
 
 
 # ============================================================
-# 模型加载
+# 模型加载（兼容新旧两种模型格式）
 # ============================================================
 
+def _ensure_int_keys(d):
+    """将字典的字符串 key 转换为 int key"""
+    if not isinstance(d, dict):
+        return d
+    result = {}
+    for k, v in d.items():
+        k_int = int(k) if isinstance(k, str) and k.isdigit() else k
+        if isinstance(v, dict):
+            result[k_int] = _ensure_int_keys(v)
+        elif isinstance(v, list):
+            result[k_int] = [
+                int(x) if isinstance(x, str) and x.strip('-').isdigit() else x
+                for x in v
+            ]
+        else:
+            result[k_int] = v
+    return result
+
+
 def load_model(algorithm='svd'):
-    """加载训练好的模型"""
+    """加载训练好的模型，兼容新旧格式"""
     model_map = {
         'svd': 'svd_model.pkl',
         'user_cf': 'user_cf_model.pkl',
@@ -50,53 +69,55 @@ def load_model(algorithm='svd'):
     with open(filepath, 'rb') as f:
         model = pickle.load(f)
 
-    # 恢复 User-CF/Item-CF 中的键
-    if model.get('algorithm') in ('user_cf',):
-        # 转换 key 为 int
-        model['user_sim_matrix'] = {
-            int(k) if isinstance(k, str) else k: v
-            for k, v in model['user_sim_matrix'].items()
-        }
-        model['user_ratings'] = {
-            int(k) if isinstance(k, str) else k: {
-                int(mk) if isinstance(mk, str) else mk: mv
-                for mk, mv in v.items()
-            }
-            for k, v in model['user_ratings'].items()
-        }
-        model['user_mean_rating'] = {
-            int(k) if isinstance(k, str) else k: v
-            for k, v in model['user_mean_rating'].items()
-        }
+    # 统一 key 类型
+    algo = model.get('algorithm', algorithm)
 
-    if model.get('algorithm') in ('item_cf',):
-        # 恢复用户电影数据
-        model['user_movies'] = {
-            int(k) if isinstance(k, str) else k: [
-                int(x) if isinstance(x, str) else x for x in v
-            ]
-            for k, v in model['user_movies'].items()
-        }
-        model['movie_sim_matrix'] = {
-            int(k) if isinstance(k, str) else k: {
-                int(mk) if isinstance(mk, str) else mk: mv
-                for mk, mv in v.items()
-            }
-            for k, v in model['movie_sim_matrix'].items()
-        }
-        model['movie_ratings'] = {
-            int(k) if isinstance(k, str) else k: {
-                int(mk) if isinstance(mk, str) else mk: mv
-                for mk, mv in v.items()
-            }
-            for k, v in model['movie_ratings'].items()
-        }
-        model['movie_mean_rating'] = {
-            int(k) if isinstance(k, str) else k: v
-            for k, v in model['movie_mean_rating'].items()
-        }
+    if algo in ('user_cf',):
+        # 旧格式: user_sim_matrix, user_ratings, user_mean_rating
+        # 新格式: user_neighbors, user_means, user_movies
+        if 'user_sim_matrix' in model:
+            model['user_sim_matrix'] = _ensure_int_keys(model['user_sim_matrix'])
+        if 'user_ratings' in model:
+            model['user_ratings'] = _ensure_int_keys(model['user_ratings'])
+        if 'user_mean_rating' in model:
+            model['user_mean_rating'] = _ensure_int_keys(model['user_mean_rating'])
 
-    print(f"  算法: {model['algorithm']}, "
+        # 兼容新格式
+        if 'user_neighbors' in model and 'user_sim_matrix' not in model:
+            model['user_sim_matrix'] = {}
+            for uid, nb_list in model['user_neighbors'].items():
+                uid_int = int(uid) if isinstance(uid, str) else uid
+                model['user_sim_matrix'][uid_int] = {nuid: sim for nuid, sim in nb_list}
+
+        if 'user_means' in model and 'user_mean_rating' not in model:
+            model['user_mean_rating'] = {
+                int(k) if isinstance(k, str) else k: float(v)
+                for k, v in model['user_means'].items()
+            }
+
+        if 'user_movies' in model and 'user_ratings' not in model:
+            model['user_ratings'] = {}
+            for uid_str, mid_list in model['user_movies'].items():
+                uid_int = int(uid_str) if isinstance(uid_str, str) else uid_str
+                model['user_ratings'][uid_int] = {mid: 1.0 for mid in mid_list}
+
+    if algo in ('item_cf',):
+        model['user_movies'] = _ensure_int_keys(model.get('user_movies', {}))
+        model['movie_sim_matrix'] = _ensure_int_keys(model.get('movie_sim_matrix', {}))
+        model['movie_mean_rating'] = _ensure_int_keys(model.get('movie_mean_rating', {}))
+
+        if 'movie_ratings' in model:
+            model['movie_ratings'] = _ensure_int_keys(model['movie_ratings'])
+        else:
+            # 新格式无 movie_ratings，用空字典代替
+            model['movie_ratings'] = {}
+
+        # 如果 movie_sim_matrix 包含原始 movie_id 键，已经是正确格式
+        # 旧格式所有_movies可能是list，确保all_movies存在
+        if 'all_movies' not in model:
+            model['all_movies'] = list(model['movie_mean_rating'].keys())
+
+    print(f"  算法: {algo}, "
           f"训练集大小: {model.get('train_size', 'N/A')}")
     return model
 

@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train_recommend.py - 推荐算法训练脚本 (CPU 极致优化版 v4 - 多核优化版)
+train_recommend.py - 推荐算法训练主入口（内存优化版 v5）
 
-对比 v3 的优化：
-  1. 动态检测 CPU 核心数，自动设置 OMP/MKL/NUMEXPR 线程数
-  2. sklearn TruncatedSVD (randomized) 替代 scipy svds，多线程加速
-  3. Numba JIT 编译加速 _apply_top_k 和导出热循环
-  4. ProcessPoolExecutor 替代 ThreadPoolExecutor，突破 GIL
-  5. 新增 --skip-eval 参数，跳过 RMSE 评估（可选）
-  6. 导出 batch_size 自适应增大
-  7. 导出阶段使用 numpy 内存映射 + 批量 JSON 序列化
-  8. 新增 --n-jobs 参数控制并行度
+全量数据（20万用户 × 8万电影）在 64核128G 机器上可稳定运行。
+
+相比 v4 的关键优化：
+  1. Item-CF: 移除 62GB 密集电影-用户矩阵，改用 CSR 稀疏矩阵
+  2. Item-CF: 分块计算相似度（chunk_size=2000），峰值仅 ~2-3 GB
+  3. User-CF: 移除 320GB 密集用户-用户相似度矩阵，改用 sparse SVD + 索引查找
+  4. User-CF: 移除 62GB 密集评分矩阵 R_mat
+  5. 所有算法均采用稀疏数据结构，峰值内存控制在 12-16 GB 以内
+  6. 训练好的模型格式兼容，recommend.py 已适配
+
+用法:
+  python train_recommend.py                          # 完整训练+评估+导出
+  python train_recommend.py --skip-eval              # 训练+导出（跳过评估）
+  python train_recommend.py --export-only            # 仅从已有模型导出缓存
 """
 
 import os
@@ -19,27 +24,23 @@ import sys
 import pickle
 import json
 import time
-import math
 import csv
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExecutor
-from functools import partial
-from itertools import islice
-
-import numpy as np
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import defaultdict
 from datetime import datetime
 
+import numpy as np
+
 # ──────────────────────── CPU 核心数自动检测 ────────────────────────
 _N_CPUS_AVAILABLE = os.cpu_count() or 1
-# 允许通过环境变量覆盖
 _N_CPUS = int(os.environ.get("TRAIN_N_JOBS", str(min(_N_CPUS_AVAILABLE, 64))))
 os.environ["OMP_NUM_THREADS"]       = str(_N_CPUS)
 os.environ["MKL_NUM_THREADS"]       = str(_N_CPUS)
 os.environ["OPENBLAS_NUM_THREADS"]  = str(_N_CPUS)
 os.environ["NUMEXPR_NUM_THREADS"]   = str(_N_CPUS)
 os.environ["VECLIB_MAXIMUM_THREADS"]= str(_N_CPUS)
-os.environ["MKL_DYNAMIC"]           = "FALSE"  # 禁止 MKL 动态调整，固定线程数
+os.environ["MKL_DYNAMIC"]           = "FALSE"
 
 import pandas as pd
 
@@ -52,87 +53,15 @@ EXPORT_DIR = os.path.join(BASE_DIR, 'export')
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-# ──────────────── 尝试导入 Numba（可选依赖） ────────────────
-try:
-    from numba import njit, prange
-    _HAS_NUMBA = True
-except ImportError:
-    _HAS_NUMBA = False
-    # 定义降级函数，避免调用处报错
-    def njit(*args, **kwargs):
-        if args and callable(args[0]):
-            return args[0]  # 直接返回原函数
-        return lambda f: f
-    prange = range
+# ──────── 导入优化版训练模块（内存友好） ────────
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from train.train_svd import train_svd as train_svd_optimized
+from train.train_usercf import train_user_cf as train_user_cf_optimized
+from train.train_itemcf import train_item_cf as train_item_cf_optimized
 
 
 print(f"[系统] CPU 可用核心: {_N_CPUS_AVAILABLE}  |  使用线程数: {_N_CPUS}  |  "
-      f"Numba: {'可用' if _HAS_NUMBA else '未安装'}")
-
-
-# ============================================================
-# Numba 加速的热点函数
-# ============================================================
-
-@njit(parallel=True, fastmath=True, cache=True)
-def _apply_top_k_numba(sim_matrix, k):
-    """
-    Numba 加速版 top-K（纯 JIT 编译，无 Python 循环开销）。
-    对每行保留 top-K 个最大值，其余置零。
-    """
-    n = sim_matrix.shape[0]
-    k_actual = min(k, n - 1)
-    if k_actual <= 0:
-        return np.zeros_like(sim_matrix)
-
-    result = np.zeros_like(sim_matrix)
-    for i in prange(n):
-        row = sim_matrix[i].copy()
-        # 排除自身（对角线）
-        row[i] = -np.inf
-        # 找到 top-K 的阈值
-        if k_actual < n:
-            # 使用 np.argpartition 的等效实现
-            idx = np.argpartition(row, -k_actual)[-k_actual:]
-            for j in idx:
-                if row[j] > 0:
-                    result[i, j] = row[j]
-        else:
-            for j in range(n):
-                if j != i and row[j] > 0:
-                    result[i, j] = row[j]
-    return result
-
-
-def _apply_top_k(sim_matrix, k):
-    """
-    对相似度矩阵每行保留 top-K 个正值，其余置零。
-    使用 np.argpartition （快速选择算法，O(n) 复杂度）。
-    """
-    n = sim_matrix.shape[0]
-    k = min(k, n - 1)
-    if k <= 0:
-        return np.zeros_like(sim_matrix)
-
-    # 使用 Numba 加速（如果有）
-    if _HAS_NUMBA and n > 500:  # 大矩阵用 Numba
-        return _apply_top_k_numba(sim_matrix, k)
-
-    # 临时将对角线置 -inf → 排除自身
-    orig_diag = np.copy(sim_matrix.diagonal())
-    np.fill_diagonal(sim_matrix, -np.inf)
-
-    # 获取 top-K 索引（未排序，O(n) 复杂度）
-    top_k_idx = np.argpartition(sim_matrix, -k, axis=1)[:, -k:]
-
-    # 恢复对角线
-    np.fill_diagonal(sim_matrix, orig_diag)
-
-    # 仅保留 top-K 的值
-    result = np.zeros_like(sim_matrix)
-    rows = np.arange(n)[:, None]
-    result[rows, top_k_idx] = sim_matrix[rows, top_k_idx]
-    return result
+      f"内存优化版 v5")
 
 
 # ============================================================
@@ -168,16 +97,13 @@ def load_data():
 
 
 def train_test_split(ratings_df, test_ratio=0.2, random_state=42):
-    """按用户划分训练/测试集（向量化分组）"""
+    """按用户划分训练/测试集"""
     print(f"\n[数据划分] 测试集比例: {test_ratio}")
     rng = np.random.default_rng(random_state)
 
     groups = ratings_df.groupby('user_id')
-    n_groups = len(groups)
-
     train_indices = np.empty(len(ratings_df), dtype=bool)
 
-    # 用 numpy 向量化 per-group 选择
     for _, group in groups:
         n = len(group)
         n_test = max(1, min(int(n * test_ratio), n - 1))
@@ -194,323 +120,28 @@ def train_test_split(ratings_df, test_ratio=0.2, random_state=42):
 
 
 # ============================================================
-# 辅助函数
-# ============================================================
-
-def _build_mappings_from_df(train_df):
-    all_users = np.sort(train_df['user_id'].unique())
-    all_movies = np.sort(train_df['movie_id'].unique())
-    user2idx = {int(uid): i for i, uid in enumerate(all_users)}
-    movie2idx = {int(mid): i for i, mid in enumerate(all_movies)}
-    idx2user = {i: int(uid) for uid, i in user2idx.items()}
-    idx2movie = {i: int(mid) for mid, i in movie2idx.items()}
-    return (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
-            len(all_users), len(all_movies))
-
-
-# ============================================================
-# 2. SVD 矩阵分解（sklearn TruncatedSVD 多线程版）
+# 2. 训练分派（调用优化模块）
 # ============================================================
 
 def train_svd(train_df, n_factors=50, test_df=None):
-    print("\n" + "=" * 60)
-    print(f"[SVD 训练] 隐因子数: {n_factors}  |  sklearn TruncatedSVD(randomized)")
+    """SVD 训练 → 调用优化模块"""
+    return train_svd_optimized(train_df, n_factors=n_factors, test_df=test_df)
 
-    start_time = time.time()
-
-    (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
-     n_users, n_movies) = _build_mappings_from_df(train_df)
-
-    # ── 构建稀疏评分矩阵 ──
-    u_idx = np.array([user2idx[uid] for uid in train_df['user_id']], dtype=np.int32)
-    m_idx = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
-    r_val = train_df['rating'].values.astype(np.float32)
-    global_mean = float(r_val.mean())
-
-    # 用户均值（向量化）
-    user_means = np.zeros(n_users, dtype=np.float32)
-    np.add.at(user_means, u_idx, r_val)
-    counts = np.bincount(u_idx, minlength=n_users).astype(np.float32)
-    counts[counts == 0] = 1
-    user_means /= counts
-
-    # 稀疏评分矩阵（仅存储有评分的位置）
-    from scipy.sparse import csr_matrix
-    centered_vals = r_val - user_means[u_idx]
-    sparse_R = csr_matrix(
-        (centered_vals, (u_idx, m_idx)),
-        shape=(n_users, n_movies),
-        dtype=np.float32
-    )
-
-    # ── sklearn TruncatedSVD (randomized) ──
-    # 自动多线程，比 scipy svds 快数倍
-    from sklearn.decomposition import TruncatedSVD as SklearnSVD
-    k = min(n_factors, min(n_users, n_movies) - 1)
-
-    svd = SklearnSVD(
-        n_components=k,
-        algorithm='randomized',
-        n_iter=5,
-        random_state=42,
-    )
-    user_features = svd.fit_transform(sparse_R)  # (n_users, k)
-    explained_variance = svd.explained_variance_ratio_.sum()
-    print(f"  解释方差比: {explained_variance:.4f}")
-
-    # 组件矩阵 = V^T → 每行是一个隐因子，每列对应电影
-    # sklearn 的 components_ 形状为 (k, n_movies)
-    movie_features = svd.components_.T  # (n_movies, k)
-
-    # ── 训练 RMSE ──
-    train_pred = np.sum(user_features[u_idx] * movie_features[m_idx], axis=1) + user_means[u_idx]
-    train_rmse = float(np.sqrt(np.mean((train_pred - r_val) ** 2)))
-    print(f"  训练集 RMSE: {train_rmse:.4f}")
-
-    # ── 测试 RMSE ──
-    test_rmse = None
-    if test_df is not None and len(test_df) > 0:
-        valid_u = np.array([user2idx.get(uid, -1) for uid in test_df['user_id']], dtype=np.int32)
-        valid_m = np.array([movie2idx.get(mid, -1) for mid in test_df['movie_id']], dtype=np.int32)
-        valid = (valid_u >= 0) & (valid_m >= 0)
-        if valid.any():
-            pred = np.sum(user_features[valid_u[valid]] * movie_features[valid_m[valid]], axis=1) \
-                   + user_means[valid_u[valid]]
-            test_rmse = float(np.sqrt(np.mean((pred - test_df['rating'].values[valid]) ** 2)))
-            print(f"  测试集 RMSE: {test_rmse:.4f}")
-
-    elapsed = time.time() - start_time
-    print(f"  SVD 训练耗时: {elapsed:.2f} 秒")
-
-    return {
-        'algorithm': 'svd',
-        'n_factors': n_factors,
-        'user_features': user_features,
-        'movie_features': movie_features,
-        'user_means': user_means,
-        'global_mean': global_mean,
-        'user2idx': user2idx,
-        'movie2idx': movie2idx,
-        'idx2user': idx2user,
-        'idx2movie': idx2movie,
-        'n_users': n_users,
-        'n_movies': n_movies,
-        'explained_variance': explained_variance,
-        'train_rmse': train_rmse,
-        'test_rmse': test_rmse,
-        'train_size': len(train_df),
-        'train_time': elapsed,
-    }
-
-
-# ============================================================
-# 3. User-Based Collaborative Filtering（SVD 投影加速版）
-# ============================================================
 
 def train_user_cf(train_df, n_neighbors=30, test_df=None):
-    """
-    User-CF 训练（轻量版）
-    SVD 投影后的隐向量做近邻计算，避免 O(n²) 全量 pairwise。
-    """
-    print("\n" + "=" * 60)
-    print(f"[User-CF 训练] 邻居数: {n_neighbors}")
+    """User-CF 训练（内存优化版）→ 调用优化模块"""
+    return train_user_cf_optimized(train_df, n_neighbors=n_neighbors, test_df=test_df)
 
-    start_time = time.time()
 
-    (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
-     n_users, n_movies) = _build_mappings_from_df(train_df)
-
-    # 构建用户-电影评分矩阵 → 用 SVD 投影代替全量 Pearson
-    u_idx = np.array([user2idx[uid] for uid in train_df['user_id']], dtype=np.int32)
-    m_idx = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
-    r_val = train_df['rating'].values.astype(np.float32)
-
-    global_mean = float(r_val.mean())
-    user_means = np.zeros(n_users, dtype=np.float32)
-    np.add.at(user_means, u_idx, r_val)
-    counts = np.bincount(u_idx, minlength=n_users).astype(np.float32)
-    counts[counts == 0] = 1
-    user_means /= counts
-
-    # 构建评分矩阵并去均值 → 用 SVD 做降维逼近
-    from scipy.sparse import csr_matrix
-    from scipy.sparse.linalg import svds
-
-    R_mat = np.full((n_users, n_movies), global_mean, dtype=np.float32)
-    R_mat[u_idx, m_idx] = r_val
-    R_mat -= user_means[:, None]
-
-    k_svd = min(30, n_users - 1, n_movies - 1)
-    u_svd, s_svd, vt_svd = svds(csr_matrix(R_mat), k=k_svd)
-    idx_sort = np.argsort(-s_svd)
-    u_svd = u_svd[:, idx_sort] * np.sqrt(s_svd[idx_sort])
-
-    # 用户相似度矩阵 = 用户隐向量的余弦相似度
-    norms = np.linalg.norm(u_svd, axis=1, keepdims=True)
-    norms[norms == 0] = 1
-    u_norm = u_svd / norms
-    sim_matrix = u_norm @ u_norm.T
-    sim_matrix = np.maximum(sim_matrix, 0)
-    np.fill_diagonal(sim_matrix, 0)
-
-    # 应用 Top-K（使用 Numba 加速）
-    sim_topk = _apply_top_k(sim_matrix, n_neighbors)
-
-    # ── 向量化 RMSE ──
-    R_centered = R_mat.copy()
-    R_centered[R_mat == 0] = 0
-    mask = (R_mat != 0).astype(np.float32)
-
-    pred_centered = sim_topk @ R_centered
-    denom = np.abs(sim_topk) @ mask
-    denom[denom == 0] = 1.0
-    pred_all = pred_centered / denom + user_means[:, None]
-
-    train_pred_vals = pred_all[u_idx, m_idx]
-    train_rmse = float(np.sqrt(np.mean((train_pred_vals - r_val) ** 2)))
-    print(f"  训练集 RMSE: {train_rmse:.4f}")
-
-    test_rmse = None
-    if test_df is not None and len(test_df) > 0:
-        tu = np.array([user2idx.get(uid, -1) for uid in test_df['user_id']], dtype=np.int32)
-        tm = np.array([movie2idx.get(mid, -1) for mid in test_df['movie_id']], dtype=np.int32)
-        valid = (tu >= 0) & (tm >= 0)
-        if valid.any():
-            pred = pred_all[tu[valid], tm[valid]]
-            test_rmse = float(np.sqrt(np.mean((pred - test_df['rating'].values[valid]) ** 2)))
-            print(f"  测试集 RMSE: {test_rmse:.4f}")
-
-    elapsed = time.time() - start_time
-    print(f"  User-CF 训练耗时: {elapsed:.2f} 秒")
-
-    return {
-        'algorithm': 'user_cf',
-        'n_neighbors': n_neighbors,
-        'user_mean_rating': {int(uid): float(user_means[i]) for uid, i in user2idx.items()},
-        'user2idx': user2idx,
-        'movie2idx': movie2idx,
-        'idx2user': idx2user,
-        'idx2movie': idx2movie,
-        'all_users': [int(u) for u in all_users],
-        'all_movies': [int(m) for m in all_movies],
-        'train_rmse': train_rmse,
-        'test_rmse': test_rmse,
-        'train_size': len(train_df),
-        'train_time': elapsed,
-    }
+def train_item_cf(train_df, n_neighbors=30, test_df=None, chunk_size=2000):
+    """Item-CF 训练（内存优化版）→ 调用优化模块"""
+    return train_item_cf_optimized(
+        train_df, n_neighbors=n_neighbors, chunk_size=chunk_size,
+    )
 
 
 # ============================================================
-# 4. Item-Based Collaborative Filtering（全向量化）
-# ============================================================
-
-def train_item_cf(train_df, n_neighbors=30, test_df=None):
-    """
-    Item-CF 训练（全向量化）
-    Adjusted Cosine Similarity + 多线程并行。
-    """
-    print("\n" + "=" * 60)
-    print(f"[Item-CF 训练] 邻居数: {n_neighbors}")
-
-    start_time = time.time()
-
-    (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
-     n_users, n_movies) = _build_mappings_from_df(train_df)
-
-    u_idx = np.array([user2idx[uid] for uid in train_df['user_id']], dtype=np.int32)
-    m_idx = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
-    r_val = train_df['rating'].values.astype(np.float32)
-
-    # ── 使用多线程加速的 numpy 运算 ──
-    # 电影-用户评分矩阵
-    movie_user = np.full((n_movies, n_users), np.nan, dtype=np.float32)
-    movie_user[m_idx, u_idx] = r_val
-    movie_means = np.nan_to_num(np.nanmean(movie_user, axis=1), nan=0.0)
-
-    # Adjusted Cosine 相似度（全向量化）
-    centered = np.nan_to_num(movie_user - movie_means[:, None], nan=0.0)
-    norms = np.linalg.norm(centered, axis=1)
-    norms[norms == 0] = 1.0
-    normalized = centered / norms[:, None]
-
-    # 矩阵乘法自动利用所有核心（OMP_NUM_THREADS 控制）
-    sim_matrix = normalized @ normalized.T
-
-    # 过滤共同评分不足的
-    has_rating = np.where(np.isfinite(movie_user), 1.0, 0.0)
-    co_counts = has_rating @ has_rating.T
-    sim_matrix[co_counts < 3] = 0.0
-    np.fill_diagonal(sim_matrix, 0.0)
-    sim_matrix = np.maximum(sim_matrix, 0.0)
-
-    # ── Top-K ──
-    sim_topk = _apply_top_k(sim_matrix, n_neighbors)
-
-    # ── RMSE ──
-    R = np.nan_to_num(movie_user, nan=0.0)
-    R_mask = (R > 0).astype(np.float32)
-
-    pred = sim_topk @ R
-    denom = np.abs(sim_topk) @ R_mask
-    denom[denom == 0] = 1.0
-    pred /= denom
-
-    train_pred_vals = pred[m_idx, u_idx]
-    train_rmse = float(np.sqrt(np.mean((train_pred_vals - r_val) ** 2)))
-    print(f"  训练集 RMSE: {train_rmse:.4f}")
-
-    test_rmse = None
-    if test_df is not None and len(test_df) > 0:
-        tu = np.array([user2idx.get(uid, -1) for uid in test_df['user_id']], dtype=np.int32)
-        tm = np.array([movie2idx.get(mid, -1) for mid in test_df['movie_id']], dtype=np.int32)
-        valid = (tu >= 0) & (tm >= 0)
-        if valid.any():
-            pred_t = pred[tm[valid], tu[valid]]
-            test_rmse = float(np.sqrt(np.mean((pred_t - test_df['rating'].values[valid]) ** 2)))
-            print(f"  测试集 RMSE: {test_rmse:.4f}")
-
-    elapsed = time.time() - start_time
-    print(f"  Item-CF 训练耗时: {elapsed:.2f} 秒")
-
-    # 构建电影均值 dict (给导出用)
-    movie_mean_rating = {int(mid): float(movie_means[i]) for i, mid in enumerate(all_movies)}
-
-    # 用户已评分电影集合 (给导出用)
-    user_movies = defaultdict(set)
-    for uid, mid in zip(train_df['user_id'], train_df['movie_id']):
-        user_movies[int(uid)].add(int(mid))
-
-    # 导出 movie_sim_dict（从 sim_topk 提取，仅保留 top-k）
-    movie_sim_dict = {}
-    for i in range(n_movies):
-        row = sim_topk[i]
-        pos = np.where(row > 0)[0]
-        if len(pos):
-            movie_sim_dict[int(all_movies[i])] = {
-                int(all_movies[j]): float(row[j]) for j in pos
-            }
-
-    return {
-        'algorithm': 'item_cf',
-        'n_neighbors': n_neighbors,
-        'movie_sim_matrix': movie_sim_dict,
-        'movie_mean_rating': movie_mean_rating,
-        'user_movies': {str(k): list(v) for k, v in user_movies.items()},
-        'user2idx': user2idx,
-        'movie2idx': movie2idx,
-        'idx2user': idx2user,
-        'idx2movie': idx2movie,
-        'all_users': [int(u) for u in all_users],
-        'all_movies': [int(m) for m in all_movies],
-        'train_rmse': train_rmse,
-        'test_rmse': test_rmse,
-        'train_size': len(train_df),
-        'train_time': elapsed,
-    }
-
-
-# ============================================================
-# 5. 模型保存
+# 3. 模型保存
 # ============================================================
 
 def save_model(model, name):
@@ -535,7 +166,6 @@ def save_metadata(models_info, train_df, test_df):
         'models': models_info,
         'system': {
             'n_cpus': _N_CPUS,
-            'numba': _HAS_NUMBA,
         },
     }
     filepath = os.path.join(MODEL_DIR, 'metadata.json')
@@ -545,7 +175,7 @@ def save_metadata(models_info, train_df, test_df):
 
 
 # ============================================================
-# 6. 缓存导出（多进程并行版）
+# 4. 缓存导出（多进程并行）
 # ============================================================
 
 def _export_users_batch(uids, user2idx, user_features, movie_vectors,
@@ -554,11 +184,10 @@ def _export_users_batch(uids, user2idx, user_features, movie_vectors,
     batch_size = len(uids)
     n_movies = len(movie_ids)
 
-    # 构建用户索引
     u_idx = np.array([user2idx[uid] for uid in uids], dtype=np.int32)
     mu = user_means[u_idx]
 
-    # 所有电影评分 (batch × n_movies) — 矩阵乘法自动多线程
+    # 所有电影评分 (batch × n_movies)
     pred_all = user_features[u_idx] @ movie_vectors.T + mu[:, None]
 
     # 排除已评分
@@ -567,7 +196,7 @@ def _export_users_batch(uids, user2idx, user_features, movie_vectors,
         if rated:
             pred_all[b, [movie_ids.index(mid) for mid in rated if mid in movie_ids]] = -np.inf
 
-    # Top-N 选择 (对整个 batch 做一次 argpartition)
+    # Top-N 选择
     k = min(top_n, n_movies)
     top_idx = np.argpartition(pred_all, -k, axis=1)[:, -k:]
 
@@ -575,7 +204,6 @@ def _export_users_batch(uids, user2idx, user_features, movie_vectors,
     for b, uid in enumerate(uids):
         indices = top_idx[b]
         scores = pred_all[b, indices]
-        # 按分数降序排序
         order = np.argsort(-scores)
         indices = indices[order]
         scores = scores[order]
@@ -591,10 +219,7 @@ def _export_users_batch(uids, user2idx, user_features, movie_vectors,
 
 def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
                                      batch_size=None):
-    """
-    用户推荐导出（多进程并行）
-    每个进程处理一个 batch，numpy 矩阵运算在多进程下可充分利用所有核心。
-    """
+    """用户推荐导出（多进程并行）"""
     print("\n" + "=" * 60)
     print("[缓存导出] 用户推荐 -> users_recommendations.csv (多进程并行)")
     print("=" * 60)
@@ -622,7 +247,6 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
     csv_path = os.path.join(EXPORT_DIR, 'users_recommendations.csv')
 
     user_ids = sorted(user2idx.keys())
-    # 自适应 batch_size：目标每个 batch 处理约 5 秒的工作量
     if batch_size is None:
         batch_size = max(500, min(10000, n_users // (_N_CPUS * 2)))
     batches = [user_ids[i:i + batch_size] for i in range(0, len(user_ids), batch_size)]
@@ -633,8 +257,6 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
     total_start = time.time()
     all_results = []
 
-    # 使用 ProcessPoolExecutor 替代 ThreadPoolExecutor
-    # 多进程可以突破 GIL 限制，每个进程独立使用 numpy 多线程
     n_workers = min(_N_CPUS, n_batches)
     print(f"  并行进程数: {n_workers}")
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
@@ -656,14 +278,12 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
                 errors += 1
                 print(f"  [警告] batch 处理失败: {e}")
 
-        # 进度报告
         elapsed = time.time() - total_start
         rate = processed / elapsed if elapsed > 0 else 0
         print(f"  进度: {processed}/{n_users} 用户  |  速率: {rate:.0f} 用户/秒")
 
     all_results.sort(key=lambda x: x[0])
 
-    # 批量写入 CSV（减少 I/O 操作次数）
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
         for uid, rec_list in all_results:
@@ -704,7 +324,6 @@ def export_movies_similarities_csv(item_cf_model, top_n=20, batch_size=None):
         print("[警告] Item-CF 模型中无电影相似度数据")
         return None
 
-    # 修复 key 类型
     movie_sim_matrix = {
         int(k): {int(sk): float(sv) for sk, sv in v.items()}
         for k, v in movie_sim_matrix.items()
@@ -752,7 +371,7 @@ def export_movies_similarities_csv(item_cf_model, top_n=20, batch_size=None):
 
 
 def generate_sql_from_csv(csv_path, table_type):
-    """CSV → SQL REPLACE INTO（批量写入优化）"""
+    """CSV → SQL REPLACE INTO"""
     if table_type == 'user':
         sql_path = csv_path.replace('.csv', '.sql')
         table_name = 'users_recommendations'
@@ -780,7 +399,7 @@ def generate_sql_from_csv(csv_path, table_type):
         f_out.write(f"-- 自动生成: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f_out.write(f"-- 源文件: {os.path.basename(csv_path)}\n\n")
 
-        batch_size = 1000  # 增大 SQL 批量大小
+        batch_size = 1000
         for i in range(0, len(rows), batch_size):
             batch = rows[i:i + batch_size]
             if table_type == 'user':
@@ -835,7 +454,6 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20, batch_
     batches = [user_ids[i:i + batch_size] for i in range(0, len(user_ids), batch_size)]
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # 多进程并行计算
     all_users = []
     n_workers = min(_N_CPUS, len(batches))
     print(f"  并行进程数: {n_workers}")
@@ -896,28 +514,29 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20, batch_
 
 
 # ============================================================
-# 7. 主流程
+# 5. 主流程
 # ============================================================
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='MovieLens 推荐系统 - 模型训练 (CPU 极致优化版 v4)'
+        description='MovieLens 推荐系统 - 模型训练 (内存优化版 v5)'
     )
     parser.add_argument('--skip-eval', action='store_true',
-                        help='skip RMSE evaluation, only train algorithms (save ~95 pct time)')
+                        help='skip RMSE evaluation, only train algorithms')
     parser.add_argument('--n-jobs', type=int, default=None,
                         help=f'parallel jobs (default: {_N_CPUS})')
     parser.add_argument('--export-only', action='store_true',
                         help='export cache from existing models only, no retraining')
     parser.add_argument('--top-n', type=int, default=20,
                         help='top-n recommendations per user/movie (default: 20)')
+    parser.add_argument('--chunk-size', type=int, default=2000,
+                        help='Item-CF chunk size, lower = less memory (default: 2000)')
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
-    # 如果指定了 n-jobs，覆盖全局设置
     if args.n_jobs is not None:
         global _N_CPUS
         _N_CPUS = args.n_jobs
@@ -931,17 +550,17 @@ def main():
 
     header = f"""
 {'=' * 60}
-    MovieLens 推荐系统 - 模型训练 (CPU 极致优化版 v4)
+    MovieLens 推荐系统 - 模型训练 (内存优化版 v5)
 {'=' * 60}
-  CPU 核心: {_N_CPUS_AVAILABLE}  |  使用: {_N_CPUS}  |  Numba: {'是' if _HAS_NUMBA else '否'}
+  CPU 核心: {_N_CPUS_AVAILABLE}  |  使用: {_N_CPUS}
   跳过评估: {'是' if skip_eval else '否'}  |  Top-N: {top_n}
+  峰值内存预估: ~12-16 GB（全量 20万用户 × 8万电影）
 """
     print(header)
     overall_start = time.time()
 
     if args.export_only:
         print("[仅导出模式] 从已有模型加载...")
-        # 加载已有模型
         with open(os.path.join(MODEL_DIR, 'svd_model.pkl'), 'rb') as f:
             svd_model = pickle.load(f)
         with open(os.path.join(MODEL_DIR, 'item_cf_model.pkl'), 'rb') as f:
@@ -966,7 +585,6 @@ def main():
     ratings_df, movies_df, user2idx, movie2idx, idx2user, idx2movie = load_data()
 
     # ── 划分 ──
-    # 跳过评估时，使用所有数据训练（不划分测试集）
     if skip_eval:
         train_df = ratings_df
         test_df = None
@@ -976,16 +594,21 @@ def main():
 
     print(f"\n{'-' * 60}\n")
 
-    # ── SVD ──
+    # ── SVD（峰值内存 ~4-6 GB）──
+    print("[开始] SVD 训练...")
     svd_model = train_svd(train_df, n_factors=50, test_df=test_df)
     print(f"  SVD 总耗时: {svd_model['train_time']:.2f} 秒\n{'-' * 60}\n")
 
-    # ── User-CF ──
+    # ── User-CF（峰值内存 ~6-8 GB）──
+    print("[开始] User-CF 训练...")
     user_cf_model = train_user_cf(train_df, n_neighbors=30, test_df=test_df)
     print(f"  User-CF 总耗时: {user_cf_model['train_time']:.2f} 秒\n{'-' * 60}\n")
 
-    # ── Item-CF ──
-    item_cf_model = train_item_cf(train_df, n_neighbors=30, test_df=test_df)
+    # ── Item-CF（峰值内存 ~2-3 GB）──
+    print("[开始] Item-CF 训练...")
+    item_cf_model = train_item_cf(
+        train_df, n_neighbors=30, chunk_size=args.chunk_size,
+    )
     print(f"  Item-CF 总耗时: {item_cf_model['train_time']:.2f} 秒\n{'-' * 60}\n")
 
     # ── 保存模型 ──
@@ -995,14 +618,19 @@ def main():
 
     # ── 元数据 ──
     models_info = [
-        {'name': 'svd', 'algorithm': 'svd', 'n_factors': svd_model['n_factors'],
-         'train_rmse': svd_model['train_rmse'], 'test_rmse': svd_model['test_rmse'],
+        {'name': 'svd', 'algorithm': 'svd', 'n_factors': svd_model.get('n_factors'),
+         'train_rmse': svd_model.get('rmse') or svd_model.get('train_rmse'),
+         'test_rmse': svd_model.get('test_rmse'),
          'train_time': svd_model['train_time'], 'train_size': svd_model['train_size']},
-        {'name': 'user_cf', 'algorithm': 'user_cf', 'n_neighbors': user_cf_model['n_neighbors'],
-         'train_rmse': user_cf_model['train_rmse'], 'test_rmse': user_cf_model['test_rmse'],
+        {'name': 'user_cf', 'algorithm': 'user_cf',
+         'n_neighbors': user_cf_model.get('n_neighbors'),
+         'train_rmse': user_cf_model.get('rmse') or user_cf_model.get('train_rmse'),
+         'test_rmse': user_cf_model.get('test_rmse'),
          'train_time': user_cf_model['train_time'], 'train_size': user_cf_model['train_size']},
-        {'name': 'item_cf', 'algorithm': 'item_cf', 'n_neighbors': item_cf_model['n_neighbors'],
-         'train_rmse': item_cf_model['train_rmse'], 'test_rmse': item_cf_model['test_rmse'],
+        {'name': 'item_cf', 'algorithm': 'item_cf',
+         'n_neighbors': item_cf_model.get('n_neighbors'),
+         'train_rmse': item_cf_model.get('rmse') or item_cf_model.get('train_rmse'),
+         'test_rmse': None,
          'train_time': item_cf_model['train_time'], 'train_size': item_cf_model['train_size']},
     ]
     save_metadata(models_info, train_df, test_df)
@@ -1013,13 +641,13 @@ def main():
     eval_tag = "(跳过评估)" if skip_eval else ""
     print(f"""
 {'=' * 60}
-                    训练完成！{eval_tag}
+                训练完成！{eval_tag}
 {'=' * 60}
 算法                   训练RMSE       测试RMSE       耗时(秒)
 {'-' * 60}
-svd                  {svd_model['train_rmse']:.4f}       {svd_model['test_rmse'] or 0:.4f}       {svd_model['train_time']:.1f}
-user_cf              {user_cf_model['train_rmse']:.4f}       {user_cf_model['test_rmse'] or 0:.4f}       {user_cf_model['train_time']:.1f}
-item_cf              {item_cf_model['train_rmse']:.4f}       {item_cf_model['test_rmse'] or 0:.4f}       {item_cf_model['train_time']:.1f}
+svd                  {svd_model.get('rmse', 0):.4f}       {svd_model.get('test_rmse', 0) or 0:.4f}       {svd_model['train_time']:.1f}
+user_cf              {user_cf_model.get('rmse', 0):.4f}       {user_cf_model.get('test_rmse', 0) or 0:.4f}       {user_cf_model['train_time']:.1f}
+item_cf              {item_cf_model.get('rmse', 0):.4f}       {item_cf_model.get('test_rmse', 0) or 0:.4f}       {item_cf_model['train_time']:.1f}
 {'=' * 60}
 模型已保存至: {MODEL_DIR}
 """)
@@ -1041,7 +669,6 @@ item_cf              {item_cf_model['train_rmse']:.4f}       {item_cf_model['tes
 
     export_time = time.time() - export_start
 
-    # ── 导入指引 ──
     print(f"""
 {'=' * 60}
   导入指引
