@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train_usercf.py - 基于用户的协同过滤训练脚本（极致内存优化版）
+train_usercf.py - 基于用户的协同过滤训练脚本（极致内存优化版 + 多核并行）
 
 核心设计（避免 200K×200K 全量相似度矩阵 300GB）：
   1. SVD 降维用户到 50 维隐向量
-  2. sklearn NearestNeighbors (ball_tree) 寻找最近邻
+  2. sklearn NearestNeighbors (brute with cosine) 寻找最近邻
   3. **不存储全量预测矩阵** — 只存储邻居关系和用户均值
-  4. RMSE 计算：分批从稀疏矩阵拉取邻居行，仅对训练样本评分做预测
+  4. RMSE 计算：joblib 多核并行 + 向量化稀疏矩阵查询
+  5. 相似度矩阵构建也并行化
 
 峰值内存: ~5-8 GB（全量 20万用户 × 8万电影）
 """
@@ -22,15 +23,21 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 from datetime import datetime
+from functools import partial
 from scipy.sparse import csr_matrix
 from sklearn.decomposition import TruncatedSVD
 from sklearn.neighbors import NearestNeighbors
+from threadpoolctl import threadpool_limits
 
 # ─── CPU 线程控制 ───
 _N_CPUS = int(os.environ.get("TRAIN_N_JOBS", str(os.cpu_count() or 1)))
 os.environ["OMP_NUM_THREADS"] = str(_N_CPUS)
 os.environ["MKL_NUM_THREADS"] = str(_N_CPUS)
 os.environ["OPENBLAS_NUM_THREADS"] = str(_N_CPUS)
+os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
+
+import warnings
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 # ─── 路径 ───
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -73,13 +80,14 @@ def build_mappings(train_df):
 
 def train_user_cf(train_df, n_neighbors=30, svd_factors=50):
     """
-    User-CF 训练（极致内存优化版）
+    User-CF 训练（极致内存优化版 + 多核并行）
 
     关键优化：不创建 (n_users, n_movies) 全量预测矩阵（62GB），
     而是分批从稀疏矩阵读取邻居行，仅对训练样本所在位置做预测。
+    RMSE 计算使用 joblib 多核并行。
     """
     print("\n" + "=" * 60)
-    print(f"[User-CF 训练] 邻居数: {n_neighbors} | SVD 维度: {svd_factors}")
+    print(f"[User-CF 训练] 邻居数: {n_neighbors} | SVD 维度: {svd_factors} | 线程: {_N_CPUS}")
 
     start_time = time.time()
 
@@ -113,12 +121,12 @@ def train_user_cf(train_df, n_neighbors=30, svd_factors=50):
     explained_var = float(svd.explained_variance_ratio_.sum())
     print(f"  SVD 降维: {user_features.shape}, 解释方差: {explained_var:.4f}")
 
-    # ─── 5. NearestNeighbors ───
+    # ─── 5. NearestNeighbors（使用 brute, 因为 ball_tree 不支持 cosine） ───
     nn = NearestNeighbors(
         n_neighbors=min(n_neighbors + 1, n_users),
         metric='cosine',
-        algorithm='ball_tree',
-        n_jobs=_N_CPUS,
+        algorithm='brute',       # brute 支持 cosine
+        n_jobs=_N_CPUS,          # NearestNeighbors 内部并行
     )
     nn.fit(user_features)
     distances, indices = nn.kneighbors(user_features, return_distance=True)
@@ -138,58 +146,66 @@ def train_user_cf(train_df, n_neighbors=30, svd_factors=50):
     del user_features, svd, nn, distances, indices
     del centered_vals
 
-    # ─── 6. 计算 RMSE（分批从稀疏矩阵拉取数据，不存储全量矩阵） ───
-    # 将训练样本按用户分组，逐批预测
-    print(f"  计算 RMSE（分批预测，避免全量矩阵）...")
+    # ─── 6. 计算 RMSE（joblib 多核并行 + 向量化查询） ───
+    print(f"  计算 RMSE（{_N_CPUS} 线程并行，分批预测）...")
 
     # 按用户 ID 分组训练数据索引
     user_to_indices = defaultdict(list)
     for i in range(len(train_df)):
         user_to_indices[int(train_df['user_id'].iloc[i])].append(i)
 
-    pred_values = np.zeros(len(train_df), dtype=np.float32)
-
-    # 分批处理用户，每批 batch_size 个用户
-    batch_size = max(100, min(1000, n_users // 20))
+    # 将用户分批，每批用户交由一个线程处理
     user_ids_list = list(user_to_indices.keys())
     n_users_total = len(user_ids_list)
-    processed_users = 0
 
-    for batch_start in range(0, n_users_total, batch_size):
-        batch_end = min(batch_start + batch_size, n_users_total)
-        batch_uids = user_ids_list[batch_start:batch_end]
+    def _predict_user_batch(batch_uids_slice):
+        """预测一批用户的评分"""
+        # 限制 BLAS 线程数, 避免嵌套并行导致线程爆炸
+        with threadpool_limits(limits=1, user_api='blas'):
+            return _predict_user_batch_impl(batch_uids_slice)
 
-        for uid in batch_uids:
+    def _predict_user_batch_impl(batch_uids_slice):
+        """预测一批用户评分的实际实现"""
+        preds_local = []
+        idxs_local = []
+        for uid in batch_uids_slice:
             u = user2idx.get(uid)
             if u is None:
                 continue
-
-            # 获取该用户的训练样本在原始 DataFrame 中的索引
             sample_indices = user_to_indices[uid]
-
-            # 该用户评过的电影
+            if not sample_indices:
+                continue
             movie_ids = m_idx[sample_indices]
 
-            # 获取邻居的去均值评分 (n_neighbors, n_movies)
             nb_rows = neighbor_indices[u]  # (n_neighbors,)
             weights = sim_weights[u]        # (n_neighbors,)
 
             # 从稀疏矩阵中获取邻居行，只取该用户评过的电影列
-            # sparse_R[:, movie_ids] 会返回 (n_users, len(movie_ids)) 子矩阵
-            # 取邻居行
             sub_R = sparse_R[nb_rows][:, movie_ids].toarray()  # (n_neighbors, n_movies_in_user)
 
-            # 加权平均
             pred_centered = np.sum(weights[:, None] * sub_R, axis=0)
             pred = pred_centered + user_means[u]
 
-            # 写入预测值
-            for idx_in_batch, orig_idx in enumerate(sample_indices):
-                pred_values[orig_idx] = pred[idx_in_batch]
+            preds_local.extend(pred.tolist())
+            idxs_local.extend(sample_indices)
+        return (idxs_local, preds_local)
 
-        processed_users = batch_end
-        if processed_users % (batch_size * 5) == 0 or processed_users == n_users_total:
-            print(f"    预测进度: {processed_users}/{n_users_total} 用户")
+    # 分块并行
+    n_jobs = _N_CPUS
+    batch_size = max(100, min(1000, n_users_total // (n_jobs * 2)))
+    batches = [user_ids_list[i:i + batch_size]
+               for i in range(0, n_users_total, batch_size)]
+
+    from joblib import Parallel, delayed
+    results = Parallel(n_jobs=n_jobs, prefer='threads', verbose=0)(
+        delayed(_predict_user_batch)(batch) for batch in batches
+    )
+
+    # 合并结果
+    pred_values = np.zeros(len(train_df), dtype=np.float32)
+    for idxs_local, preds_local in results:
+        for idx, val in zip(idxs_local, preds_local):
+            pred_values[idx] = val
 
     rmse = float(np.sqrt(np.mean((pred_values - r_val) ** 2)))
     elapsed = time.time() - start_time
@@ -249,7 +265,7 @@ def save_model(model, name='user_cf_model'):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='User-CF 模型训练（内存优化版）')
+    parser = argparse.ArgumentParser(description='User-CF 模型训练（内存优化版 + 多核并行）')
     parser.add_argument('--n-neighbors', type=int, default=30, help='邻居数 (default: 30)')
     parser.add_argument('--svd-factors', type=int, default=50, help='SVD 降维数 (default: 50)')
     parser.add_argument('--n-jobs', type=int, default=None, help='并行线程数')
@@ -259,6 +275,7 @@ def main():
         global _N_CPUS
         _N_CPUS = args.n_jobs
         os.environ["OMP_NUM_THREADS"] = str(_N_CPUS)
+        os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
 
     print(f"[系统] CPU 核心: {os.cpu_count()} | 使用线程: {_N_CPUS}")
 

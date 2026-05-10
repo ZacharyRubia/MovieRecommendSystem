@@ -31,3 +31,6 @@ scripts/tmp/
 scripts/extract_test_subset_test
 
 /docs/lywf
+
+# 课程资源
+courses/
