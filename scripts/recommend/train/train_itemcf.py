@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train_itemcf.py - 基于物品的协同过滤训练脚本（极致内存优化版 + 多核并行）
+train_itemcf.py - 基于物品的协同过滤训练脚本（极致性能优化版）
 
-核心设计（避免 83K×83K 全量相似度矩阵 51GB）：
-  1. 稀疏矩阵存储电影-用户评分数据（不创建密集 62GB 矩阵）
-  2. **分块计算**电影相似度：每次只计算 chunk_size 部电影与其他所有电影的相似度
-  3. 每块计算后立即应用 top-K，只保留 K 个最大相似度值
-  4. 增量聚合到最终 movie_sim_dict
-  5. RMSE 计算使用 joblib 多核并行 + 向量化批量查询
-
-峰值内存: ~5-8 GB（全量 8万电影，chunk_size=2000）
+核心设计：
+  1. 稀疏矩阵存储电影-用户评分数据
+  2. 分块计算电影相似度（内部使用线程并行，限制 BLAS 线程=1）
+  3. RMSE 计算使用进程池并行，充分利用多核 CPU
+  4. 避免全量相似度矩阵，峰值内存可控
 """
 
 import os
@@ -22,22 +19,20 @@ import argparse
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from datetime import datetime
-from functools import partial
-from scipy.sparse import csr_matrix, isspmatrix_csr
+from scipy.sparse import csr_matrix
 from threadpoolctl import threadpool_limits
 
-# ─── CPU 线程控制 ───
+# ─── CPU 控制：全局 BLAS 线程数设为 1，避免嵌套 ──────────────
 _N_CPUS = int(os.environ.get("TRAIN_N_JOBS", str(os.cpu_count() or 1)))
-os.environ["OMP_NUM_THREADS"] = str(_N_CPUS)
-os.environ["MKL_NUM_THREADS"] = str(_N_CPUS)
-os.environ["OPENBLAS_NUM_THREADS"] = str(_N_CPUS)
-os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)  # joblib 感知
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
 
 import warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-# ─── 路径 ───
+# ─── 路径 ────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
@@ -76,58 +71,41 @@ def build_mappings(train_df):
             n_users, n_movies, u_idx, m_idx, r_val)
 
 
-def _adjust_cosine_similarity(sparse_matrix, top_k=30, chunk_size=2000, min_co_ratings=3):
-    """
-    分块计算 Adjusted Cosine Similarity，避免全量密集相似度矩阵。
-
-    利用 joblib 并行处理各分块，充分利用多核 CPU。
-
-    策略：
-    1. 将电影分成 chunk_size 大小的块
-    2. 对每个块，计算该块 vs 所有电影的余弦相似度（稀疏矩阵乘法，自动 OMP 多线程）
-    3. 对每行应用 top-K，只保留 K 个最大正值
-    4. 累积到结果字典
-    """
+def _adjust_cosine_similarity(sparse_matrix, top_k=30, chunk_size=2000):
+    """分块计算 Adjusted Cosine Similarity（线程并行 + 限制 BLAS 线程）"""
     from sklearn.metrics.pairwise import cosine_similarity
+    from scipy.sparse import dia_matrix
 
     n_movies = sparse_matrix.shape[0]
     n_users = sparse_matrix.shape[1]
 
-    # 计算每行的 L2 范数
+    # 计算每行 L2 范数
     norms = np.sqrt(sparse_matrix.multiply(sparse_matrix).sum(axis=1)).A.ravel()
     norms[norms == 0] = 1.0
 
-    # 归一化：构建对角矩阵 1/norms
-    from scipy.sparse import dia_matrix
     inv_norms = dia_matrix((1.0 / norms, [0]), shape=(n_movies, n_movies))
-    normalized = inv_norms @ sparse_matrix  # (n_movies, n_users) CSR
+    normalized = inv_norms @ sparse_matrix
 
     print(f"  归一化矩阵计算完成")
 
-    # 分块计算相似度
     chunk_ranges = [(i, min(i + chunk_size, n_movies)) for i in range(0, n_movies, chunk_size)]
     n_chunks = len(chunk_ranges)
     print(f"  分块计算: {chunk_size} 电影/块 × {n_chunks} 块 (使用 {_N_CPUS} 线程)")
 
     def _process_chunk(c_start, c_end):
-        """处理单个分块：计算余弦相似度并保留 top-K"""
+        """单个分块处理（内层 BLAS 单线程）"""
         chunk_rows = c_end - c_start
         chunk = normalized[c_start:c_end]
-
-        # threadpool_limits 限制内层 BLAS 线程数为 1, 避免与 joblib 外层嵌套并行
         with threadpool_limits(limits=1, user_api='blas'):
-            sim_chunk = cosine_similarity(chunk, normalized)  # (chunk_rows, n_movies)
+            sim_chunk = cosine_similarity(chunk, normalized)
         np.maximum(sim_chunk, 0, out=sim_chunk)
 
-        # 对角线（自身）置 0
         for local_i in range(chunk_rows):
             global_i = c_start + local_i
             sim_chunk[local_i, global_i] = 0.0
 
-        # top-K
         n_cols = sim_chunk.shape[1]
         actual_k = min(top_k, n_cols - 1)
-
         result = {}
         if actual_k > 0:
             top_idx = np.argpartition(sim_chunk, -actual_k, axis=1)[:, -actual_k:]
@@ -141,48 +119,33 @@ def _adjust_cosine_similarity(sparse_matrix, top_k=30, chunk_size=2000, min_co_r
                 row = filtered[local_i]
                 pos = np.where(row > 0)[0]
                 if len(pos):
-                    result[global_i] = {
-                        int(j): float(row[j]) for j in pos
-                    }
-
+                    result[global_i] = {int(j): float(row[j]) for j in pos}
         return result
 
-    # 使用 joblib 并行处理各分块
     from joblib import Parallel, delayed
     chunk_results = Parallel(n_jobs=_N_CPUS, prefer='threads', verbose=0)(
         delayed(_process_chunk)(c_start, c_end) for c_start, c_end in chunk_ranges
     )
 
-    # 合并结果
     all_movie_sim = {}
     for cr in chunk_results:
         all_movie_sim.update(cr)
 
     print(f"  相似度计算完成: {len(all_movie_sim)} 部电影有相似邻居")
-
     return all_movie_sim
 
 
-def train_item_cf(train_df, n_neighbors=30, chunk_size=2000, min_co_ratings=3):
-    """
-    Item-CF 训练（分块内存优化版 + 多核并行 RMSE）
-
-    峰值内存分析（chunk_size=2000）：
-    - 归一化稀疏矩阵: ~200-300 MB
-    - 单块相似度矩阵: 2000 × 83146 × 8 = 1.33 GB (float64)
-    - 累积结果字典: 按需要动态增长
-    - 峰值: ~2-3 GB
-    """
+def train_item_cf(train_df, n_neighbors=30, chunk_size=2000):
     print("\n" + "=" * 60)
-    print(f"[Item-CF 训练] 邻居数: {n_neighbors} | 分块大小: {chunk_size} | 线程: {_N_CPUS}")
+    print(f"[Item-CF 训练] 邻居数: {n_neighbors} | 分块大小: {chunk_size} | 进程数(RMSE): {_N_CPUS}")
 
     start_time = time.time()
 
-    # ─── 1. 构建映射 ───
+    # 1. 映射
     (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
      n_users, n_movies, u_idx, m_idx, r_val) = build_mappings(train_df)
 
-    # ─── 2. 电影均值 ───
+    # 2. 电影均值
     movie_mean_arr = np.zeros(n_movies, dtype=np.float64)
     movie_count_arr = np.zeros(n_movies, dtype=np.int64)
     np.add.at(movie_mean_arr, m_idx, r_val)
@@ -191,7 +154,7 @@ def train_item_cf(train_df, n_neighbors=30, chunk_size=2000, min_co_ratings=3):
     movie_means = (movie_mean_arr / movie_count_arr).astype(np.float32)
     print(f"  电影均值计算完成")
 
-    # ─── 3. 构建稀疏电影-用户矩阵 ───
+    # 3. 稀疏电影-用户矩阵（中心化）
     centered_vals = r_val - movie_means[m_idx]
     sorted_order = np.argsort(m_idx)
     movie_user_sparse = csr_matrix(
@@ -201,17 +164,14 @@ def train_item_cf(train_df, n_neighbors=30, chunk_size=2000, min_co_ratings=3):
     )
     print(f"  稀疏矩阵: ({n_movies}, {n_users}), 非零: {movie_user_sparse.nnz:,}")
 
-    # ─── 4. 分块相似度计算（已并行化） ───
+    # 4. 相似度计算（内部已并行）
     movie_sim = _adjust_cosine_similarity(
         movie_user_sparse,
         top_k=n_neighbors,
         chunk_size=chunk_size,
     )
 
-    # ─── 5. RMSE 计算（joblib 多核并行） ───
-    print(f"  计算 RMSE（{_N_CPUS} 线程并行）...")
-
-    # 将 movie_sim 的内部索引转为 numpy 数组便于向量化查询
+    # 5. 准备 RMSE 预测所需的数据结构（向量化邻居表）
     max_neighbors = max(len(nb) for nb in movie_sim.values()) if movie_sim else 0
     sim_nb_idx = np.zeros((n_movies, max_neighbors), dtype=np.int32)
     sim_nb_val = np.zeros((n_movies, max_neighbors), dtype=np.float32)
@@ -224,84 +184,76 @@ def train_item_cf(train_df, n_neighbors=30, chunk_size=2000, min_co_ratings=3):
             sim_nb_idx[mi, j] = nmi
             sim_nb_val[mi, j] = sim
 
+    # 将训练数据转为 numpy 数组，方便子进程序列化（比传递 DataFrame 轻量）
+    train_user_ids = train_df['user_id'].values.astype(np.int32)
+    train_movie_ids = train_df['movie_id'].values.astype(np.int32)
+    train_ratings = r_val
+
+    # 定义预测函数（在子进程中运行）
     def _predict_batch(batch_indices):
-        """批量预测一批评分样本"""
-        # 限制 BLAS 线程数, 避免嵌套并行导致线程爆炸
+        """批量预测，在独立进程中执行，内部不使用额外多线程"""
+        # 确保 BLAS 单线程（安全）
         with threadpool_limits(limits=1, user_api='blas'):
-            return _predict_batch_impl(batch_indices)
+            n_batch = len(batch_indices)
+            preds = np.zeros(n_batch, dtype=np.float32)
+            for k, i in enumerate(batch_indices):
+                uid = train_user_ids[i]
+                mid = train_movie_ids[i]
+                ui = user2idx.get(uid)
+                mi = movie2idx.get(mid)
 
-    def _predict_batch_impl(batch_indices):
-        """批量预测一批评分样本的实际实现"""
-        n_batch = len(batch_indices)
-        preds = np.zeros(n_batch, dtype=np.float32)
-        for k, i in enumerate(batch_indices):
-            uid = int(train_df['user_id'].iloc[i])
-            mid = int(train_df['movie_id'].iloc[i])
-            ui = user2idx.get(uid)
-            mi = movie2idx.get(mid)
+                if mi is None:
+                    preds[k] = movie_means[mi] if mi is not None else 3.0
+                    continue
 
-            if mi is None:
-                preds[k] = movie_means[mi] if mi is not None else 3.0
-                continue
+                nb_cnt = sim_nb_cnt[mi]
+                if nb_cnt == 0:
+                    preds[k] = movie_means[mi]
+                    continue
 
-            nb_cnt = sim_nb_cnt[mi]
-            if nb_cnt == 0:
-                preds[k] = movie_means[mi]
-                continue
+                nmi_arr = sim_nb_idx[mi, :nb_cnt]
+                sim_arr = sim_nb_val[mi, :nb_cnt]
 
-            nmi_arr = sim_nb_idx[mi, :nb_cnt]
-            sim_arr = sim_nb_val[mi, :nb_cnt]
+                # 从稀疏矩阵中获取邻居评分（向量化）
+                neighbor_vals = np.array([movie_user_sparse[nmi, ui] for nmi in nmi_arr], dtype=np.float32)
+                mask = neighbor_vals != 0
+                if not np.any(mask):
+                    preds[k] = movie_means[mi]
+                    continue
 
-            neighbor_vals = np.array([
-                movie_user_sparse[nmi, ui] for nmi in nmi_arr
-            ], dtype=np.float32)
+                neighbor_ratings = neighbor_vals[mask] + movie_means[nmi_arr[mask]]
+                sim_used = sim_arr[mask]
+                numerator = float(np.sum(sim_used * (neighbor_ratings - movie_means[mi])))
+                denominator = float(np.sum(np.abs(sim_used)))
+                preds[k] = (numerator / denominator + movie_means[mi]) if denominator > 0 else movie_means[mi]
+            return preds
 
-            mask = neighbor_vals != 0
-            if not np.any(mask):
-                preds[k] = movie_means[mi]
-                continue
-
-            neighbor_ratings = neighbor_vals[mask] + movie_means[nmi_arr[mask]]
-            sim_used = sim_arr[mask]
-            numerator = float(np.sum(sim_used * (neighbor_ratings - movie_means[mi])))
-            denominator = float(np.sum(np.abs(sim_used)))
-            preds[k] = (numerator / denominator + movie_means[mi]) if denominator > 0 else movie_means[mi]
-        return preds
-
-    # 分块并行
+    # 划分批次（每个批次交给一个进程）
     total = len(train_df)
-    n_jobs = _N_CPUS
-    chunk_size_rmse = max(1000, total // (n_jobs * 4))
-    batches = [list(range(i, min(i + chunk_size_rmse, total)))
-               for i in range(0, total, chunk_size_rmse)]
+    chunk_size_rmse = max(1000, total // (_N_CPUS * 2))
+    batches = [list(range(i, min(i + chunk_size_rmse, total))) for i in range(0, total, chunk_size_rmse)]
+    print(f"  RMSE 计算: {total} 条样本, {len(batches)} 批次, 使用 {_N_CPUS} 个进程")
 
     from joblib import Parallel, delayed
-    results = Parallel(n_jobs=n_jobs, prefer='threads', verbose=0)(
+    # 使用进程池，避免 GIL，彻底利用多核
+    results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
         delayed(_predict_batch)(batch) for batch in batches
     )
 
     pred_values = np.concatenate(results).astype(np.float32)
-    rmse = float(np.sqrt(np.mean((pred_values - r_val) ** 2)))
-    print(f"  RMSE 计算完成: {total} 条, {n_jobs} 线程并行")
-
+    rmse = float(np.sqrt(np.mean((pred_values - train_ratings) ** 2)))
     elapsed = time.time() - start_time
-    print(f"  训练 RMSE: {rmse:.4f} (近似值，使用电影均值)")
+    print(f"  训练 RMSE: {rmse:.4f}")
     print(f"  Item-CF 训练耗时: {elapsed:.2f} 秒")
 
-    # ─── 6. 将内部索引转换为原始 movie_id ───
+    # 6. 转换为原始 movie_id 的相似度字典
     movie_sim_dict = {}
     for mi, neighbors in movie_sim.items():
         mid = int(all_movies[mi])
-        movie_sim_dict[mid] = {
-            int(all_movies[nmi]): float(nsim)
-            for nmi, nsim in neighbors.items()
-        }
+        movie_sim_dict[mid] = {int(all_movies[nmi]): float(nsim) for nmi, nsim in neighbors.items()}
     print(f"  最终相似度字典: {len(movie_sim_dict)} 部电影有相似邻居")
 
-    # ─── 7. 电影均值字典 ───
     movie_mean_rating = {int(all_movies[i]): float(movie_means[i]) for i in range(n_movies)}
-
-    # 用户已评分电影
     user_movies = defaultdict(set)
     for uid_val, mid_val in zip(train_df['user_id'], train_df['movie_id']):
         user_movies[int(uid_val)].add(int(mid_val))
@@ -333,8 +285,7 @@ def save_model(model, name='item_cf_model'):
     size_mb = os.path.getsize(path) / (1024 * 1024)
     print(f"  模型大小: {size_mb:.2f} MB")
 
-    meta = {k: v for k, v in model.items()
-            if isinstance(v, (str, int, float, bool, list))}
+    meta = {k: v for k, v in model.items() if isinstance(v, (str, int, float, bool, list))}
     meta_path = os.path.join(MODEL_DIR, f'{name}_meta.json')
     with open(meta_path, 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
@@ -343,31 +294,23 @@ def save_model(model, name='item_cf_model'):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Item-CF 模型训练（内存优化版 + 多核并行）')
-    parser.add_argument('--n-neighbors', type=int, default=30, help='邻居数 (default: 30)')
-    parser.add_argument('--chunk-size', type=int, default=2000,
-                        help='分块大小，控制峰值内存 (default: 2000)')
-    parser.add_argument('--n-jobs', type=int, default=None, help='并行线程数')
+    parser = argparse.ArgumentParser(description='Item-CF 模型训练（进程并行 RMSE）')
+    parser.add_argument('--n-neighbors', type=int, default=30, help='邻居数')
+    parser.add_argument('--chunk-size', type=int, default=2000, help='分块大小')
+    parser.add_argument('--n-jobs', type=int, default=None, help='并行进程数（用于 RMSE）')
     args = parser.parse_args()
 
     if args.n_jobs is not None:
         global _N_CPUS
         _N_CPUS = args.n_jobs
-        os.environ["OMP_NUM_THREADS"] = str(_N_CPUS)
         os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
 
-    print(f"[系统] CPU 核心: {os.cpu_count()} | 使用线程: {_N_CPUS}")
+    print(f"[系统] CPU 核心: {os.cpu_count()} | RMSE 使用进程数: {_N_CPUS}")
 
     overall_start = time.time()
     ratings_df = load_data()
-
-    model = train_item_cf(
-        ratings_df,
-        n_neighbors=args.n_neighbors,
-        chunk_size=args.chunk_size,
-    )
+    model = train_item_cf(ratings_df, n_neighbors=args.n_neighbors, chunk_size=args.chunk_size)
     save_model(model, 'item_cf_model')
-
     total = time.time() - overall_start
     print(f"\n{'=' * 60}")
     print(f"  Item-CF 训练完成！总耗时: {total:.2f} 秒")
