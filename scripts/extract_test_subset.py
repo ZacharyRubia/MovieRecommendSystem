@@ -18,6 +18,7 @@ import random
 import os
 import argparse
 import numpy as np
+import itertools
 
 # --------------------------------
 # 数据库配置
@@ -34,6 +35,10 @@ DB_CONFIG = {
 # 输出目录（与 train_recommend.py 中的 DATA_DIR 保持一致）
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'extract_test_subset_test')
 
+# 分批查询参数：每批处理的记录数
+CHUNK_SIZE = 1000
+
+
 # --------------------------------
 # 辅助函数
 # --------------------------------
@@ -42,9 +47,16 @@ def ensure_dir(directory):
     print(f"  ✅ 输出目录: {directory}")
 
 
+def chunks(lst, n):
+    """将列表 lst 分成每批 n 个元素"""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
 def pick_active_users(cursor, target_count=None):
     """选取活跃用户。target_count=None 表示全量选取"""
     if target_count is not None:
+        # 有限量选取：一次查询 + fetchall（量不大，不会超时）
         query = """
             SELECT user_id, COUNT(*) AS rating_count
             FROM users_movies_behaviors
@@ -65,7 +77,8 @@ def pick_active_users(cursor, target_count=None):
             selected = selected[:target_count]
             print(f"  ✅ 从 {len(rows)} 个活跃用户中选取前 {target_count} 个最活跃用户")
     else:
-        # 全量选取所有有评分行为的用户
+        # 全量选取：用 fetchmany 流式读取，避免一次性拉取全部结果
+        print(f"  ⏳ 正在全量选取有评分行为的用户（流式读取）...")
         query = """
             SELECT user_id
             FROM users_movies_behaviors
@@ -74,75 +87,106 @@ def pick_active_users(cursor, target_count=None):
             ORDER BY user_id
         """
         cursor.execute(query)
-        rows = cursor.fetchall()
-        selected = [r[0] for r in rows]
+        selected = []
+        # 每批取 CHUNK_SIZE 行，循环拉取
+        while True:
+            batch = cursor.fetchmany(CHUNK_SIZE)
+            if not batch:
+                break
+            selected.extend([r[0] for r in batch])
+            print(f"  ⏳ 已读取 {len(selected)} 个用户...")
         print(f"  ✅ 全量选取所有有评分行为的用户: {len(selected)} 个")
 
     return selected
 
 
 def extract_user_info(cursor, user_ids):
-    """从 users 表提取用户基本信息"""
+    """从 users 表提取用户基本信息（分批查询）"""
     if not user_ids:
         return pd.DataFrame()
-    
-    fmt_ids = ','.join(['%s'] * len(user_ids))
-    query = f"""
-        SELECT id, username, email, created_at
-        FROM users
-        WHERE id IN ({fmt_ids})
-    """
-    cursor.execute(query, user_ids)
-    rows = cursor.fetchall()
-    df = pd.DataFrame(rows, columns=['user_id', 'username', 'email', 'created_at'])
-    print(f"  ✅ 提取用户信息: {len(df)} 条")
+
+    all_chunks = list(chunks(user_ids, CHUNK_SIZE))
+    total_chunks = len(all_chunks)
+    dfs = []
+    for i, chunk_ids in enumerate(all_chunks):
+        fmt_ids = ','.join(['%s'] * len(chunk_ids))
+        query = f"""
+            SELECT id, username, email, created_at
+            FROM users
+            WHERE id IN ({fmt_ids})
+        """
+        cursor.execute(query, chunk_ids)
+        rows = cursor.fetchall()
+        dfs.append(pd.DataFrame(rows, columns=['user_id', 'username', 'email', 'created_at']))
+        if total_chunks > 1:
+            print(f"    └── 批次 {i+1}/{total_chunks}: {len(chunk_ids)} 个用户 -> {len(rows)} 条")
+    df = pd.concat(dfs, ignore_index=True)
+    print(f"  ✅ 提取用户信息: {len(df)} 条 (分批 {total_chunks} 次)")
     return df
 
 
 def extract_ratings_for_users(cursor, user_ids, output_path):
-    """提取指定用户的评分数据"""
+    """提取指定用户的评分数据（分批查询）"""
     if not user_ids:
         return pd.DataFrame()
-    
-    fmt_ids = ','.join(['%s'] * len(user_ids))
-    query = f"""
-        SELECT 
-            umb.user_id,
-            umb.movie_id,
-            umb.rating,
-            umb.created_at
-        FROM users_movies_behaviors umb
-        WHERE umb.behavior_type = 'rate'
-          AND umb.user_id IN ({fmt_ids})
-    """
-    cursor.execute(query, user_ids)
-    rows = cursor.fetchall()
-    df = pd.DataFrame(rows, columns=['user_id', 'movie_id', 'rating', 'created_at'])
-    print(f"  ✅ 提取评分数据: {len(df)} 条")
+
+    all_chunks = list(chunks(user_ids, CHUNK_SIZE))
+    total_chunks = len(all_chunks)
+    total_rows = 0
+    dfs = []
+    for i, chunk_ids in enumerate(all_chunks):
+        fmt_ids = ','.join(['%s'] * len(chunk_ids))
+        query = f"""
+            SELECT 
+                umb.user_id,
+                umb.movie_id,
+                umb.rating,
+                umb.created_at
+            FROM users_movies_behaviors umb
+            WHERE umb.behavior_type = 'rate'
+              AND umb.user_id IN ({fmt_ids})
+        """
+        cursor.execute(query, chunk_ids)
+        rows = cursor.fetchall()
+        total_rows += len(rows)
+        dfs.append(pd.DataFrame(rows, columns=['user_id', 'movie_id', 'rating', 'created_at']))
+        if total_chunks > 1:
+            print(f"    └── 批次 {i+1}/{total_chunks}: {len(chunk_ids)} 个用户 -> {len(rows)} 条评分 (累计 {total_rows} 条)")
+    df = pd.concat(dfs, ignore_index=True)
+    print(f"  ✅ 提取评分数据: {len(df)} 条 (分批 {total_chunks} 次)")
     return df
 
 
 def extract_comments_for_users(cursor, user_ids, output_path):
-    """提取指定用户的评论数据"""
+    """提取指定用户的评论数据（分批查询）"""
     if not user_ids:
         return pd.DataFrame()
-    
-    fmt_ids = ','.join(['%s'] * len(user_ids))
-    query = f"""
-        SELECT 
-            c.id,
-            c.user_id,
-            c.movie_id,
-            c.parent_id,
-            c.content,
-            c.created_at
-        FROM comments c
-        WHERE c.user_id IN ({fmt_ids})
-    """
-    cursor.execute(query, user_ids)
-    rows = cursor.fetchall()
-    df = pd.DataFrame(rows, columns=['comment_id', 'user_id', 'movie_id', 'parent_id', 'content', 'created_at'])
-    print(f"  ✅ 提取评论数据: {len(df)} 条")
+
+    all_chunks = list(chunks(user_ids, CHUNK_SIZE))
+    total_chunks = len(all_chunks)
+    total_rows = 0
+    dfs = []
+    for i, chunk_ids in enumerate(all_chunks):
+        fmt_ids = ','.join(['%s'] * len(chunk_ids))
+        query = f"""
+            SELECT 
+                c.id,
+                c.user_id,
+                c.movie_id,
+                c.parent_id,
+                c.content,
+                c.created_at
+            FROM comments c
+            WHERE c.user_id IN ({fmt_ids})
+        """
+        cursor.execute(query, chunk_ids)
+        rows = cursor.fetchall()
+        total_rows += len(rows)
+        dfs.append(pd.DataFrame(rows, columns=['comment_id', 'user_id', 'movie_id', 'parent_id', 'content', 'created_at']))
+        if total_chunks > 1:
+            print(f"    └── 批次 {i+1}/{total_chunks}: {len(chunk_ids)} 个用户 -> {len(rows)} 条评论 (累计 {total_rows} 条)")
+    df = pd.concat(dfs, ignore_index=True)
+    print(f"  ✅ 提取评论数据: {len(df)} 条 (分批 {total_chunks} 次)")
     return df
 
 
@@ -153,21 +197,46 @@ def pick_movies(cursor, movie_ids_from_ratings, target_count=None):
 
     if target_count is not None and len(movie_ids_native) > target_count:
         # 按评分出现次数排序（热门优先）
-        fmt_ids = ','.join(['%s'] * len(movie_ids_native))
-        query = f"""
-            SELECT movie_id, COUNT(*) AS cnt
-            FROM users_movies_behaviors
-            WHERE behavior_type = 'rate'
-              AND movie_id IN ({fmt_ids})
-            GROUP BY movie_id
-            ORDER BY cnt DESC
-            LIMIT %s
-        """
-        params = list(movie_ids_native) + [target_count]
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        selected = [r[0] for r in rows]
-        print(f"  ✅ 从 {len(movie_ids_native)} 部涉及电影中选取最热门的 {len(selected)} 部")
+        # 如果 movie_ids_native 太多，也需要分批查询
+        if len(movie_ids_native) > CHUNK_SIZE:
+            # 分批统计，然后合并计数
+            print(f"  ⏳ 电影数量 {len(movie_ids_native)}，分批统计热度...")
+            counter = {}
+            all_chunks = list(chunks(movie_ids_native, CHUNK_SIZE))
+            total_chunks = len(all_chunks)
+            for i, chunk_ids in enumerate(all_chunks):
+                fmt_ids = ','.join(['%s'] * len(chunk_ids))
+                q = f"""
+                    SELECT movie_id, COUNT(*) AS cnt
+                    FROM users_movies_behaviors
+                    WHERE behavior_type = 'rate'
+                      AND movie_id IN ({fmt_ids})
+                    GROUP BY movie_id
+                """
+                cursor.execute(q, chunk_ids)
+                for row in cursor.fetchall():
+                    counter[row[0]] = counter.get(row[0], 0) + row[1]
+                print(f"    └── 批次 {i+1}/{total_chunks}: 已统计 {len(counter)} 部电影")
+            # 按计数降序取前 target_count 个
+            sorted_movies = sorted(counter.items(), key=lambda x: -x[1])
+            selected = [movie_id for movie_id, _ in sorted_movies[:target_count]]
+            print(f"  ✅ 从 {len(movie_ids_native)} 部涉及电影中选取最热门的 {len(selected)} 部 (分批统计)")
+        else:
+            fmt_ids = ','.join(['%s'] * len(movie_ids_native))
+            query = f"""
+                SELECT movie_id, COUNT(*) AS cnt
+                FROM users_movies_behaviors
+                WHERE behavior_type = 'rate'
+                  AND movie_id IN ({fmt_ids})
+                GROUP BY movie_id
+                ORDER BY cnt DESC
+                LIMIT %s
+            """
+            params = list(movie_ids_native) + [target_count]
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            selected = [r[0] for r in rows]
+            print(f"  ✅ 从 {len(movie_ids_native)} 部涉及电影中选取最热门的 {len(selected)} 部")
     else:
         selected = list(movie_ids_native)
         print(f"  ✅ 全量保留涉及的所有电影: {len(selected)} 部")
@@ -176,27 +245,34 @@ def pick_movies(cursor, movie_ids_from_ratings, target_count=None):
 
 
 def extract_movie_info(cursor, movie_ids):
-    """从 movies 表提取电影基本信息"""
+    """从 movies 表提取电影基本信息（分批查询）"""
     if not movie_ids:
         return pd.DataFrame()
-    
-    fmt_ids = ','.join(['%s'] * len(movie_ids))
-    query = f"""
-        SELECT 
-            m.id,
-            m.title,
-            m.description,
-            m.release_year,
-            m.duration,
-            m.avg_rating,
-            m.created_at
-        FROM movies m
-        WHERE m.id IN ({fmt_ids})
-    """
-    cursor.execute(query, movie_ids)
-    rows = cursor.fetchall()
-    df = pd.DataFrame(rows, columns=['movie_id', 'title', 'description', 'release_year', 'duration', 'avg_rating', 'created_at'])
-    print(f"  ✅ 提取电影信息: {len(df)} 条")
+
+    all_chunks = list(chunks(movie_ids, CHUNK_SIZE))
+    total_chunks = len(all_chunks)
+    dfs = []
+    for i, chunk_ids in enumerate(all_chunks):
+        fmt_ids = ','.join(['%s'] * len(chunk_ids))
+        query = f"""
+            SELECT 
+                m.id,
+                m.title,
+                m.description,
+                m.release_year,
+                m.duration,
+                m.avg_rating,
+                m.created_at
+            FROM movies m
+            WHERE m.id IN ({fmt_ids})
+        """
+        cursor.execute(query, chunk_ids)
+        rows = cursor.fetchall()
+        dfs.append(pd.DataFrame(rows, columns=['movie_id', 'title', 'description', 'release_year', 'duration', 'avg_rating', 'created_at']))
+        if total_chunks > 1:
+            print(f"    └── 批次 {i+1}/{total_chunks}: {len(chunk_ids)} 部电影 -> {len(rows)} 条")
+    df = pd.concat(dfs, ignore_index=True)
+    print(f"  ✅ 提取电影信息: {len(df)} 条 (分批 {total_chunks} 次)")
     return df
 
 
