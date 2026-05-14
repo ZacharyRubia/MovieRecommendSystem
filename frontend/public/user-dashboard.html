@@ -496,8 +496,9 @@
       container.innerHTML = '<div class="recommend-loading">🎬 正在为你生成个性化推荐...</div>';
 
       try {
-        // 步骤 1: 优先调用 AI 混合推荐（响应快，~0.5~3s）
-        const aiResult = await tryAiRecommendation(userId, 'hybrid', 10, 10000);
+        // 步骤 1: 优先调用 AI 混合推荐
+        // 首次加载需等待模型文件加载（svd_model.json ~67MB + user_cf + item_cf），放宽到 120 秒
+        const aiResult = await tryAiRecommendation(userId, 'hybrid', 10, 120000);
         if (aiResult && aiResult.length > 0) {
           // AI 推荐成功，将返回的 movieId 映射为电影信息
           await renderSimpleRecommendCards(container, aiResult, 'AI 混合推荐');
@@ -661,25 +662,9 @@
      * 渲染 AI 模型信息
      */
     function renderAiModelInfo() {
+      // 不再显示模型名称/类型信息
       const infoDiv = document.getElementById('aiModelInfo');
-      if (!aiModelMeta) {
-        infoDiv.style.display = 'none';
-        return;
-      }
-
-      const { models, dataset } = aiModelMeta;
-      let html = '';
-      
-      if (models && models.length > 0) {
-        html = models.map(m => {
-          let metrics = '';
-          if (m.type) metrics += `<span class="ai-metric"><span class="ai-metric-label">类型</span> <span class="ai-metric-value">${m.type}</span></span>`;
-          return `<div style="margin-bottom:6px;"><strong>${m.name || m.id}</strong> ${metrics}</div>`;
-        }).join('');
-      }
-
-      infoDiv.innerHTML = html;
-      infoDiv.style.display = 'block';
+      infoDiv.style.display = 'none';
     }
 
     /**
@@ -697,10 +682,22 @@
 
       container.innerHTML = `<div class="recommend-loading">🤖 正在使用 ${algorithmNames[currentAiAlgorithm] || currentAiAlgorithm} 生成推荐...</div>`;
 
+      // 确保模型列表已加载，若未加载则在此处同步获取
+      if (!aiModelMeta) {
+        try {
+          const modelsRes = await fetch(`${API_BASE}/recommend/ai/models`);
+          const models = await modelsRes.json();
+          if (models.success) aiModelMeta = models.data;
+        } catch (e) {
+          console.warn('[AI 推荐] 模型列表加载失败，使用默认超时:', e.message);
+        }
+      }
+      // 未注册过 meta（首次）→ 120s；已加载模型列表（非首次）→ 30s
+      const isFirstLoad = !aiModelMeta || !aiModelMeta.models;
+      const timeoutMs = isFirstLoad ? 120000 : 30000;
+
       try {
         const controller = new AbortController();
-        // 首次请求可能遇到模型正在预热加载，放宽超时到 60 秒
-        const timeoutMs = (aiModelMeta && aiModelMeta.models) ? 30000 : 60000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         const response = await fetch(
@@ -735,18 +732,9 @@
       const container = document.getElementById('aiRecommendContainer');
       const recommendations = data.recommendations || [];
 
-      // 算法名称映射
-      const algoLabels = {
-        'hybrid': '混合推荐',
-        'svd': 'SVD',
-        'user_cf': 'User-CF',
-        'item_cf': 'Item-CF'
-      };
-
-      // 显示耗时和算法信息
+      // 显示耗时和数量信息
       const infoHtml = `
         <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;color:#666;">
-          <span>🔬 算法: <strong>${algoLabels[data.algorithm] || data.algorithm}</strong></span>
           <span>⚡ 耗时: ${data.elapsed || '?'}s</span>
           <span>📊 结果: ${data.total} 部</span>
         </div>

@@ -7,6 +7,8 @@ const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
 
 // Model cache
 const _models = {};
+// 并发加载保护锁：防止 warmupModels() 和首次请求同时加载同一模型
+const _loadingPromises = {};
 
 /**
  * 异步加载 JSON 模型，大文件不阻塞事件循环
@@ -44,6 +46,7 @@ function loadJsonModelSync(filename) {
 }
 
 async function loadModelAsync(algorithm) {
+  // 1. 已缓存 → 直接返回
   if (_models[algorithm]) return _models[algorithm];
 
   const modelMap = {
@@ -55,10 +58,21 @@ async function loadModelAsync(algorithm) {
   const filename = modelMap[algorithm];
   if (!filename) throw new Error(`Unknown algorithm: ${algorithm}`);
 
+  // 2. 已有同名 model 正在加载中 → 共享同一个 promise，避免并发重复加载
+  if (_loadingPromises[algorithm]) {
+    console.log(`[Load model] ${algorithm}: ${filename} (awaiting existing load)`);
+    return _loadingPromises[algorithm];
+  }
+
+  // 3. 首次加载 → 创建 loading promise，缓存后在末尾释放
   console.log(`[Load model] ${algorithm}: ${filename}`);
-  const model = await loadJsonModelAsync(filename);
-  _models[algorithm] = model;
-  return model;
+  _loadingPromises[algorithm] = loadJsonModelAsync(filename).then(model => {
+    _models[algorithm] = model;
+    delete _loadingPromises[algorithm];
+    return model;
+  });
+
+  return _loadingPromises[algorithm];
 }
 
 function loadModel(algorithm) {
