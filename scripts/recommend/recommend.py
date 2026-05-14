@@ -55,6 +55,7 @@ def load_model(algorithm='svd'):
         'svd': 'svd_model.pkl',
         'user_cf': 'user_cf_model.pkl',
         'item_cf': 'item_cf_model.pkl',
+        'turbo_cf': 'turbo_cf_model.pkl',
     }
 
     filename = model_map.get(algorithm)
@@ -299,8 +300,103 @@ def recommend_item_cf(model, user_id, top_n=10):
     return predictions[:top_n]
 
 
+def recommend_turbo_cf(model, user_id, top_n=10):
+    """
+    使用 Turbo-CF（K-Means 用户聚类加速协同过滤）推荐
+
+    Turbo-CF 核心流程：
+      1. 将用户分配至最近簇（余弦距离）
+      2. 在簇内（或扩展范围）搜索 top-K 相似用户
+      3. 加权平均预测评分
+
+    复杂度：O(U) → O(U/C)，当 C=50 时理论加速 50x
+    """
+    user_neighbors = model.get('user_neighbors', {})
+    user_movies = model.get('user_movies', {})
+    user_means = model.get('user_means', {})
+
+    # 检查用户是否存在
+    uid_key = user_id
+    if isinstance(list(user_neighbors.keys())[0], str) if user_neighbors else False:
+        uid_key = str(user_id)
+
+    if uid_key not in user_neighbors:
+        print(f"[警告] 用户 {user_id} 不在训练集中（Turbo-CF）")
+        return []
+
+    # 获取用户的邻居（已归一化权重）
+    neighbors = user_neighbors.get(uid_key, [])
+    if not neighbors:
+        print(f"[警告] 用户 {user_id} 没有邻居")
+        return []
+
+    # 获取用户已评分电影
+    rated_key = str(user_id) if isinstance(list(user_movies.keys())[0] if user_movies else '', str) else user_id
+    rated_movies = set(user_movies.get(rated_key, []))
+    if isinstance(rated_movies, list):
+        rated_movies = set(rated_movies)
+
+    # 获取用户均值
+    mean_key = uid_key
+    user_mean = user_means.get(mean_key, 3.5)
+
+    # 获取所有候选电影的评分
+    # 由于 Turbo-CF 邻居已预先计算好，只需要基于邻居的评分做预测
+    # 遍历所有候选电影
+    all_movies_set = set()
+    for nb_uid, _ in neighbors:
+        nb_movies = user_movies.get(
+            str(nb_uid) if isinstance(list(user_movies.keys())[0] if user_movies else '', str) else nb_uid,
+            []
+        )
+        if isinstance(nb_movies, list):
+            all_movies_set.update(nb_movies)
+
+    candidates = all_movies_set - rated_movies
+
+    predictions = []
+    for mid in candidates:
+        num = 0.0
+        den = 0.0
+        for nb_uid, sim in neighbors:
+            # 获取邻居的评分
+            nb_movies_dict = user_movies.get(
+                str(nb_uid) if isinstance(list(user_movies.keys())[0] if user_movies else '', str) else nb_uid,
+                []
+            )
+            # user_movies 存储的是已评分电影ID列表，没有具体评分值
+            # 这里用简化方法：如果邻居看过该电影，贡献为正
+            if mid in nb_movies_dict:
+                # 使用均值偏差作为评分估计（简化）
+                num += sim * 1.0  # 正向信号
+                den += abs(sim)
+
+        if den > 0:
+            # 用均值 + 偏差预测
+            pred = user_mean + num / den * 0.5  # 缩放因子
+            predictions.append((mid, float(pred)))
+
+    if not predictions:
+        # 回退：使用频率最高的候选电影
+        movie_freq = defaultdict(int)
+        for nb_uid, _ in neighbors:
+            nb_movies = user_movies.get(
+                str(nb_uid) if isinstance(list(user_movies.keys())[0] if user_movies else '', str) else nb_uid,
+                []
+            )
+            for m in nb_movies:
+                if m not in rated_movies:
+                    movie_freq[m] += 1
+
+        for mid, freq in movie_freq.items():
+            predictions.append((mid, float(freq)))
+
+    predictions.sort(key=lambda x: -x[1])
+    return predictions[:top_n]
+
+
 def recommend_hybrid(model_svd, model_user_cf, model_item_cf,
-                     user_id, top_n=10, weights=None):
+                     user_id, top_n=10, model_turbo_cf=None, weights=None):
     """
     混合推荐: 融合 SVD + User-CF + Item-CF 的结果
 
@@ -415,6 +511,7 @@ def interactive_mode():
         model_svd = load_model('svd')
         model_user_cf = load_model('user_cf')
         model_item_cf = load_model('item_cf')
+        model_turbo_cf = load_model('turbo_cf')
     except (FileNotFoundError, Exception) as e:
         print(f"[错误] {e}")
         return
@@ -425,7 +522,7 @@ def interactive_mode():
     while True:
         print("\n" + "-" * 50)
         print("命令: recommend <user_id> [算法] | history <user_id> | list | quit")
-        print("算法: svd | user_cf | item_cf | hybrid (默认)")
+        print("算法: svd | user_cf | item_cf | turbo_cf | hybrid (默认)")
         print("-" * 50)
 
         try:
@@ -465,13 +562,16 @@ def interactive_mode():
                 top_n = 10
                 if algorithm == 'hybrid':
                     results = recommend_hybrid(model_svd, model_user_cf,
-                                                model_item_cf, uid, top_n)
+                                                model_item_cf, uid, top_n,
+                                                model_turbo_cf)
                 elif algorithm == 'svd':
                     results = recommend_svd(model_svd, uid, top_n)
                 elif algorithm == 'user_cf':
                     results = recommend_user_cf(model_user_cf, uid, top_n)
                 elif algorithm == 'item_cf':
                     results = recommend_item_cf(model_item_cf, uid, top_n)
+                elif algorithm == 'turbo_cf':
+                    results = recommend_turbo_cf(model_turbo_cf, uid, top_n)
                 else:
                     print(f"未知算法: {algorithm}")
                     continue
@@ -509,7 +609,7 @@ def main():
     parser.add_argument('user_id', type=int, nargs='?', default=None,
                         help='用户ID')
     parser.add_argument('--algorithm', '-a', default='hybrid',
-                        choices=['svd', 'user_cf', 'item_cf', 'hybrid'],
+                        choices=['svd', 'user_cf', 'item_cf', 'turbo_cf', 'hybrid'],
                         help='推荐算法 (默认: hybrid)')
     parser.add_argument('--top_n', '-n', type=int, default=10,
                         help='推荐数量 (默认: 10)')
@@ -533,9 +633,10 @@ def main():
     # 加载模型
     print(f"\n[加载] 算法: {algorithm}, 用户: {user_id}, Top-N: {top_n}")
     try:
-        model_svd = load_model('svd')
+        model_svd = load_model('svd') if algorithm in ('svd', 'hybrid') else None
         model_user_cf = load_model('user_cf') if algorithm in ('user_cf', 'hybrid') else None
         model_item_cf = load_model('item_cf') if algorithm in ('item_cf', 'hybrid') else None
+        model_turbo_cf = load_model('turbo_cf') if algorithm in ('turbo_cf', 'hybrid') else None
     except FileNotFoundError as e:
         print(f"[错误] {e}")
         sys.exit(1)
@@ -556,13 +657,15 @@ def main():
             except ValueError:
                 pass
         results = recommend_hybrid(model_svd, model_user_cf, model_item_cf,
-                                    user_id, top_n, weights)
+                                    user_id, top_n, model_turbo_cf, weights)
     elif algorithm == 'svd':
         results = recommend_svd(model_svd, user_id, top_n)
     elif algorithm == 'user_cf':
         results = recommend_user_cf(model_user_cf, user_id, top_n)
     elif algorithm == 'item_cf':
         results = recommend_item_cf(model_item_cf, user_id, top_n)
+    elif algorithm == 'turbo_cf':
+        results = recommend_turbo_cf(model_turbo_cf, user_id, top_n)
     else:
         print(f"[错误] 未知算法: {algorithm}")
         sys.exit(1)

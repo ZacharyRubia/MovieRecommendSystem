@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train_recommend.py - 推荐算法训练主入口（内存优化版 v5）
+train_recommend.py - 推荐算法训练主入口（内存优化版 v5，集成 Turbo-CF）
 
 全量数据（20万用户 × 8万电影）在 64核128G 机器上可稳定运行。
+
+训练算法：
+  - SVD: 矩阵分解协同过滤
+  - User-CF: 基于用户的协同过滤（sparse SVD + 索引查找）
+  - Item-CF: 基于物品的协同过滤（CSR 稀疏矩阵 + 分块计算）
+  - Turbo-CF: K-Means 用户聚类加速协同过滤（当用户数 > 10^4 时自动启用）
 
 相比 v4 的关键优化：
   1. Item-CF: 移除 62GB 密集电影-用户矩阵，改用 CSR 稀疏矩阵
@@ -11,7 +17,8 @@ train_recommend.py - 推荐算法训练主入口（内存优化版 v5）
   3. User-CF: 移除 320GB 密集用户-用户相似度矩阵，改用 sparse SVD + 索引查找
   4. User-CF: 移除 62GB 密集评分矩阵 R_mat
   5. 所有算法均采用稀疏数据结构，峰值内存控制在 12-16 GB 以内
-  6. 训练好的模型格式兼容，recommend.py 已适配
+  6. Turbo-CF: K-Means 聚类压缩邻居搜索空间，复杂度 O(U) → O(U/C)
+  7. 训练好的模型格式兼容，recommend.py 已适配
 
 用法:
   python train_recommend.py                          # 完整训练+评估+导出
@@ -58,6 +65,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from train.train_svd import train_svd as train_svd_optimized
 from train.train_usercf import train_user_cf as train_user_cf_optimized
 from train.train_itemcf import train_item_cf as train_item_cf_optimized
+from train.train_turbocf import train_turbo_cf
 
 
 print(f"[系统] CPU 可用核心: {_N_CPUS_AVAILABLE}  |  使用线程数: {_N_CPUS}  |  "
@@ -611,10 +619,21 @@ def main():
     )
     print(f"  Item-CF 总耗时: {item_cf_model['train_time']:.2f} 秒\n{'-' * 60}\n")
 
+    # ── Turbo-CF（K-Means 用户聚类加速协同过滤）──
+    print("[开始] Turbo-CF 训练（基于 K-Means 用户聚类的加速协同过滤）...")
+    turbo_cf_model = train_turbo_cf(
+        train_df,
+        n_clusters=50,
+        n_neighbors=30,
+        extend_range=1,
+    )
+    print(f"  Turbo-CF 总耗时: {turbo_cf_model['train_time']:.2f} 秒\n{'-' * 60}\n")
+
     # ── 保存模型 ──
     save_model(svd_model, 'svd_model')
     save_model(user_cf_model, 'user_cf_model')
     save_model(item_cf_model, 'item_cf_model')
+    save_model(turbo_cf_model, 'turbo_cf_model')
 
     # ── 元数据 ──
     models_info = [
@@ -632,6 +651,14 @@ def main():
          'train_rmse': item_cf_model.get('rmse') or item_cf_model.get('train_rmse'),
          'test_rmse': None,
          'train_time': item_cf_model['train_time'], 'train_size': item_cf_model['train_size']},
+        {'name': 'turbo_cf', 'algorithm': 'turbo_cf',
+         'n_clusters': turbo_cf_model.get('n_clusters'),
+         'n_neighbors': turbo_cf_model.get('n_neighbors'),
+         'extend_range': turbo_cf_model.get('extend_range'),
+         'turbo_enabled': turbo_cf_model.get('turbo_enabled', False),
+         'train_rmse': turbo_cf_model.get('rmse') or turbo_cf_model.get('train_rmse'),
+         'test_rmse': turbo_cf_model.get('test_rmse'),
+         'train_time': turbo_cf_model['train_time'], 'train_size': turbo_cf_model['train_size']},
     ]
     save_metadata(models_info, train_df, test_df)
 
@@ -639,6 +666,7 @@ def main():
 
     # ── 汇总 ──
     eval_tag = "(跳过评估)" if skip_eval else ""
+    turbo_tag = " ✅" if turbo_cf_model.get('turbo_enabled', False) else " ⚠️"
     print(f"""
 {'=' * 60}
                 训练完成！{eval_tag}
@@ -648,6 +676,7 @@ def main():
 svd                  {svd_model.get('rmse', 0):.4f}       {svd_model.get('test_rmse', 0) or 0:.4f}       {svd_model['train_time']:.1f}
 user_cf              {user_cf_model.get('rmse', 0):.4f}       {user_cf_model.get('test_rmse', 0) or 0:.4f}       {user_cf_model['train_time']:.1f}
 item_cf              {item_cf_model.get('rmse', 0):.4f}       {item_cf_model.get('test_rmse', 0) or 0:.4f}       {item_cf_model['train_time']:.1f}
+turbo_cf             {turbo_cf_model.get('rmse', 0):.4f}       {turbo_cf_model.get('test_rmse', 0) or 0:.4f}       {turbo_cf_model['train_time']:.1f}{turbo_tag}
 {'=' * 60}
 模型已保存至: {MODEL_DIR}
 """)

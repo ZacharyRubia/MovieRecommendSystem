@@ -177,6 +177,52 @@ def export_item_cf_model(model, output_path):
     print()
 
 
+def export_turbo_cf_model(model, output_path):
+    """导出 Turbo-CF 模型为 JSON"""
+    print("[导出] Turbo-CF 模型...")
+
+    user_neighbors = model.get('user_neighbors', {})
+    user_neighbors_str = {}
+    for k, v in user_neighbors.items():
+        user_neighbors_str[str(k)] = [[int(nb), float(sim)] for nb, sim in v]
+
+    user_movies = model.get('user_movies', {})
+    user_movies_str = {}
+    for k, v in user_movies.items():
+        user_movies_str[str(k)] = [int(x) for x in v]
+
+    user_means = model.get('user_means', {})
+    user_means_str = {str(k): float(v) for k, v in user_means.items()}
+
+    centroids = model.get('centroids', None)
+    centroids_list = None
+    if centroids is not None:
+        centroids_list = convert_numpy(centroids)
+
+    data = {
+        'algorithm': model.get('algorithm', 'turbo_cf'),
+        'train_size': model.get('train_size', None),
+        'n_clusters': model.get('n_clusters', 50),
+        'n_neighbors': model.get('n_neighbors', 30),
+        'extend_range': model.get('extend_range', 1),
+        'turbo_enabled': model.get('turbo_enabled', False),
+        'user_neighbors': user_neighbors_str,
+        'user_movies': user_movies_str,
+        'user_means': user_means_str,
+        'centroids': centroids_list,
+    }
+
+    size_mb = len(json.dumps(data, ensure_ascii=False)) / (1024 * 1024)
+    print(f"  数据大小: 约 {size_mb:.1f} MB")
+
+    output_file = os.path.join(output_path, 'turbo_cf_model.json')
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+    print(f"  已保存: {output_file}")
+    print(f"  用户数: {len(user_means)}, 簇数: {data['n_clusters']}, Turbo启用: {data['turbo_enabled']}")
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Export pickle models to JSON')
     parser.add_argument('--model-dir', '-m', default=None,
@@ -229,6 +275,15 @@ def main():
         export_item_cf_model(model_icf, output_dir)
     else:
         print(f"[跳过] Item-CF 模型不存在: {icf_path}\n")
+    
+    # 导出 Turbo-CF 模型
+    tcf_path = os.path.join(model_dir, 'turbo_cf_model.pkl')
+    if os.path.exists(tcf_path):
+        with open(tcf_path, 'rb') as f:
+            model_tcf = pickle.load(f)
+        export_turbo_cf_model(model_tcf, output_dir)
+    else:
+        print(f"[跳过] Turbo-CF 模型不存在: {tcf_path}\n")
     
     print(f"{'=' * 60}")
     print(f"  导出完成！输出目录: {output_dir}")

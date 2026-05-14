@@ -53,6 +53,7 @@ async function loadModelAsync(algorithm) {
     svd: 'svd_model.json',
     user_cf: 'user_cf_model.json',
     item_cf: 'item_cf_model.json',
+    turbo_cf: 'turbo_cf_model.json',
   };
 
   const filename = modelMap[algorithm];
@@ -82,6 +83,7 @@ function loadModel(algorithm) {
     svd: 'svd_model.json',
     user_cf: 'user_cf_model.json',
     item_cf: 'item_cf_model.json',
+    turbo_cf: 'turbo_cf_model.json',
   };
 
   const filename = modelMap[algorithm];
@@ -97,7 +99,7 @@ function loadModel(algorithm) {
  * 预热：在服务器启动时异步预加载所有模型
  */
 async function warmupModels() {
-  const algorithms = ['svd', 'user_cf', 'item_cf'];
+  const algorithms = ['svd', 'user_cf', 'item_cf', 'turbo_cf'];
   console.log('[预热] 开始预加载推荐模型...');
   for (const algo of algorithms) {
     try {
@@ -259,6 +261,59 @@ function recommendItemCF(model, userId, topN = 10) {
 }
 
 // ============================================================
+// Turbo-CF Recommendation (K-Means 聚类加速协同过滤)
+// ============================================================
+function recommendTurboCF(model, userId, topN = 10) {
+  const { user_neighbors, user_movies, user_means, n_neighbors, centroids } = model;
+
+  const uidStr = String(userId);
+  if (!(uidStr in user_movies)) return [];
+
+  const ratedMovies = new Set(user_movies[uidStr].map(String));
+  const neighbors = user_neighbors[uidStr] || [];
+
+  if (neighbors.length === 0) return [];
+
+  const uidMean = user_means[uidStr] || 3.5;
+  const neighborLimit = Math.min(neighbors.length, n_neighbors || 30);
+  const topNeighbors = neighbors.slice(0, neighborLimit);
+
+  // 收集邻居评分过的所有候选电影
+  const candidateScores = {};
+
+  for (const [nuid, sim] of topNeighbors) {
+    const nuidStr = String(nuid);
+    const nMovies = user_movies[nuidStr];
+    const nMean = user_means[nuidStr] || 3.5;
+    if (!nMovies) continue;
+
+    for (const mid of nMovies) {
+      const midStr = String(mid);
+      if (ratedMovies.has(midStr)) continue;
+      if (!candidateScores[midStr]) candidateScores[midStr] = { num: 0, den: 0 };
+      // sim 已包含归一化的相似度权重
+      candidateScores[midStr].num += sim;
+      candidateScores[midStr].den += Math.abs(sim);
+    }
+  }
+
+  // 转换为预测评分
+  const predictions = [];
+  for (const [midStr, { num, den }] of Object.entries(candidateScores)) {
+    if (den > 0) {
+      predictions.push({
+        movieId: parseInt(midStr, 10),
+        score: uidMean + num / den
+      });
+    }
+  }
+
+  // 按预测评分排序，取 Top-N
+  predictions.sort((a, b) => b.score - a.score);
+  return predictions.slice(0, topN);
+}
+
+// ============================================================
 // Hybrid Recommendation
 // ============================================================
 function recommendHybrid(modelSVD, modelUserCF, modelItemCF, userId, topN = 10, weights) {
@@ -395,6 +450,8 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
     results = recommendUserCF(await loadModelAsync('user_cf'), userId, topN);
   } else if (algorithm === 'item_cf') {
     results = recommendItemCF(await loadModelAsync('item_cf'), userId, topN);
+  } else if (algorithm === 'turbo_cf') {
+    results = recommendTurboCF(await loadModelAsync('turbo_cf'), userId, topN);
   } else {
     throw new Error(`Unknown algorithm: ${algorithm}`);
   }

@@ -33,6 +33,7 @@ const AVAILABLE_ALGORITHMS = {
   'hybrid': { name: '混合推荐 (Hybrid CF)', description: '融合 User-Based CF 与 Item-Based CF，支持自适应权重' },
   'user_cf': { name: '基于用户的协同过滤 (User-Based CF)', description: '基于相似用户的评分预测' },
   'item_cf': { name: '基于物品的协同过滤 (Item-Based CF)', description: '基于相似物品的评分预测' },
+  'turbo_cf': { name: 'Turbo-CF (K-Means 聚类加速协同过滤)', description: 'K-Means 用户聚类压缩邻居搜索空间，O(U) → O(U/C) 加速' },
   'popular': { name: '热门推荐 (Popular)', description: '基于评分数量和均值的全局热门' },
   'content_based': { name: '基于内容的推荐 (Content-Based)', description: '基于 Qdrant 向量的内容相似度推荐' }
 };
@@ -453,7 +454,7 @@ async function aiModelRecommend(req, res) {
     const n = parseInt(topN) || 10;
 
     // 支持的算法列表
-    const supportedAlgorithms = ['hybrid', 'svd', 'user_cf', 'item_cf'];
+    const supportedAlgorithms = ['hybrid', 'svd', 'user_cf', 'item_cf', 'turbo_cf'];
     const effectiveAlgo = supportedAlgorithms.includes(algo) ? algo : 'hybrid';
 
     console.log(`[AI 推荐] 用户 ${uid}, 算法 ${effectiveAlgo}, Top-N ${n}`);
