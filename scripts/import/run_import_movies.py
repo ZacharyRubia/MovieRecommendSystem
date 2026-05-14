@@ -15,8 +15,8 @@ if sys.stdout.encoding != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-# 获取脚本所在目录的上一级（项目根目录）
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 获取项目根目录（scripts/import/ → scripts/ → 项目根目录）
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CSV_PATH = os.path.join(BASE_DIR, 'movie data', 'ml-32m', 'movies.csv')
 
 DB_CONFIG = {

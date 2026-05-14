@@ -33,7 +33,7 @@ DB_CONFIG = {
 }
 
 # 输出目录（与 train_recommend.py 中的 DATA_DIR 保持一致）
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'extract_test_subset_test')
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'extract_test_subset_test')
 
 # 分批查询参数：每批处理的记录数
 CHUNK_SIZE = 1000

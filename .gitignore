@@ -28,9 +28,11 @@ scripts/export/
 
 # 临时输出文件
 scripts/tmp/
-scripts/extract_test_subset_test
+scripts/extract_test_subset_test/
+/export/
+
 
 /docs/lywf
 
-# 课程资源
-courses/
+# dataset
+dataset/

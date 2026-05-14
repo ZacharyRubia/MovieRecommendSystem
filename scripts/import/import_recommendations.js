@@ -16,12 +16,13 @@ const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
 const mysql = require('mysql2/promise');
-require('dotenv').config({ path: path.join(__dirname, '..', 'backend', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '..', 'backend', '.env') });
 
 // ============================================================
 // 配置
 // ============================================================
-const EXPORT_DIR = path.join(__dirname, 'export');
+// 训练脚本 (scripts/recommend/train_recommend.py) 输出 CSV 到 scripts/recommend/export/
+const EXPORT_DIR = path.join(__dirname, '..', 'recommend', 'export');
 const BATCH_SIZE = 500;          // 每批写入行数
 const DB_CONFIG = {
   host: process.env.DB_HOST || '192.168.1.38',

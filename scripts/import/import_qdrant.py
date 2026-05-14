@@ -12,6 +12,7 @@
 环境依赖:
   pip install pymysql qdrant-client sentence-transformers pandas
 """
+import os
 import sys
 import io
 import time
@@ -44,7 +45,7 @@ QDRANT_PORT = 6333
 COLLECTION_NAME = "movies"
 
 # 本地模型路径（项目根目录下的 models/all-MiniLM-L6-v2）
-MODEL_PATH = r"models/all-MiniLM-L6-v2"
+MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "models", "all-MiniLM-L6-v2")
 
 
 def get_movies_with_genres(cursor):

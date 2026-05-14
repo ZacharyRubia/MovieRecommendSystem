@@ -45,7 +45,7 @@ os.environ["MKL_DYNAMIC"]           = "FALSE"
 import pandas as pd
 
 # ---------- 路径配置 ----------
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 EXPORT_DIR = os.path.join(BASE_DIR, 'export')

@@ -459,8 +459,11 @@ async function aiModelRecommend(req, res) {
     console.log(`[AI 推荐] 用户 ${uid}, 算法 ${effectiveAlgo}, Top-N ${n}`);
 
   // 使用预训练模型引擎进行快速推荐
-  // 引擎通过 JSON 模型文件预测，无需 SQL 计算，速度 < 1s
-  const result = await recommendEngine.getRecommendations(uid, effectiveAlgo, n);
+  // 引擎通过 JSON 模型文件预测（首次加载 ~67MB 模型可能较慢），使用超时保护
+  const result = await withTimeout(
+    recommendEngine.getRecommendations(uid, effectiveAlgo, n),
+    REQUEST_TIMEOUT
+  );
 
   let recommendations = result.recommendations.map(r => ({
     movieId: r.movieId,
