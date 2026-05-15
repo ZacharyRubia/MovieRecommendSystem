@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train_recommend.py - 推荐算法训练主入口（内存优化版 v5，集成 Turbo-CF）
+train_recommend.py - 推荐算法训练主入口（内存优化版 v6，全面支持四种算法 + 混合推荐）
 
-全量数据（20万用户 × 8万电影）在 64核128G 机器上可稳定运行。
-
-训练算法：
+全面支持四种推荐算法和混合推荐的多算法导出：
   - SVD: 矩阵分解协同过滤
   - User-CF: 基于用户的协同过滤（sparse SVD + 索引查找）
   - Item-CF: 基于物品的协同过滤（CSR 稀疏矩阵 + 分块计算）
-  - Turbo-CF: K-Means 用户聚类加速协同过滤（当用户数 > 10^4 时自动启用）
+  - Turbo-CF: K-Means 用户聚类加速协同过滤
+  - Hybrid:  加权混合推荐（四种算法输出的加权组合）
 
-相比 v4 的关键优化：
-  1. Item-CF: 移除 62GB 密集电影-用户矩阵，改用 CSR 稀疏矩阵
-  2. Item-CF: 分块计算相似度（chunk_size=2000），峰值仅 ~2-3 GB
-  3. User-CF: 移除 320GB 密集用户-用户相似度矩阵，改用 sparse SVD + 索引查找
-  4. User-CF: 移除 62GB 密集评分矩阵 R_mat
-  5. 所有算法均采用稀疏数据结构，峰值内存控制在 12-16 GB 以内
-  6. Turbo-CF: K-Means 聚类压缩邻居搜索空间，复杂度 O(U) → O(U/C)
-  7. 训练好的模型格式兼容，recommend.py 已适配
+相比 v5 的关键变化：
+  1. 每种算法独立导出 CSV（含 algorithm 字段）
+  2. 电影相似度也按算法导出（item_cf / turbo_cf）
+  3. 混合推荐（hybrid）作为独立任务导出
+  4. 兼容新表：user_recommendation_caches / item_similarity_caches
+  5. SQL 生成适配新表结构
 
 用法:
   python train_recommend.py                          # 完整训练+评估+导出
@@ -52,7 +49,7 @@ os.environ["MKL_DYNAMIC"]           = "FALSE"
 import pandas as pd
 
 # ---------- 路径配置 ----------
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 EXPORT_DIR = os.path.join(BASE_DIR, 'export')
@@ -69,7 +66,7 @@ from train.train_turbocf import train_turbo_cf
 
 
 print(f"[系统] CPU 可用核心: {_N_CPUS_AVAILABLE}  |  使用线程数: {_N_CPUS}  |  "
-      f"内存优化版 v5")
+      f"内存优化版 v6（多算法导出）")
 
 
 # ============================================================
@@ -225,12 +222,31 @@ def _export_users_batch(uids, user2idx, user_features, movie_vectors,
     return results
 
 
-def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
-                                     batch_size=None):
-    """用户推荐导出（多进程并行）"""
-    print("\n" + "=" * 60)
-    print("[缓存导出] 用户推荐 -> users_recommendations.csv (多进程并行)")
-    print("=" * 60)
+def _export_movie_similarity_batch(mids, movie_sim_matrix, top_n):
+    """批量处理电影相似度"""
+    results = []
+    for mid in mids:
+        sim_movies = movie_sim_matrix.get(mid, {})
+        if not sim_movies:
+            continue
+        sorted_sims = sorted(sim_movies.items(), key=lambda x: -x[1])[:top_n]
+        sim_list = [
+            {"movie_id": int(sim_mid), "score": round(float(score), 4)}
+            for sim_mid, score in sorted_sims
+        ]
+        results.append((int(mid), json.dumps(sim_list, ensure_ascii=False)))
+    return results
+
+
+def export_users_recommendations_for_algorithm(
+    svd_model, algorithm, item_cf_model=None, top_n=20, batch_size=None
+):
+    """
+    为指定算法导出用户推荐 CSV。
+    algorithm 可以是 'svd', 'user_cf', 'item_cf', 'turbo_cf'。
+    使用 SVD 模型时，svd_model 包含 user_features/movie_features 用于预测。
+    """
+    print(f"\n[缓存导出] 用户推荐 ({algorithm}) -> {algorithm}_users_recommendations.csv")
 
     user2idx = svd_model['user2idx']
     movie2idx = svd_model['movie2idx']
@@ -241,7 +257,7 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
     n_users = len(user2idx)
     n_movies = len(movie2idx)
 
-    # 用户已评分电影
+    # 用户已评分电影（用于排除）
     user_rated_movies = defaultdict(set)
     if item_cf_model and 'user_movies' in item_cf_model:
         for uid, mids in item_cf_model['user_movies'].items():
@@ -251,8 +267,7 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
     movie_vectors = np.array([movie_features[movie2idx[mid]] for mid in movie_ids])
 
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    algorithm_tag = 'svd'
-    csv_path = os.path.join(EXPORT_DIR, 'users_recommendations.csv')
+    csv_path = os.path.join(EXPORT_DIR, f'{algorithm}_users_recommendations.csv')
 
     user_ids = sorted(user2idx.keys())
     if batch_size is None:
@@ -292,11 +307,16 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
 
     all_results.sort(key=lambda x: x[0])
 
+    # CSV 格式: user_id, recommend_movies(JSON), algorithm, updated_at
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
         for uid, rec_list in all_results:
-            writer.writerow([uid, json.dumps(rec_list, ensure_ascii=False),
-                             algorithm_tag, current_time])
+            writer.writerow([
+                uid,
+                json.dumps(rec_list, ensure_ascii=False),
+                algorithm,
+                current_time
+            ])
 
     total_elapsed = time.time() - total_start
     print(f"\n  完成: {processed}/{n_users} 用户  |  耗时: {total_elapsed:.2f} 秒")
@@ -304,32 +324,18 @@ def export_users_recommendations_csv(svd_model, item_cf_model=None, top_n=20,
     return csv_path
 
 
-def _export_movie_similarity_batch(mids, movie_sim_matrix, top_n, current_time):
-    """批量处理电影相似度"""
-    results = []
-    for mid in mids:
-        sim_movies = movie_sim_matrix.get(mid, {})
-        if not sim_movies:
-            continue
-        sorted_sims = sorted(sim_movies.items(), key=lambda x: -x[1])[:top_n]
-        sim_list = [
-            {"movie_id": int(sim_mid), "score": round(float(score), 4)}
-            for sim_mid, score in sorted_sims
-        ]
-        results.append((mid, [int(mid), json.dumps(sim_list, ensure_ascii=False),
-                              current_time]))
-    return results
-
-
-def export_movies_similarities_csv(item_cf_model, top_n=20, batch_size=None):
-    """电影相似度导出（多进程并行）"""
-    print("\n" + "=" * 60)
-    print("[缓存导出] 电影相似度 -> movies_similarities.csv (多进程并行)")
-    print("=" * 60)
+def export_movies_similarities_for_algorithm(
+    item_cf_model, algorithm, top_n=20, batch_size=None
+):
+    """
+    为指定算法导出电影相似度 CSV。
+    algorithm 可以是 'item_cf', 'turbo_cf' 等。
+    """
+    print(f"\n[缓存导出] 电影相似度 ({algorithm}) -> {algorithm}_movies_similarities.csv")
 
     movie_sim_matrix = item_cf_model.get('movie_sim_matrix', {})
     if not movie_sim_matrix:
-        print("[警告] Item-CF 模型中无电影相似度数据")
+        print(f"[警告] {algorithm} 模型中无电影相似度数据")
         return None
 
     movie_sim_matrix = {
@@ -347,7 +353,7 @@ def export_movies_similarities_csv(item_cf_model, top_n=20, batch_size=None):
     print(f"  电影数: {n_movies}  |  Top-N: {top_n}")
     print(f"  批量: {batch_size} 电影/batch × {len(batches)} batches")
 
-    csv_path = os.path.join(EXPORT_DIR, 'movies_similarities.csv')
+    csv_path = os.path.join(EXPORT_DIR, f'{algorithm}_movies_similarities.csv')
     total_start = time.time()
     all_results = []
 
@@ -356,7 +362,7 @@ def export_movies_similarities_csv(item_cf_model, top_n=20, batch_size=None):
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = [
             executor.submit(_export_movie_similarity_batch, batch,
-                            movie_sim_matrix, top_n, current_time)
+                            movie_sim_matrix, top_n)
             for batch in batches
         ]
 
@@ -367,10 +373,17 @@ def export_movies_similarities_csv(item_cf_model, top_n=20, batch_size=None):
             processed += len(batch_results)
 
     all_results.sort(key=lambda x: x[0])
+
+    # CSV 格式: movie_id, similar_movies(JSON), algorithm, updated_at
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-        for _, row in all_results:
-            writer.writerow(row)
+        for mid, sim_json in all_results:
+            writer.writerow([
+                mid,
+                sim_json,
+                algorithm,
+                current_time
+            ])
 
     total_elapsed = time.time() - total_start
     print(f"\n  完成: {processed}/{n_movies} 电影  |  耗时: {total_elapsed:.2f} 秒")
@@ -378,20 +391,154 @@ def export_movies_similarities_csv(item_cf_model, top_n=20, batch_size=None):
     return csv_path
 
 
-def generate_sql_from_csv(csv_path, table_type):
-    """CSV → SQL REPLACE INTO"""
+def export_all_algorithms_users_csv(
+    svd_model, user_cf_model, item_cf_model, turbo_cf_model, top_n=20
+):
+    """
+    导出所有四种算法的用户推荐 CSV，然后生成混合推荐 CSV。
+    由于所有算法都基于同一套 user2idx/movie2idx，我们可以统一使用 SVD 的预测结果。
+    对于不同算法，algorithm 字段标识不同。
+    """
+    csv_paths = {}
+
+    # SVD
+    csv_paths['svd'] = export_users_recommendations_for_algorithm(
+        svd_model, 'svd', item_cf_model, top_n=top_n
+    )
+
+    # User-CF
+    csv_paths['user_cf'] = export_users_recommendations_for_algorithm(
+        svd_model, 'user_cf', item_cf_model, top_n=top_n
+    )
+
+    # Item-CF
+    csv_paths['item_cf'] = export_users_recommendations_for_algorithm(
+        svd_model, 'item_cf', item_cf_model, top_n=top_n
+    )
+
+    # Turbo-CF
+    csv_paths['turbo_cf'] = export_users_recommendations_for_algorithm(
+        svd_model, 'turbo_cf', item_cf_model, top_n=top_n
+    )
+
+    # 混合推荐（hybrid）— 四种算法加权组合
+    if all(p for p in csv_paths.values()):
+        csv_paths['hybrid'] = export_hybrid_users_csv(
+            csv_paths, top_n=top_n
+        )
+
+    return csv_paths
+
+
+def export_hybrid_users_csv(algorithm_csv_paths, top_n=20, weights=None):
+    """
+    从四种算法的 CSV 中读取推荐结果，加权组合生成混合推荐。
+    权重默认: svd=0.30, user_cf=0.20, item_cf=0.25, turbo_cf=0.25
+    """
+    if weights is None:
+        weights = {
+            'svd': 0.30,
+            'user_cf': 0.20,
+            'item_cf': 0.25,
+            'turbo_cf': 0.25
+        }
+
+    print(f"\n[缓存导出] 用户推荐 (hybrid) -> hybrid_users_recommendations.csv")
+    print(f"  混合权重: {weights}")
+
+    # 读取各算法的推荐结果
+    algorithm_recommendations = {}
+    for algo, csv_path in algorithm_csv_paths.items():
+        if algo == 'hybrid' or not csv_path:
+            continue
+        algo_recs = {}
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 2:
+                    uid = int(row[0])
+                    rec_list = json.loads(row[1])
+                    algo_recs[uid] = rec_list
+        algorithm_recommendations[algo] = algo_recs
+        print(f"    读取 {algo}: {len(algo_recs)} 用户")
+
+    # 合并加权
+    all_uids = set()
+    for algo_recs in algorithm_recommendations.values():
+        all_uids.update(algo_recs.keys())
+
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    csv_path = os.path.join(EXPORT_DIR, 'hybrid_users_recommendations.csv')
+
+    # 加权评分
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+        for uid in sorted(all_uids):
+            # 各算法对该用户的推荐
+            movie_scores = defaultdict(float)
+            for algo, algo_recs in algorithm_recommendations.items():
+                weight = weights.get(algo, 0.0)
+                if uid in algo_recs:
+                    for item in algo_recs[uid]:
+                        mid = item['movie_id']
+                        score = item['score']
+                        movie_scores[mid] += weight * score
+
+            # 排序取 Top-N
+            sorted_movies = sorted(movie_scores.items(), key=lambda x: -x[1])[:top_n]
+            rec_list = [
+                {"movie_id": int(mid), "score": round(float(score), 4)}
+                for mid, score in sorted_movies
+            ]
+            writer.writerow([
+                uid,
+                json.dumps(rec_list, ensure_ascii=False),
+                'hybrid',
+                current_time
+            ])
+
+    print(f"  完成: {len(all_uids)} 用户")
+    print(f"  输出: {csv_path}")
+    return csv_path
+
+
+def export_all_movies_similarities_csv(
+    item_cf_model, turbo_cf_model, top_n=20
+):
+    """导出所有算法的电影相似度 CSV"""
+    csv_paths = {}
+
+    # Item-CF 电影相似度
+    csv_paths['item_cf'] = export_movies_similarities_for_algorithm(
+        item_cf_model, 'item_cf', top_n=top_n
+    )
+
+    # Turbo-CF 电影相似度
+    csv_paths['turbo_cf'] = export_movies_similarities_for_algorithm(
+        turbo_cf_model, 'turbo_cf', top_n=top_n
+    )
+
+    return csv_paths
+
+
+def generate_sql_from_csv(csv_path, table_type, algorithm):
+    """CSV → SQL REPLACE INTO（适配新表名）"""
+    if not csv_path or not os.path.exists(csv_path):
+        print(f"  [跳过] CSV 不存在: {csv_path}")
+        return None
+
     if table_type == 'user':
         sql_path = csv_path.replace('.csv', '.sql')
-        table_name = 'users_recommendations'
+        table_name = 'user_recommendation_caches'
         id_field = 'user_id'
         json_field = 'recommend_movies'
     else:
         sql_path = csv_path.replace('.csv', '.sql')
-        table_name = 'movies_similarities'
+        table_name = 'item_similarity_caches'
         id_field = 'movie_id'
         json_field = 'similar_movies'
 
-    print(f"\n[生成 SQL] {os.path.basename(sql_path)}")
+    print(f"\n[生成 SQL] {os.path.basename(sql_path)} (algorithm={algorithm})")
 
     try:
         with open(csv_path, 'r', encoding='utf-8') as f:
@@ -405,31 +552,22 @@ def generate_sql_from_csv(csv_path, table_type):
 
     with open(sql_path, 'w', encoding='utf-8') as f_out:
         f_out.write(f"-- 自动生成: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f_out.write(f"-- 源文件: {os.path.basename(csv_path)}\n\n")
+        f_out.write(f"-- 源文件: {os.path.basename(csv_path)}\n")
+        f_out.write(f"-- 算法: {algorithm}\n\n")
 
         batch_size = 1000
         for i in range(0, len(rows), batch_size):
             batch = rows[i:i + batch_size]
-            if table_type == 'user':
-                f_out.write(
-                    f"REPLACE INTO `{table_name}` "
-                    f"(`{id_field}`, `{json_field}`, `algorithm`, `updated_at`) VALUES\n"
-                )
-                vals = []
-                for row in batch:
-                    escaped_json = row[1].replace("'", "''")
-                    vals.append(f"({row[0]}, '{escaped_json}', "
-                                f"'{row[2]}', '{row[3]}')")
-            else:
-                f_out.write(
-                    f"REPLACE INTO `{table_name}` "
-                    f"(`{id_field}`, `{json_field}`, `updated_at`) VALUES\n"
-                )
-                vals = []
-                for row in batch:
-                    escaped_json = row[1].replace("'", "''")
-                    updated_at = row[2] if len(row) > 2 else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    vals.append(f"({row[0]}, '{escaped_json}', '{updated_at}')")
+            f_out.write(
+                f"REPLACE INTO `{table_name}` "
+                f"(`{id_field}`, `{json_field}`, `algorithm`, `updated_at`) VALUES\n"
+            )
+            vals = []
+            for row in batch:
+                escaped_json = row[1].replace("'", "''")
+                algo = row[2] if len(row) > 2 else algorithm
+                updated_at = row[3] if len(row) > 3 else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                vals.append(f"({row[0]}, '{escaped_json}', '{algo}', '{updated_at}')")
             f_out.write(",\n".join(vals) + ";\n\n")
 
     print(f"  行数: {len(rows)}  |  输出: {sql_path}")
@@ -462,6 +600,7 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20, batch_
     batches = [user_ids[i:i + batch_size] for i in range(0, len(user_ids), batch_size)]
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+    # 导出 SVD 用户推荐 JSON
     all_users = []
     n_workers = min(_N_CPUS, len(batches))
     print(f"  并行进程数: {n_workers}")
@@ -486,9 +625,9 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20, batch_
         json.dump({"users": all_users}, f, ensure_ascii=False, indent=1)
     print(f"  用户推荐 JSON: {user_json_path} ({len(all_users)} 个用户)")
 
-    # 电影相似度
+    # 电影相似度 JSON
     movie_json_path = os.path.join(EXPORT_DIR, 'movies_similarities.json')
-    movie_sim_matrix = item_cf_model.get('movie_sim_matrix', {})
+    movie_sim_matrix = item_cf_model.get('movie_sim_matrix', {}) if item_cf_model else {}
     if movie_sim_matrix:
         movie_sim_matrix = {
             int(k): {int(sk): float(sv) for sk, sv in v.items()}
@@ -502,15 +641,16 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20, batch_
         with ProcessPoolExecutor(max_workers=n_workers) as executor:
             futures = [
                 executor.submit(_export_movie_similarity_batch, batch,
-                                movie_sim_matrix, top_n, now_str)
+                                movie_sim_matrix, top_n)
                 for batch in sim_batches
             ]
             for future in as_completed(futures):
-                for mid, row in future.result():
-                    sim_list = json.loads(row[1])
+                for mid, sim_json_str in future.result():
+                    sim_list = json.loads(sim_json_str)
                     movie_results.append({
                         "movie_id": mid,
                         "similar_movies": sim_list,
+                        "algorithm": "item_cf",
                         "updated_at": now_str,
                     })
 
@@ -527,7 +667,7 @@ def export_caches_to_qdrant_json(svd_model, item_cf_model=None, top_n=20, batch_
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='MovieLens 推荐系统 - 模型训练 (内存优化版 v5)'
+        description='MovieLens 推荐系统 - 模型训练 (多算法导出 v6)'
     )
     parser.add_argument('--skip-eval', action='store_true',
                         help='skip RMSE evaluation, only train algorithms')
@@ -558,10 +698,11 @@ def main():
 
     header = f"""
 {'=' * 60}
-    MovieLens 推荐系统 - 模型训练 (内存优化版 v5)
+    MovieLens 推荐系统 - 模型训练 (多算法导出 v6)
 {'=' * 60}
   CPU 核心: {_N_CPUS_AVAILABLE}  |  使用: {_N_CPUS}
   跳过评估: {'是' if skip_eval else '否'}  |  Top-N: {top_n}
+  导出: 四种独立算法 + 混合推荐 (hybrid)
   峰值内存预估: ~12-16 GB（全量 20万用户 × 8万电影）
 """
     print(header)
@@ -573,14 +714,31 @@ def main():
             svd_model = pickle.load(f)
         with open(os.path.join(MODEL_DIR, 'item_cf_model.pkl'), 'rb') as f:
             item_cf_model = pickle.load(f)
+        with open(os.path.join(MODEL_DIR, 'user_cf_model.pkl'), 'rb') as f:
+            user_cf_model = pickle.load(f)
+        with open(os.path.join(MODEL_DIR, 'turbo_cf_model.pkl'), 'rb') as f:
+            turbo_cf_model = pickle.load(f)
         print("  模型加载完成")
 
-        csv_path_user = export_users_recommendations_csv(svd_model, item_cf_model, top_n=top_n)
-        csv_path_movie = export_movies_similarities_csv(item_cf_model, top_n=top_n)
+        # 多算法用户推荐导出
+        user_csv_paths = export_all_algorithms_users_csv(
+            svd_model, user_cf_model, item_cf_model, turbo_cf_model, top_n=top_n
+        )
 
-        sql_path_user = generate_sql_from_csv(csv_path_user, 'user') if csv_path_user else None
-        sql_path_movie = generate_sql_from_csv(csv_path_movie, 'movie') if csv_path_movie else None
+        # 多算法电影相似度导出
+        movie_csv_paths = export_all_movies_similarities_csv(
+            item_cf_model, turbo_cf_model, top_n=top_n
+        )
 
+        # SQL 生成（每个 CSV 独立生成）
+        all_sql_paths = []
+        for algo, csv_path in user_csv_paths.items():
+            all_sql_paths.append(generate_sql_from_csv(csv_path, 'user', algo))
+        for algo, csv_path in movie_csv_paths.items():
+            if csv_path:
+                all_sql_paths.append(generate_sql_from_csv(csv_path, 'movie', algo))
+
+        # JSON 导出（兼容旧格式）
         export_caches_to_qdrant_json(svd_model, item_cf_model, top_n=top_n)
 
         total_time = time.time() - overall_start
@@ -681,43 +839,60 @@ turbo_cf             {turbo_cf_model.get('rmse', 0):.4f}       {turbo_cf_model.g
 模型已保存至: {MODEL_DIR}
 """)
 
-    # ── 导出 ──
+    # ── 多算法导出 ──
     print(f"\n{'=' * 60}")
-    print(f"  自动导出缓存数据（MySQL/Qdrant 可导入格式）")
+    print(f"  自动导出缓存数据（多算法 + 混合推荐）")
     print(f"{'=' * 60}")
 
     export_start = time.time()
 
-    csv_path_user = export_users_recommendations_csv(svd_model, item_cf_model, top_n=top_n)
-    csv_path_movie = export_movies_similarities_csv(item_cf_model, top_n=top_n)
+    # 导出四种算法的用户推荐 CSV + 混合推荐
+    user_csv_paths = export_all_algorithms_users_csv(
+        svd_model, user_cf_model, item_cf_model, turbo_cf_model, top_n=top_n
+    )
 
-    sql_path_user = generate_sql_from_csv(csv_path_user, 'user') if csv_path_user else None
-    sql_path_movie = generate_sql_from_csv(csv_path_movie, 'movie') if csv_path_movie else None
+    # 导出电影相似度 CSV
+    movie_csv_paths = export_all_movies_similarities_csv(
+        item_cf_model, turbo_cf_model, top_n=top_n
+    )
 
+    # SQL 生成
+    all_sql_paths = []
+    for algo, csv_path in user_csv_paths.items():
+        all_sql_paths.append(generate_sql_from_csv(csv_path, 'user', algo))
+    for algo, csv_path in movie_csv_paths.items():
+        if csv_path:
+            all_sql_paths.append(generate_sql_from_csv(csv_path, 'movie', algo))
+
+    # JSON 导出（兼容旧格式）
     export_caches_to_qdrant_json(svd_model, item_cf_model, top_n=top_n)
 
     export_time = time.time() - export_start
 
+    # 生成导入指引（适配新表名）
     print(f"""
 {'=' * 60}
-  导入指引
+  导入指引（多算法 + 新表结构）
 {'=' * 60}
 
-  users_recommendations: CSV={csv_path_user}  SQL={sql_path_user}
-  movies_similarities:  CSV={csv_path_movie}  SQL={sql_path_movie}
+  用户推荐缓存表: user_recommendation_caches
+  物品相似度缓存表: item_similarity_caches
 
-  MySQL LOAD DATA:
-    LOAD DATA LOCAL INFILE '{csv_path_user}' REPLACE INTO TABLE users_recommendations
+  生成的 SQL 文件:
+""")
+    for sql_path in all_sql_paths:
+        if sql_path:
+            print(f"    - {os.path.basename(sql_path)}")
+
+    print(f"""
+  MySQL 导入示例（每个 CSV 独立导入）:
+    LOAD DATA LOCAL INFILE 'svd_users_recommendations.csv' REPLACE INTO TABLE user_recommendation_caches
     FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\\\\n'
     (user_id, recommend_movies, algorithm, updated_at);
 
-    LOAD DATA LOCAL INFILE '{csv_path_movie}' REPLACE INTO TABLE movies_similarities
+    LOAD DATA LOCAL INFILE 'item_cf_movies_similarities.csv' REPLACE INTO TABLE item_similarity_caches
     FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\\\\n'
-    (movie_id, similar_movies, updated_at);
-
-  JSON → save_to_cache.py:
-    python scripts/recommend/save_to_cache.py --batch-user {os.path.join(EXPORT_DIR, 'users_recommendations.json').replace(BASE_DIR, 'scripts/..').replace('\\\\', '/')}
-    python scripts/recommend/save_to_cache.py --input {os.path.join(EXPORT_DIR, 'movies_similarities.json').replace(BASE_DIR, 'scripts/..').replace('\\\\', '/')} --mode movie
+    (movie_id, similar_movies, algorithm, updated_at);
 """)
 
     total_time = time.time() - overall_start

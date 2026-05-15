@@ -30,7 +30,8 @@ const MAX_TOP_N = 200;          // 推荐数上限
 
 // 可用算法列表
 const AVAILABLE_ALGORITHMS = {
-  'hybrid': { name: '混合推荐 (Hybrid CF)', description: '融合 User-Based CF 与 Item-Based CF，支持自适应权重' },
+  'hybrid': { name: '混合推荐 (Hybrid CF)', description: '融合 SVD + UserCF + ItemCF + TurboCF 四种算法加权组合' },
+  'svd': { name: 'SVD 矩阵分解推荐', description: '基于矩阵分解的评分预测' },
   'user_cf': { name: '基于用户的协同过滤 (User-Based CF)', description: '基于相似用户的评分预测' },
   'item_cf': { name: '基于物品的协同过滤 (Item-Based CF)', description: '基于相似物品的评分预测' },
   'turbo_cf': { name: 'Turbo-CF (K-Means 聚类加速协同过滤)', description: 'K-Means 用户聚类压缩邻居搜索空间，O(U) → O(U/C) 加速' },

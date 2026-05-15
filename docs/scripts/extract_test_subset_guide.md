@@ -30,9 +30,9 @@
 
 ```bash
 cd scripts
-python extract_test_subset.py
+python export/extract_test_subset.py
 # 等效于:
-python extract_test_subset.py --users 0 --movies 0
+python export/extract_test_subset.py --users 0 --movies 0
 ```
 
   - 导出 **所有** 有评分行为的用户
@@ -48,7 +48,7 @@ python extract_test_subset.py --users 0 --movies 0
 
 ```bash
 # 示例：导出 1000 个最活跃用户 + 500 部最热门电影
-python extract_test_subset.py --users 1000 --movies 500
+python export/extract_test_subset.py --users 1000 --movies 500
 ```
 
 参数说明：
@@ -77,10 +77,10 @@ python extract_test_subset.py --users 1000 --movies 500
 
 ```bash
 # 全量用户 + 仅 5000 部热门电影（缩小测试集推荐候选范围）
-python extract_test_subset.py --users 0 --movies 5000
+python export/extract_test_subset.py --users 0 --movies 5000
 
 # 仅 5000 个用户 + 全量涉及电影
-python extract_test_subset.py --users 5000 --movies 0
+python export/extract_test_subset.py --users 5000 --movies 0
 ```
 
 ---
@@ -90,7 +90,7 @@ python extract_test_subset.py --users 5000 --movies 0
 ### 🅰 开发调试（最小测试集）
 
 ```bash
-python extract_test_subset.py --users 100 --movies 50
+python export/extract_test_subset.py --users 100 --movies 50
 ```
 
 - 最快导出（几秒完成）
@@ -100,7 +100,7 @@ python extract_test_subset.py --users 100 --movies 50
 ### 🅱 资源受限的服务器（中等测试集）
 
 ```bash
-python extract_test_subset.py --users 10000 --movies 3000
+python export/extract_test_subset.py --users 10000 --movies 3000
 ```
 
 - 64GB 内存机器可跑
@@ -110,7 +110,7 @@ python extract_test_subset.py --users 10000 --movies 3000
 ### 🅲 完整生产训练（全量导出）
 
 ```bash
-python extract_test_subset.py
+python export/extract_test_subset.py
 ```
 
 - 推荐在 128GB+ 机器上使用
@@ -126,7 +126,7 @@ python extract_test_subset.py
 ```bash
 # 步骤一：导出数据
 cd scripts
-python extract_test_subset.py --users 10000 --movies 3000
+python export/extract_test_subset.py --users 10000 --movies 3000
 
 # 步骤二：训练模型
 cd recommend

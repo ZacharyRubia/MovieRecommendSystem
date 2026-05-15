@@ -21,7 +21,8 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 // =============================================
 
 /**
- * 将用户推荐结果写回 users_recommendations 缓存表（异步，不阻塞）
+ * 将用户推荐结果写回 user_recommendation_caches 缓存表（异步，不阻塞）
+ * 新表支持多算法复合主键 (user_id, algorithm)
  */
 async function saveCacheUserRecommend(userId, recommendations, algorithm) {
   if (!recommendations || recommendations.length === 0) return;
@@ -32,7 +33,7 @@ async function saveCacheUserRecommend(userId, recommendations, algorithm) {
     }));
     const recommendJson = JSON.stringify(items);
     await query(
-      `REPLACE INTO users_recommendations (user_id, algorithm, recommend_movies, updated_at)
+      `REPLACE INTO user_recommendation_caches (user_id, algorithm, recommend_movies, updated_at)
        VALUES (?, ?, ?, NOW())`,
       [userId, algorithm, recommendJson]
     );
@@ -43,9 +44,10 @@ async function saveCacheUserRecommend(userId, recommendations, algorithm) {
 }
 
 /**
- * 将电影相似度结果写回 movies_similarities 缓存表（异步，不阻塞）
+ * 将电影相似度结果写回 item_similarity_caches 缓存表（异步，不阻塞）
+ * 新表支持多算法复合主键 (movie_id, algorithm)
  */
-async function saveCacheMovieSimilarity(movieId, similarMovies) {
+async function saveCacheMovieSimilarity(movieId, similarMovies, algorithm = 'item_cf') {
   if (!similarMovies || similarMovies.length === 0) return;
   try {
     const items = similarMovies.map(r => ({
@@ -54,11 +56,11 @@ async function saveCacheMovieSimilarity(movieId, similarMovies) {
     }));
     const similarJson = JSON.stringify(items);
     await query(
-      `REPLACE INTO movies_similarities (movie_id, similar_movies, updated_at)
-       VALUES (?, ?, NOW())`,
-      [movieId, similarJson]
+      `REPLACE INTO item_similarity_caches (movie_id, algorithm, similar_movies, updated_at)
+       VALUES (?, ?, ?, NOW())`,
+      [movieId, algorithm, similarJson]
     );
-    console.log(`[缓存写回] 电影 ${movieId} 相似度 ${items.length} 条`);
+    console.log(`[缓存写回] 电影 ${movieId} (${algorithm}) 相似度 ${items.length} 条`);
   } catch (err) {
     console.error(`[缓存写回] 电影 ${movieId} 失败:`, err.message);
   }
@@ -136,12 +138,15 @@ const cache = {
 const CACHE_TTL_MS = 60 * 60 * 1000; // 离线缓存有效期1小时
 
 /**
- * 从 movies_similarities 读取某部电影的相似电影列表
+ * 从 item_similarity_caches 读取某部电影的相似电影列表
+ * @param {number} movieId - 电影 ID
+ * @param {string} algorithm - 算法类型（默认 item_cf）
+ * @param {number} minSimilarity - 最小相似度阈值
  */
-async function getCachedSimilarMovies(movieId, minSimilarity = 0) {
+async function getCachedSimilarMovies(movieId, algorithm = 'item_cf', minSimilarity = 0) {
   const rows = await query(
-    'SELECT similar_movies, updated_at FROM movies_similarities WHERE movie_id = ?',
-    [movieId]
+    'SELECT similar_movies, updated_at FROM item_similarity_caches WHERE movie_id = ? AND algorithm = ?',
+    [movieId, algorithm]
   );
   if (!rows || rows.length === 0) return null;
   const row = rows[0];
@@ -161,15 +166,15 @@ async function getCachedSimilarMovies(movieId, minSimilarity = 0) {
 }
 
 /**
- * 从 movies_similarities 聚合 Item-Based 推荐
+ * 从 item_similarity_caches 聚合 Item-Based 推荐
  * 对用户已评分的每部电影，查找其相似电影，按评分加权聚合
  */
 async function getItemBasedFromCache(targetRatingMap, topN) {
   const movieIds = Array.from(targetRatingMap.keys());
-  // 批量查询这些电影的相似缓存
+  // 批量查询这些电影的相似缓存（使用 item_cf 算法）
   const placeholders = movieIds.map(() => '?').join(',');
   const rows = await query(
-    `SELECT movie_id, similar_movies FROM movies_similarities WHERE movie_id IN (${placeholders})`,
+    `SELECT movie_id, similar_movies FROM item_similarity_caches WHERE movie_id IN (${placeholders}) AND algorithm = 'item_cf'`,
     movieIds
   );
   if (!rows || rows.length === 0) return null;
@@ -210,12 +215,12 @@ async function getItemBasedFromCache(targetRatingMap, topN) {
 }
 
 /**
- * 从 users_recommendations 读取某用户的推荐列表
+ * 从 user_recommendation_caches 读取某用户的指定算法推荐列表
  */
-async function getCachedUserRecommend(userId) {
+async function getCachedUserRecommend(userId, algorithm = 'user_cf') {
   const rows = await query(
-    'SELECT recommend_movies, algorithm, updated_at FROM users_recommendations WHERE user_id = ?',
-    [userId]
+    'SELECT recommend_movies, algorithm, updated_at FROM user_recommendation_caches WHERE user_id = ? AND algorithm = ?',
+    [userId, algorithm]
   );
   if (!rows || rows.length === 0) return null;
   const row = rows[0];
@@ -681,7 +686,7 @@ async function userBasedCF(userId, k = DEFAULT_K, topN = DEFAULT_TOP_N) {
 
   console.log(`[User-Based CF] 完成: ${result.length} 个推荐, 耗时 ${Date.now() - startTime}ms`);
 
-  // [缓存写回] 实时计算结果异步写回 users_recommendations 表
+  // [缓存写回] 实时计算结果异步写回 user_recommendation_caches 表
   saveCacheUserRecommend(userId, result, 'user_cf');
 
   return result;
@@ -721,7 +726,7 @@ async function itemBasedCF(userId, k = DEFAULT_K, topN = DEFAULT_TOP_N) {
     targetRatingMap.set(r.movie_id, r.rating);
   }
 
-        // 0. 尝试使用离线 movies_similarities 缓存
+        // 0. 尝试使用离线 item_similarity_caches 缓存
   const cachedResults = await getItemBasedFromCache(targetRatingMap, topN);
   if (cachedResults) {
     console.log(`[Item-Based CF] 使用离线缓存 (item_cf), 耗时 ${Date.now() - startTime}ms`);
@@ -839,7 +844,7 @@ async function itemBasedCF(userId, k = DEFAULT_K, topN = DEFAULT_TOP_N) {
 
   console.log(`[Item-Based CF] 完成: ${result.length} 个推荐, 耗时 ${Date.now() - startTime}ms`);
 
-  // [缓存写回] 实时计算结果异步写回 users_recommendations 表
+  // [缓存写回] 实时计算结果异步写回 user_recommendation_caches 表
   saveCacheUserRecommend(userId, result, 'item_cf');
 
   return result;

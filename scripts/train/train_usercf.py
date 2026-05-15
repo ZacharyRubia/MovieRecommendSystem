@@ -28,7 +28,7 @@ os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
 import warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 os.makedirs(MODEL_DIR, exist_ok=True)

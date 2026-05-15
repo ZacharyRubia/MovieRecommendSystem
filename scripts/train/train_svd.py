@@ -27,7 +27,7 @@ os.environ["MKL_NUM_THREADS"] = str(_N_CPUS)
 os.environ["OPENBLAS_NUM_THREADS"] = str(_N_CPUS)
 
 # ─── 路径 ───
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 os.makedirs(MODEL_DIR, exist_ok=True)

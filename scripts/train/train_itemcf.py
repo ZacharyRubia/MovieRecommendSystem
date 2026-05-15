@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train_itemcf.py - 基于物品的协同过滤训练脚本（单线程串行版）
+train_itemcf.py - 基于物品的协同过滤训练脚本（极致性能优化版）
 
 核心设计：
   1. 稀疏矩阵存储电影-用户评分数据
-  2. 分块计算电影相似度（顺序执行，无并行）
-  3. RMSE 计算顺序执行，避免多进程/多线程开销
-  4. 内存可控，适合单机调试
+  2. 分块计算电影相似度（内部使用线程并行，限制 BLAS 线程=1）
+  3. RMSE 计算使用进程池并行，充分利用多核 CPU
+  4. 避免全量相似度矩阵，峰值内存可控
 """
 
 import os
@@ -22,18 +22,18 @@ from collections import defaultdict
 from scipy.sparse import csr_matrix
 from threadpoolctl import threadpool_limits
 
-# ─── CPU 控制：全局 BLAS 线程数设为 1，避免内部多线程 ──────────
-_N_CPUS = 1   # 改为单线程，你可手工改为 2 以启用少量线程
-os.environ["OMP_NUM_THREADS"] = str(_N_CPUS)
-os.environ["MKL_NUM_THREADS"] = str(_N_CPUS)
-os.environ["OPENBLAS_NUM_THREADS"] = str(_N_CPUS)
+# ─── CPU 控制：全局 BLAS 线程数设为 1，避免嵌套 ──────────────
+_N_CPUS = int(os.environ.get("TRAIN_N_JOBS", str(os.cpu_count() or 1)))
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
 
 import warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 # ─── 路径 ────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -72,7 +72,7 @@ def build_mappings(train_df):
 
 
 def _adjust_cosine_similarity(sparse_matrix, top_k=30, chunk_size=2000):
-    """分块计算 Adjusted Cosine Similarity（顺序执行，无并行）"""
+    """分块计算 Adjusted Cosine Similarity（线程并行 + 限制 BLAS 线程）"""
     from sklearn.metrics.pairwise import cosine_similarity
     from scipy.sparse import dia_matrix
 
@@ -90,23 +90,23 @@ def _adjust_cosine_similarity(sparse_matrix, top_k=30, chunk_size=2000):
 
     chunk_ranges = [(i, min(i + chunk_size, n_movies)) for i in range(0, n_movies, chunk_size)]
     n_chunks = len(chunk_ranges)
-    print(f"  分块计算: {chunk_size} 电影/块 × {n_chunks} 块 (顺序执行)")
+    print(f"  分块计算: {chunk_size} 电影/块 × {n_chunks} 块 (使用 {_N_CPUS} 线程)")
 
-    all_movie_sim = {}
-    for c_start, c_end in chunk_ranges:
+    def _process_chunk(c_start, c_end):
+        """单个分块处理（内层 BLAS 单线程）"""
+        chunk_rows = c_end - c_start
         chunk = normalized[c_start:c_end]
-        # 单线程 BLAS
         with threadpool_limits(limits=1, user_api='blas'):
             sim_chunk = cosine_similarity(chunk, normalized)
         np.maximum(sim_chunk, 0, out=sim_chunk)
 
-        chunk_rows = c_end - c_start
         for local_i in range(chunk_rows):
             global_i = c_start + local_i
             sim_chunk[local_i, global_i] = 0.0
 
         n_cols = sim_chunk.shape[1]
         actual_k = min(top_k, n_cols - 1)
+        result = {}
         if actual_k > 0:
             top_idx = np.argpartition(sim_chunk, -actual_k, axis=1)[:, -actual_k:]
             filtered = np.zeros_like(sim_chunk)
@@ -119,7 +119,17 @@ def _adjust_cosine_similarity(sparse_matrix, top_k=30, chunk_size=2000):
                 row = filtered[local_i]
                 pos = np.where(row > 0)[0]
                 if len(pos):
-                    all_movie_sim[global_i] = {int(j): float(row[j]) for j in pos}
+                    result[global_i] = {int(j): float(row[j]) for j in pos}
+        return result
+
+    from joblib import Parallel, delayed
+    chunk_results = Parallel(n_jobs=_N_CPUS, prefer='threads', verbose=0)(
+        delayed(_process_chunk)(c_start, c_end) for c_start, c_end in chunk_ranges
+    )
+
+    all_movie_sim = {}
+    for cr in chunk_results:
+        all_movie_sim.update(cr)
 
     print(f"  相似度计算完成: {len(all_movie_sim)} 部电影有相似邻居")
     return all_movie_sim
@@ -127,7 +137,7 @@ def _adjust_cosine_similarity(sparse_matrix, top_k=30, chunk_size=2000):
 
 def train_item_cf(train_df, n_neighbors=30, chunk_size=2000):
     print("\n" + "=" * 60)
-    print(f"[Item-CF 训练] 邻居数: {n_neighbors} | 分块大小: {chunk_size} | 模式: 单线程串行")
+    print(f"[Item-CF 训练] 邻居数: {n_neighbors} | 分块大小: {chunk_size} | 进程数(RMSE): {_N_CPUS}")
 
     start_time = time.time()
 
@@ -154,7 +164,7 @@ def train_item_cf(train_df, n_neighbors=30, chunk_size=2000):
     )
     print(f"  稀疏矩阵: ({n_movies}, {n_users}), 非零: {movie_user_sparse.nnz:,}")
 
-    # 4. 相似度计算（顺序分块）
+    # 4. 相似度计算（内部已并行）
     movie_sim = _adjust_cosine_similarity(
         movie_user_sparse,
         top_k=n_neighbors,
@@ -174,48 +184,63 @@ def train_item_cf(train_df, n_neighbors=30, chunk_size=2000):
             sim_nb_idx[mi, j] = nmi
             sim_nb_val[mi, j] = sim
 
-    # 将训练数据转为 numpy 数组
+    # 将训练数据转为 numpy 数组，方便子进程序列化（比传递 DataFrame 轻量）
     train_user_ids = train_df['user_id'].values.astype(np.int32)
     train_movie_ids = train_df['movie_id'].values.astype(np.int32)
     train_ratings = r_val
 
-    # ---------- 单线程批量预测（顺序执行所有样本）----------
+    # 定义预测函数（在子进程中运行）
+    def _predict_batch(batch_indices):
+        """批量预测，在独立进程中执行，内部不使用额外多线程"""
+        # 确保 BLAS 单线程（安全）
+        with threadpool_limits(limits=1, user_api='blas'):
+            n_batch = len(batch_indices)
+            preds = np.zeros(n_batch, dtype=np.float32)
+            for k, i in enumerate(batch_indices):
+                uid = train_user_ids[i]
+                mid = train_movie_ids[i]
+                ui = user2idx.get(uid)
+                mi = movie2idx.get(mid)
+
+                if mi is None:
+                    preds[k] = movie_means[mi] if mi is not None else 3.0
+                    continue
+
+                nb_cnt = sim_nb_cnt[mi]
+                if nb_cnt == 0:
+                    preds[k] = movie_means[mi]
+                    continue
+
+                nmi_arr = sim_nb_idx[mi, :nb_cnt]
+                sim_arr = sim_nb_val[mi, :nb_cnt]
+
+                # 从稀疏矩阵中获取邻居评分（向量化）
+                neighbor_vals = np.array([movie_user_sparse[nmi, ui] for nmi in nmi_arr], dtype=np.float32)
+                mask = neighbor_vals != 0
+                if not np.any(mask):
+                    preds[k] = movie_means[mi]
+                    continue
+
+                neighbor_ratings = neighbor_vals[mask] + movie_means[nmi_arr[mask]]
+                sim_used = sim_arr[mask]
+                numerator = float(np.sum(sim_used * (neighbor_ratings - movie_means[mi])))
+                denominator = float(np.sum(np.abs(sim_used)))
+                preds[k] = (numerator / denominator + movie_means[mi]) if denominator > 0 else movie_means[mi]
+            return preds
+
+    # 划分批次（每个批次交给一个进程）
     total = len(train_df)
-    print(f"  RMSE 计算: {total} 条样本，单线程顺序执行")
+    chunk_size_rmse = max(1000, total // (_N_CPUS * 2))
+    batches = [list(range(i, min(i + chunk_size_rmse, total))) for i in range(0, total, chunk_size_rmse)]
+    print(f"  RMSE 计算: {total} 条样本, {len(batches)} 批次, 使用 {_N_CPUS} 个进程")
 
-    # 为了减少内存碎片，可以一次性分配预测数组
-    pred_values = np.zeros(total, dtype=np.float32)
-    for i in range(total):
-        uid = train_user_ids[i]
-        mid = train_movie_ids[i]
-        ui = user2idx.get(uid)
-        mi = movie2idx.get(mid)
+    from joblib import Parallel, delayed
+    # 使用进程池，避免 GIL，彻底利用多核
+    results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
+        delayed(_predict_batch)(batch) for batch in batches
+    )
 
-        if mi is None:
-            pred_values[i] = movie_means[mi] if mi is not None else 3.0
-            continue
-
-        nb_cnt = sim_nb_cnt[mi]
-        if nb_cnt == 0:
-            pred_values[i] = movie_means[mi]
-            continue
-
-        nmi_arr = sim_nb_idx[mi, :nb_cnt]
-        sim_arr = sim_nb_val[mi, :nb_cnt]
-
-        # 获取邻居评分（向量化但循环较小）
-        neighbor_vals = np.array([movie_user_sparse[nmi, ui] for nmi in nmi_arr], dtype=np.float32)
-        mask = neighbor_vals != 0
-        if not np.any(mask):
-            pred_values[i] = movie_means[mi]
-            continue
-
-        neighbor_ratings = neighbor_vals[mask] + movie_means[nmi_arr[mask]]
-        sim_used = sim_arr[mask]
-        numerator = float(np.sum(sim_used * (neighbor_ratings - movie_means[mi])))
-        denominator = float(np.sum(np.abs(sim_used)))
-        pred_values[i] = (numerator / denominator + movie_means[mi]) if denominator > 0 else movie_means[mi]
-
+    pred_values = np.concatenate(results).astype(np.float32)
     rmse = float(np.sqrt(np.mean((pred_values - train_ratings) ** 2)))
     elapsed = time.time() - start_time
     print(f"  训练 RMSE: {rmse:.4f}")
@@ -269,19 +294,18 @@ def save_model(model, name='item_cf_model'):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Item-CF 模型训练（单线程串行版）')
+    parser = argparse.ArgumentParser(description='Item-CF 模型训练（进程并行 RMSE）')
     parser.add_argument('--n-neighbors', type=int, default=30, help='邻居数')
     parser.add_argument('--chunk-size', type=int, default=2000, help='分块大小')
-    parser.add_argument('--threads', type=int, default=1,
-                        help='BLAS 线程数（建议 1 或 2），默认 1')
+    parser.add_argument('--n-jobs', type=int, default=None, help='并行进程数（用于 RMSE）')
     args = parser.parse_args()
 
-    # 设置 BLAS 线程数
-    threads = args.threads
-    os.environ["OMP_NUM_THREADS"] = str(threads)
-    os.environ["MKL_NUM_THREADS"] = str(threads)
-    os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
-    print(f"[系统] BLAS 线程数: {threads} | 整体模式: 单进程串行")
+    if args.n_jobs is not None:
+        global _N_CPUS
+        _N_CPUS = args.n_jobs
+        os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
+
+    print(f"[系统] CPU 核心: {os.cpu_count()} | RMSE 使用进程数: {_N_CPUS}")
 
     overall_start = time.time()
     ratings_df = load_data()

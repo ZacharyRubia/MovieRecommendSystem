@@ -353,10 +353,10 @@
       
       <!-- 算法切换标签 -->
       <div id="aiTabContainer" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <button class="ai-tab-btn active" data-algorithm="hybrid" onclick="switchAiAlgorithm('hybrid')">混合推荐</button>
-        <button class="ai-tab-btn" data-algorithm="svd" onclick="switchAiAlgorithm('svd')">SVD 模型</button>
+        <button class="ai-tab-btn active" data-algorithm="svd" onclick="switchAiAlgorithm('svd')">SVD 模型</button>
         <button class="ai-tab-btn" data-algorithm="user_cf" onclick="switchAiAlgorithm('user_cf')">User-CF 模型</button>
         <button class="ai-tab-btn" data-algorithm="item_cf" onclick="switchAiAlgorithm('item_cf')">Item-CF 模型</button>
+        <button class="ai-tab-btn" data-algorithm="turbo_cf" onclick="switchAiAlgorithm('turbo_cf')">Turbo-CF 模型</button>
         <span id="aiStatusBadge" style="margin-left:auto;font-size:13px;color:#888;padding:6px 0;"></span>
       </div>
       
@@ -610,7 +610,7 @@
     // AI 模型推荐（独立区域，切换算法）
     // =============================================
 
-    let currentAiAlgorithm = 'hybrid';
+    let currentAiAlgorithm = 'svd';
     let aiModelMeta = null;
 
     /**
@@ -674,10 +674,10 @@
       const container = document.getElementById('aiRecommendContainer');
       const userId = currentUser.id;
       const algorithmNames = {
-        'hybrid': '混合推荐',
         'svd': 'SVD 模型',
         'user_cf': 'User-CF 模型',
-        'item_cf': 'Item-CF 模型'
+        'item_cf': 'Item-CF 模型',
+        'turbo_cf': 'Turbo-CF 模型'
       };
 
       container.innerHTML = `<div class="recommend-loading">🤖 正在使用 ${algorithmNames[currentAiAlgorithm] || currentAiAlgorithm} 生成推荐...</div>`;

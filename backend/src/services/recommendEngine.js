@@ -314,16 +314,18 @@ function recommendTurboCF(model, userId, topN = 10) {
 }
 
 // ============================================================
-// Hybrid Recommendation
+// Hybrid Recommendation (4种算法: SVD + UserCF + ItemCF + TurboCF)
 // ============================================================
-function recommendHybrid(modelSVD, modelUserCF, modelItemCF, userId, topN = 10, weights) {
-  if (!weights) weights = { svd: 0.4, user_cf: 0.3, item_cf: 0.3 };
+function recommendHybrid(modelSVD, modelUserCF, modelItemCF, modelTurboCF, userId, topN = 10, weights) {
+  // 四项加权：SVD 理论精度最高权重较大，TurboCF 速度最快但精度稍低
+  if (!weights) weights = { svd: 0.35, user_cf: 0.20, item_cf: 0.25, turbo_cf: 0.20 };
 
   const nCandidates = topN * 3;
 
   let svdResults = [];
   let userCFResults = [];
   let itemCFResults = [];
+  let turboCFResults = [];
 
   try { svdResults = recommendSVD(modelSVD, userId, nCandidates); }
   catch (e) { console.error('  SVD recommend failed:', e.message); }
@@ -333,6 +335,9 @@ function recommendHybrid(modelSVD, modelUserCF, modelItemCF, userId, topN = 10, 
 
   try { itemCFResults = recommendItemCF(modelItemCF, userId, nCandidates); }
   catch (e) { console.error('  Item-CF recommend failed:', e.message); }
+
+  try { turboCFResults = recommendTurboCF(modelTurboCF, userId, nCandidates); }
+  catch (e) { console.error('  Turbo-CF recommend failed:', e.message); }
 
   const scoreMap = {};
   const weightSumMap = {};
@@ -348,6 +353,7 @@ function recommendHybrid(modelSVD, modelUserCF, modelItemCF, userId, topN = 10, 
   addScores(svdResults, weights.svd);
   addScores(userCFResults, weights.user_cf);
   addScores(itemCFResults, weights.item_cf);
+  addScores(turboCFResults, weights.turbo_cf);
 
   const finalScores = [];
   for (const [mid, totalScore] of Object.entries(scoreMap)) {
@@ -366,7 +372,7 @@ function recommendHybrid(modelSVD, modelUserCF, modelItemCF, userId, topN = 10, 
 async function getCachedRecommendation(userId, algorithm) {
   try {
     const rows = await query(
-      "SELECT recommend_movies, algorithm, updated_at FROM users_recommendations WHERE user_id = ? AND algorithm = ? ORDER BY updated_at DESC LIMIT 1",
+      "SELECT recommend_movies, algorithm, updated_at FROM user_recommendation_caches WHERE user_id = ? AND algorithm = ? LIMIT 1",
       [userId, algorithm]
     );
     if (rows.length === 0) return null;
@@ -392,6 +398,30 @@ async function getCachedRecommendation(userId, algorithm) {
   }
 }
 
+
+/**
+ * 查询电影相似度缓存（item_similarity_caches）
+ */
+async function getCachedMovieSimilarity(movieId, algorithm = 'item_cf') {
+  try {
+    const rows = await query(
+      "SELECT similar_movies, algorithm, updated_at FROM item_similarity_caches WHERE movie_id = ? AND algorithm = ? LIMIT 1",
+      [movieId, algorithm]
+    );
+    if (rows.length === 0) return null;
+
+    const row = rows[0];
+    const items = typeof row.similar_movies === 'string'
+      ? JSON.parse(row.similar_movies)
+      : row.similar_movies;
+
+    return { items, algorithm: row.algorithm, movieId };
+  } catch (e) {
+    console.error(`[Cache] Movie similarity query failed: ${e.message}`);
+    return null;
+  }
+}
+
 async function saveResultToCache(userId, recommendations, algorithm) {
   try {
     const items = recommendations.map(r => ({
@@ -401,7 +431,7 @@ async function saveResultToCache(userId, recommendations, algorithm) {
     const recommendJson = JSON.stringify(items);
 
     await query(
-      "INSERT INTO users_recommendations (user_id, algorithm, recommend_movies, updated_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE recommend_movies = VALUES(recommend_movies), updated_at = NOW()",
+      "REPLACE INTO user_recommendation_caches (user_id, algorithm, recommend_movies, updated_at) VALUES (?, ?, ?, NOW())",
       [userId, algorithm, recommendJson]
     );
     console.log(`[Cache] Saved user ${userId}, algo: ${algorithm}, items: ${items.length}`);
@@ -443,7 +473,8 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
     const modelSVD = _models['svd'] || await loadModelAsync('svd');
     const modelUserCF = _models['user_cf'] || await loadModelAsync('user_cf');
     const modelItemCF = _models['item_cf'] || await loadModelAsync('item_cf');
-    results = recommendHybrid(modelSVD, modelUserCF, modelItemCF, userId, topN);
+    const modelTurboCF = _models['turbo_cf'] || await loadModelAsync('turbo_cf');
+    results = recommendHybrid(modelSVD, modelUserCF, modelItemCF, modelTurboCF, userId, topN);
   } else if (algorithm === 'svd') {
     results = recommendSVD(await loadModelAsync('svd'), userId, topN);
   } else if (algorithm === 'user_cf') {

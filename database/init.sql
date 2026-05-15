@@ -206,32 +206,37 @@ CREATE TABLE IF NOT EXISTS `comments` (
     INDEX `idx_parent_id` (`parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论表';
 
+-- ============================================
+-- 16. 清理旧表（若存在）
+-- ============================================
+DROP TABLE IF EXISTS `users_recommendations`;
+DROP TABLE IF EXISTS `movies_similarities`;
 
 -- ============================================
--- 17. 电影相似度缓存表 (movies_similarities)
--- 对应 recommend_export_evaluation 方案中的实际表名
--- Item-Based CF 离线计算结果
+-- 17. 物品相似度缓存表 (item_similarity_caches)
+-- 支持：ItemCF, TurboCF, 基于内容的相似度等
 -- ============================================
-CREATE TABLE IF NOT EXISTS `movies_similarities` (
-    `movie_id` BIGINT UNSIGNED PRIMARY KEY COMMENT '电影ID',
-    `similar_movies` JSON NOT NULL COMMENT '相似电影列表(JSON，含movie_id和similarity)',
+CREATE TABLE IF NOT EXISTS `item_similarity_caches` (
+    `movie_id` BIGINT UNSIGNED NOT NULL COMMENT '电影ID',
+    `algorithm` VARCHAR(20) NOT NULL COMMENT '算法类型（item_cf / turbo_cf / content_based 等）',
+    `similar_movies` JSON NOT NULL COMMENT '相似电影列表(JSON，含movie_id和score)',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '离线计算更新时间',
+    PRIMARY KEY (`movie_id`, `algorithm`),
     FOREIGN KEY (`movie_id`) REFERENCES `movies`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='电影相似度缓存表（离线计算结果）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物品相似度缓存表（多算法）';
 
-
-/* ============================================
-   18. 用户推荐缓存表 (users_recommendations)
-   对应 recommend_export_evaluation 方案中的实际表名
-   SVD / 混合推荐离线计算结果
-============================================ */
-CREATE TABLE IF NOT EXISTS `users_recommendations` (
-    `user_id` BIGINT UNSIGNED PRIMARY KEY COMMENT '用户ID',
+-- ============================================
+-- 18. 用户推荐缓存表 (user_recommendation_caches)
+-- 支持：SVD, UserCF, ItemCF, TurboCF, 混合推荐等
+-- ============================================
+CREATE TABLE IF NOT EXISTS `user_recommendation_caches` (
+    `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+    `algorithm` VARCHAR(20) NOT NULL COMMENT '算法类型（svd / user_cf / item_cf / turbo_cf / hybrid 等）',
     `recommend_movies` JSON NOT NULL COMMENT '推荐电影列表(JSON，含movie_id和score)',
-    `algorithm` VARCHAR(20) NOT NULL COMMENT '算法类型（svd / user_cf / item_cf / hybrid 等）',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '离线计算更新时间',
+    PRIMARY KEY (`user_id`, `algorithm`),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户推荐缓存表（离线计算结果）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户推荐缓存表（多算法）';
 
 -- ============================================
 -- 创建完成提示
