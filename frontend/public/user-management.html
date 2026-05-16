@@ -926,6 +926,48 @@
     </div>
   </div>
 
+  <!-- ==================== 用户编辑 模态框 ==================== -->
+  <div class="modal" id="userEditModal">
+    <div class="modal-content" style="max-width:500px;">
+      <div class="modal-header">
+        <h3 id="userEditModalTitle">编辑用户</h3>
+        <button class="modal-close" onclick="closeModal('userEditModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- 用户基本信息 -->
+        <div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;">
+          <p style="font-size:16px;font-weight:600;color:#111;" id="userEditDisplayName"></p>
+          <p style="font-size:13px;color:#888;margin-top:5px;" id="userEditDisplayRole"></p>
+        </div>
+
+        <!-- 角色管理 -->
+        <div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;">
+          <h4 style="font-size:14px;color:#111;margin-bottom:10px;">角色管理</h4>
+          <button class="btn btn-sm" id="userEditRoleBtn" style="padding:8px 16px;font-size:13px;"></button>
+        </div>
+
+        <!-- 密码重置 -->
+        <div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;">
+          <h4 style="font-size:14px;color:#111;margin-bottom:10px;">重置密码</h4>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input type="password" id="userEditPassword" placeholder="输入新密码" style="flex:1;padding:8px 12px;border:2px solid #ddd;border-radius:6px;font-size:14px;outline:none;" onfocus="this.style.borderColor='#111'" onblur="this.style.borderColor='#ddd'">
+            <button class="btn btn-sm btn-primary" onclick="resetUserPassword()" style="white-space:nowrap;">确认重置</button>
+          </div>
+        </div>
+
+        <!-- 删除用户 -->
+        <div>
+          <h4 style="font-size:14px;color:#cc0000;margin-bottom:10px;">危险操作</h4>
+          <button class="btn btn-sm btn-delete" onclick="deleteCurrentUser()" style="padding:8px 16px;font-size:13px;">删除该用户</button>
+          <p style="font-size:12px;color:#999;margin-top:8px;">删除后无法恢复，请谨慎操作。</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('userEditModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 删除确认 模态框 ==================== -->
   <div class="modal" id="deleteModal">
     <div class="modal-content" style="max-width:400px;">
@@ -1744,11 +1786,7 @@
           <td>${user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-'}</td>
           <td>
             <div class="table-actions">
-              ${user.role_id === 1
-                ? `<button class="btn btn-sm btn-edit" onclick="changeRole(${user.id}, 2)">降级为用户</button>`
-                : `<button class="btn btn-sm btn-success" onclick="changeRole(${user.id}, 1)">升级为管理员</button>`
-              }
-              <button class="btn btn-sm btn-delete" onclick="confirmDelete('user', ${user.id}, '${escapeHtml(user.username)}')">删除</button>
+              <button class="btn btn-sm btn-edit" onclick="openUserEditModal(${user.id})">编辑</button>
             </div>
           </td>
         `;
@@ -1758,7 +1796,39 @@
 
     document.getElementById('userSearch').addEventListener('input', () => renderUsers(allUsers));
 
-    async function changeRole(userId, newRoleId) {
+    // ==================== 用户编辑弹窗 ====================
+    let userEditTarget = null;
+
+    function openUserEditModal(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) { showToast('未找到该用户', 'error'); return; }
+
+      userEditTarget = user;
+
+      // 显示用户基本信息
+      document.getElementById('userEditDisplayName').textContent = user.username;
+      const roleText = user.role_id === 1 ? '管理员' : '普通用户';
+      document.getElementById('userEditDisplayRole').textContent = `当前角色：${roleText}`;
+
+      // 设置角色切换按钮
+      const roleBtn = document.getElementById('userEditRoleBtn');
+      if (user.role_id === 1) {
+        roleBtn.textContent = '降级为普通用户';
+        roleBtn.className = 'btn btn-sm btn-warning';
+        roleBtn.onclick = function() { changeUserRole(user.id, 2); };
+      } else {
+        roleBtn.textContent = '升级为管理员';
+        roleBtn.className = 'btn btn-sm btn-success';
+        roleBtn.onclick = function() { changeUserRole(user.id, 1); };
+      }
+
+      // 清空密码输入框
+      document.getElementById('userEditPassword').value = '';
+
+      document.getElementById('userEditModal').classList.add('active');
+    }
+
+    async function changeUserRole(userId, newRoleId) {
       const user = allUsers.find(u => u.id === userId);
       const action = newRoleId === 1 ? '升级' : '降级';
       if (!confirm(`确定要将用户 "${user.username}" ${action}为${newRoleId === 1 ? '管理员' : '普通用户'}吗？`)) return;
@@ -1770,12 +1840,53 @@
           body: JSON.stringify({ role_id: newRoleId })
         });
         const data = await res.json();
-        if (data.success) { showToast(data.message, 'success'); loadUsers(); }
-        else { showToast(data.message, 'error'); }
+        if (data.success) {
+          showToast(data.message, 'success');
+          closeModal('userEditModal');
+          loadUsers();
+        } else {
+          showToast(data.message, 'error');
+        }
       } catch (err) {
         console.error('更改角色失败:', err);
         showToast('网络错误，更改角色失败', 'error');
       }
+    }
+
+    async function resetUserPassword() {
+      const user = userEditTarget;
+      if (!user) { showToast('未指定用户', 'error'); return; }
+
+      const newPassword = document.getElementById('userEditPassword').value.trim();
+      if (!newPassword) { showToast('请输入新密码', 'error'); return; }
+      if (newPassword.length < 6) { showToast('密码长度不能少于6位', 'error'); return; }
+
+      try {
+        const res = await fetch(`${USER_API}/users/${user.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: newPassword })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('密码重置成功', 'success');
+          document.getElementById('userEditPassword').value = '';
+        } else {
+          showToast(data.message || '密码重置失败', 'error');
+        }
+      } catch (err) {
+        console.error('重置密码失败:', err);
+        showToast('网络错误，重置密码失败', 'error');
+      }
+    }
+
+    function deleteCurrentUser() {
+      const user = userEditTarget;
+      if (!user) { showToast('未指定用户', 'error'); return; }
+
+      closeModal('userEditModal');
+      // 复用已有的 confirmDelete 函数
+      confirmDelete('user', user.id, user.username);
     }
 
     function openUserModal(mode = 'add', userData = null) {
