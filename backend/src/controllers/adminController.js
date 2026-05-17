@@ -34,7 +34,7 @@ exports.getAllMovies = async (req, res) => {
       params.push(`%${search}%`);
     }
     
-    sql += ` GROUP BY m.id ORDER BY m.created_at DESC LIMIT ? OFFSET ?`;
+    sql += ` GROUP BY m.id ORDER BY m.id ASC LIMIT ? OFFSET ?`;
     params.push(pageSize, parseInt(offset));
     
     const movies = await db.query(sql, params);
