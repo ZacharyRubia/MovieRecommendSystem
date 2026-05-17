@@ -1,6 +1,6 @@
 # Scripts 目录脚本汇总
 
-> 更新时间：2026-05-13
+> 更新时间：2026-05-17
 
 ## 目录结构
 
@@ -129,9 +129,29 @@ scripts/
 
 ---
 
-## 五、测试与评估
+## 五、混合推荐权重优化评估
 
-### 12. `test_recommend.py`
+### 12. `evaluate_hybrid_weights.py`
+- **位置**：`scripts/evaluation/evaluate_hybrid_weights.py`
+- **用途**：混合推荐算法权重优化评估脚本，通过网格搜索/随机搜索找出最优权重组合
+- **评估指标**：RMSE、MAE、Precision@K、Recall@K、F1@K、Coverage
+- **运行模式**：
+  - `--mode 2`（默认）：双模型模式（User-CF + Item-CF），网格搜索
+  - `--mode all`：全模型模式（7 个子模型），随机搜索
+- **输出目录**：`scripts/evaluation_results/hybrid_weights/`
+- **输出文件**：`evaluation_results.json`、`optimal_weights.json`、`weight_optimization.csv`、`pareto_frontier.csv`、`weight_vs_metrics.json`、`analysis_points/`
+- **用法**：
+  ```
+  python scripts/evaluation/evaluate_hybrid_weights.py
+  python scripts/evaluation/evaluate_hybrid_weights.py --mode all --n-random 200
+  python scripts/evaluation/evaluate_hybrid_weights.py --grid-step 0.02 --test-size 5000
+  ```
+
+---
+
+## 六、测试与评估
+
+### 13. `test_recommend.py`
 - **用途**：推荐系统全面评估测试
 - **评估指标**：RMSE、MAE、Precision@K、Recall@K、Coverage、Diversity
 - **可视化**：生成评估图表
@@ -142,19 +162,19 @@ scripts/
   python test_recommend.py --demo    # 仅展示推荐样例
   ```
 
-### 13. `test_recommend_pipeline.ps1`（PowerShell）
+### 14. `test_recommend_pipeline.ps1`（PowerShell）
 - **用途**：推荐系统端到端 E2E 测试脚本
 - **测试链路**：Python AI 推荐服务 (5100) → Node.js 后端代理 (3000)
 - **测试模型**：SVD / User-CF / Item-CF / Hybrid
 - **用法**：`.\test_recommend_pipeline.ps1`
 
-### 14. `test_pipeline_simple.ps1`（PowerShell）
+### 15. `test_pipeline_simple.ps1`（PowerShell）
 - **用途**：简化的 E2E 测试（步骤更少，快速验证）
 - **用法**：`.\test_pipeline_simple.ps1`
 
 ---
 
-## 六、已删除的过时脚本
+## 七、已删除的过时脚本
 
 以下脚本已被删除，理由如下：
 

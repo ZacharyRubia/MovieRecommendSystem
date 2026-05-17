@@ -30,9 +30,14 @@ scripts/export/
 scripts/tmp/
 scripts/extract_test_subset_test/
 /export/
+scripts/evaluation_results/
 
 
 /docs/lywf
 
 # dataset
 dataset/
+
+# 日志文件
+scripts/train/logs/
+__pycache__/

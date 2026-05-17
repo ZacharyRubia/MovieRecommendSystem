@@ -19,6 +19,7 @@ from collections import defaultdict
 from datetime import datetime
 from scipy.sparse import csr_matrix
 from sklearn.decomposition import TruncatedSVD
+from train_logger import log_output, verbose_init, verbose_step, verbose_close
 
 # ─── CPU 线程控制 ───
 _N_CPUS = int(os.environ.get("TRAIN_N_JOBS", str(os.cpu_count() or 1)))
@@ -33,21 +34,27 @@ MODEL_DIR = os.path.join(BASE_DIR, 'models')
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 
-def load_data():
+def load_data(verbose=False):
     print("=" * 60)
+    verbose_step("数据加载", "开始读取评分数据文件...", verbose)
     print("[加载数据] 读取评分数据...")
     ratings_df = pd.read_csv(
         os.path.join(DATA_DIR, 'test_ratings.csv'),
         dtype={'user_id': np.int32, 'movie_id': np.int32, 'rating': np.float32},
     )
-    print(f"  评分数据: {len(ratings_df)} 条, "
-          f"用户 {ratings_df['user_id'].nunique()} 个, "
-          f"电影 {ratings_df['movie_id'].nunique()} 部")
+    n_records = len(ratings_df)
+    n_users = ratings_df['user_id'].nunique()
+    n_movies = ratings_df['movie_id'].nunique()
+    print(f"  评分数据: {n_records} 条, "
+          f"用户 {n_users} 个, "
+          f"电影 {n_movies} 部")
+    verbose_step("数据加载", f"完成: {n_records} 条, {n_users} 用户, {n_movies} 电影", verbose)
     return ratings_df
 
 
-def build_sparse_matrix(train_df):
+def build_sparse_matrix(train_df, verbose=False):
     """构建稀疏评分矩阵（内存友好）"""
+    verbose_step("矩阵构建", "开始构建用户-电影映射表...", verbose)
     all_users = np.sort(train_df['user_id'].unique())
     all_movies = np.sort(train_df['movie_id'].unique())
     user2idx = {int(uid): i for i, uid in enumerate(all_users)}
@@ -56,12 +63,15 @@ def build_sparse_matrix(train_df):
     idx2movie = {i: int(mid) for mid, i in movie2idx.items()}
     n_users = len(all_users)
     n_movies = len(all_movies)
+    verbose_step("矩阵构建", f"映射表完成: {n_users} 用户, {n_movies} 电影", verbose)
 
+    verbose_step("矩阵构建", "构建索引数组...", verbose)
     u_idx = np.array([user2idx[uid] for uid in train_df['user_id']], dtype=np.int32)
     m_idx = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
     r_val = train_df['rating'].values.astype(np.float32)
 
     # 用户均值（向量化）
+    verbose_step("矩阵构建", "计算用户均值（向量化运算）...", verbose)
     user_means = np.zeros(n_users, dtype=np.float32)
     np.add.at(user_means, u_idx, r_val)
     counts = np.bincount(u_idx, minlength=n_users).astype(np.float32)
@@ -69,16 +79,18 @@ def build_sparse_matrix(train_df):
     user_means /= counts
 
     # 去均值后的稀疏矩阵
+    verbose_step("矩阵构建", "构建去均值稀疏矩阵 CSR 格式...", verbose)
     centered_vals = r_val - user_means[u_idx]
     sparse_R = csr_matrix(
         (centered_vals, (u_idx, m_idx)),
         shape=(n_users, n_movies),
         dtype=np.float32
     )
+    verbose_step("矩阵构建", f"稀疏矩阵构建完成: ({n_users}, {n_movies}), 非零: {sparse_R.nnz:,}", verbose)
     return sparse_R, user_means, user2idx, movie2idx, idx2user, idx2movie, n_users, n_movies
 
 
-def train_svd(train_df, n_factors=50):
+def train_svd(train_df, n_factors=50, verbose=False):
     """
     SVD 训练（稀疏矩阵 + TruncatedSVD，内存友好）
     全量 20万×8万 数据，峰值 ~8-10 GB
@@ -88,13 +100,16 @@ def train_svd(train_df, n_factors=50):
 
     start_time = time.time()
 
+    verbose_step("SVD训练", "构建稀疏评分矩阵...", verbose)
     sparse_R, user_means, user2idx, movie2idx, idx2user, idx2movie, n_users, n_movies = \
-        build_sparse_matrix(train_df)
+        build_sparse_matrix(train_df, verbose=verbose)
 
     print(f"  稀疏矩阵形状: ({n_users}, {n_movies}), "
           f"非零元素: {sparse_R.nnz:,}")
+    verbose_step("SVD训练", f"稀疏矩阵: ({n_users}, {n_movies}), 非零: {sparse_R.nnz:,}", verbose)
 
     k = min(n_factors, min(n_users, n_movies) - 1)
+    verbose_step("SVD训练", f"执行 TruncatedSVD, n_components={k}", verbose)
     svd = TruncatedSVD(
         n_components=k,
         algorithm='randomized',
@@ -106,11 +121,14 @@ def train_svd(train_df, n_factors=50):
     explained_variance = float(svd.explained_variance_ratio_.sum())
     print(f"  解释方差比: {explained_variance:.4f}")
     print(f"  用户隐向量: {user_features.shape}, 电影隐向量: {movie_features.shape}")
+    verbose_step("SVD训练", f"SVD完成: 解释方差比={explained_variance:.4f}, 用户隐向量 {user_features.shape}, 电影隐向量 {movie_features.shape}", verbose)
 
     # ─── RMSE 计算 ───
+    verbose_step("RMSE计算", "开始计算训练集 RMSE...", verbose)
     u_idx = np.array([user2idx[uid] for uid in train_df['user_id']], dtype=np.int32)
     m_idx = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
     r_val = train_df['rating'].values.astype(np.float32)
+    verbose_step("RMSE计算", f"索引数组构建完成, 共 {len(r_val)} 条评分", verbose)
 
     pred = np.sum(user_features[u_idx] * movie_features[m_idx], axis=1) + user_means[u_idx]
     rmse = float(np.sqrt(np.mean((pred - r_val) ** 2)))
@@ -118,6 +136,8 @@ def train_svd(train_df, n_factors=50):
     elapsed = time.time() - start_time
     print(f"  训练 RMSE: {rmse:.4f}")
     print(f"  SVD 训练耗时: {elapsed:.2f} 秒")
+    verbose_step("RMSE计算", f"RMSE={rmse:.4f}", verbose)
+    verbose_step("SVD训练", f"训练完成, 总耗时: {elapsed:.2f} 秒", verbose)
 
     return {
         'algorithm': 'svd',
@@ -138,20 +158,24 @@ def train_svd(train_df, n_factors=50):
     }
 
 
-def save_model(model, name='svd_model'):
+def save_model(model, name='svd_model', verbose=False):
     path = os.path.join(MODEL_DIR, f'{name}.pkl')
     print(f"\n[保存模型] {path}")
+    verbose_step("模型保存", f"开始保存模型至 {path}...", verbose)
     with open(path, 'wb') as f:
         pickle.dump(model, f)
     size_mb = os.path.getsize(path) / (1024 * 1024)
     print(f"  模型大小: {size_mb:.2f} MB")
+    verbose_step("模型保存", f"模型文件大小: {size_mb:.2f} MB", verbose)
 
     # 保存元信息 JSON
+    verbose_step("模型保存", "保存元信息 JSON...", verbose)
     meta = {k: v for k, v in model.items() if isinstance(v, (str, int, float, bool, list))}
     meta_path = os.path.join(MODEL_DIR, f'{name}_meta.json')
     with open(meta_path, 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=2)
     print(f"  元数据: {meta_path}")
+    verbose_step("模型保存", f"元数据已保存至 {meta_path}", verbose)
     return path
 
 
@@ -159,6 +183,7 @@ def main():
     parser = argparse.ArgumentParser(description='SVD 模型训练（内存优化版）')
     parser.add_argument('--n-factors', type=int, default=50, help='隐因子数 (default: 50)')
     parser.add_argument('--n-jobs', type=int, default=None, help='并行线程数')
+    parser.add_argument('--verbose', action='store_true', help='输出详细步骤日志到 logs/verbose/')
     args = parser.parse_args()
 
     if args.n_jobs is not None:
@@ -166,24 +191,35 @@ def main():
         _N_CPUS = args.n_jobs
         os.environ["OMP_NUM_THREADS"] = str(_N_CPUS)
 
+    verbose_init('train_svd', args.verbose)
+
     print(f"[系统] CPU 核心: {os.cpu_count()} | 使用线程: {_N_CPUS}")
 
     overall_start = time.time()
 
     # 1. 加载数据
-    ratings_df = load_data()
+    verbose_step("数据加载", "从数据库加载评分数据...", args.verbose)
+    ratings_df = load_data(verbose=args.verbose)
+    verbose_step("数据加载完成", f"加载 {len(ratings_df)} 条评分记录", args.verbose)
 
     # 2. SVD 训练
-    model = train_svd(ratings_df, n_factors=args.n_factors)
+    verbose_step("开始训练", f"隐因子数={args.n_factors}", args.verbose)
+    model = train_svd(ratings_df, n_factors=args.n_factors, verbose=args.verbose)
+    verbose_step("训练完成", "SVD矩阵分解完成", args.verbose)
 
     # 3. 保存
-    save_model(model, 'svd_model')
+    verbose_step("保存模型", "持久化模型文件...", args.verbose)
+    save_model(model, 'svd_model', verbose=args.verbose)
+    verbose_step("模型保存完成", "模型已保存至 models/", args.verbose)
 
     total = time.time() - overall_start
     print(f"\n{'=' * 60}")
     print(f"  SVD 训练完成！总耗时: {total:.2f} 秒")
     print(f"{'=' * 60}\n")
+    verbose_step("全部完成", f"总耗时: {total:.2f} 秒", args.verbose)
+    verbose_close()
 
 
 if __name__ == '__main__':
-    main()
+    with log_output('train_svd'):
+        main()

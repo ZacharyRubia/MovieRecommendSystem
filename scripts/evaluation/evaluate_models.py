@@ -644,30 +644,37 @@ class TraditionalSlopeOne(BaseModel):
 class ImprovedSlopeOne(BaseModel):
     """
     改进 Slope One
-    - 邻域筛选: 先在 SVD 降维空间中找到用户的 Top-K 相似邻居
-      （用 sklearn.neighbors 在 SVD 降维后的空间上做）
-    - 公式 (3-5), (3-6): 局域偏差
-        dev_local(j,i) = (1 / |U_ji_local|) * Σ (r_uj - r_ui), u ∈ U_nb
-        pred(u,i) = (1 / |R_i_local|) * Σ (r_uj + dev_local(i,j)), j ∈ R_nb
-      其中 U_nb 是邻居集合，R_nb 是邻居中用户 u 已评分的物品
+    - 邻域筛选: 在 SVD 降维空间中找到用户的 Top-K 相似邻居
+    - 局域偏差（预测时按需计算）:
+        dev_local(i,j) = avg(r_ui - r_uj), u ∈ U_nb
+        pred(u,i) = avg(r_uj + dev_local(i,j)), j ∈ R_nb
+      其中 U_nb 是邻居集合，R_nb 是用户 u 已评分且邻居也评过目标物品 i 的物品
+    - 按需计算策略:
+        * 不预计算局域偏差表（避免 O(U·N·M²) 耗时）
+        * 预测时对每个 (i, j) 对实时计算邻居共同评分偏差
+        * 使用缓存避免同一用户多次预测时的重复计算
     """
-    def __init__(self, n_neighbors=30, svd_factors=50):
+    def __init__(self, n_neighbors=30, svd_factors=50, min_common=1):
         super().__init__('improved_slope_one')
         self.n_neighbors = n_neighbors
         self.svd_factors = svd_factors
+        self.min_common = min_common  # 局域偏差所需最低共同评分邻居数
 
     def train(self, ctx):
         print(f"\n{'=' * 60}")
-        print(f"[{self.name}] 训练: 邻域筛选 + 局域偏差...")
+        print(f"[{self.name}] 训练: SVD 降维 + 寻找邻居 + 全局偏差...")
         t0 = time.time()
 
         self.ctx = ctx
         n_users = ctx['n_users']
+        n_movies = ctx['n_movies']
         rating_matrix = ctx['rating_matrix']
         user_means = ctx['user_means']
+        all_users = ctx['all_users']
+        train_df = ctx['train_df']
 
-        # 1. SVD 降维找到用户邻居
-        k = min(self.svd_factors, min(ctx['n_users'], ctx['n_movies']) - 1)
+        # ── 1. SVD 降维找到用户邻居 ──
+        k = min(self.svd_factors, min(n_users, n_movies) - 1)
         centered = rating_matrix.copy().astype(np.float32)
         row_indices = np.repeat(np.arange(n_users), np.diff(rating_matrix.indptr))
         centered.data -= user_means[row_indices.astype(np.int32)]
@@ -687,63 +694,127 @@ class ImprovedSlopeOne(BaseModel):
         # 构建邻居集合 U_nb
         self.user_neighbor_sets = {}  # {uid: set(nb_uids)}
         for i in range(n_users):
-            uid = int(ctx['all_users'][i])
+            uid = int(all_users[i])
             nb_set = set()
             for j in range(1, min(self.n_neighbors + 1, n_users)):
-                nb_set.add(int(ctx['all_users'][indices[i, j]]))
+                nb_set.add(int(all_users[indices[i, j]]))
             self.user_neighbor_sets[uid] = nb_set
 
-        # 2. 计算局域偏差（只使用邻居用户的评分数据）
-        # 先构建邻居用户的评分数据子集
-        train_df = ctx['train_df']
-        self.local_deviation = {}  # {(mid_j, mid_i): dev}
-        self.local_frequency = {}  # {(mid_j, mid_i): count}
+        print(f"  邻居集合: {len(self.user_neighbor_sets)} 个用户, 各 {self.n_neighbors} 个邻居")
 
+        # ── 2. 预计算全局偏差（作为回退） ──
+        print(f"  计算全局偏差矩阵...")
         dev_sum = defaultdict(float)
         freq = defaultdict(int)
 
-        # 对每个用户，计算其邻居集合中共同评分的电影对
         for uid, group in train_df.groupby('user_id'):
-            uid_int = int(uid)
             movies = group['movie_id'].values
             ratings = group['rating'].values
             n = len(movies)
-
             if n < 2:
                 continue
-
             for a in range(n):
                 for b in range(a + 1, n):
                     mid_a = int(movies[a])
                     mid_b = int(movies[b])
                     diff = ratings[a] - ratings[b]
-
                     key_ab = (mid_a, mid_b)
                     dev_sum[key_ab] += diff
                     freq[key_ab] += 1
-
                     key_ba = (mid_b, mid_a)
                     dev_sum[key_ba] -= diff
                     freq[key_ba] += 1
 
+        self.global_deviation = {}
         for key, f in freq.items():
-            self.local_deviation[key] = dev_sum[key] / f
-            self.local_frequency[key] = f
+            self.global_deviation[key] = dev_sum[key] / f
+
+        # ── 3. 局域偏差不预计算，改为预测时按需生成 ──
+        # 缓存：{uid: {(target_mid, j_mid): dev}}
+        self._local_dev_cache = {}
+        self._local_freq_cache = {}
 
         self.trained = True
-        print(f"  邻居集合: {len(self.user_neighbor_sets)} 个用户")
-        print(f"  局域偏差对: {len(self.local_deviation)} 对")
+        print(f"  全局偏差对: {len(self.global_deviation)} 对（回退用）")
+        print(f"  局域偏差: 预测时按需计算（不预计算）")
         print(f"  耗时: {time.time() - t0:.2f}s")
+
+    def _compute_local_dev(self, uid, neighbors, mid, j_mid):
+        """
+        实时计算单个电影对的局域偏差 dev_local(mid, j_mid)
+        只遍历邻居集合，计算平均偏差差
+        返回: (dev, count) 或 (None, 0)
+        """
+        diff_sum = 0.0
+        count = 0
+        for nb_uid in neighbors:
+            nb_ratings = self.ctx['user_ratings_dict'].get(nb_uid, {})
+            r_i = nb_ratings.get(mid)
+            r_j = nb_ratings.get(j_mid)
+            if r_i is not None and r_j is not None:
+                diff_sum += r_i - r_j
+                count += 1
+        if count >= self.min_common:
+            return diff_sum / count, count
+        return None, count
+
+    def _batch_local_devs(self, neighbors, mid, j_mids):
+        """
+        批量计算局域偏差：一次扫描所有邻居，
+        收集目标电影 mid 和所有 j_mids 的评分
+        返回: {(mid, j_mid): (dev, count), ...}
+        """
+        # 对每个 (mid, j_mid) 累积 diff 和 count
+        dev_sum = defaultdict(float)
+        freq = defaultdict(int)
+        for nb_uid in neighbors:
+            nb_ratings = self.ctx['user_ratings_dict'].get(nb_uid, {})
+            r_mid = nb_ratings.get(mid)
+            if r_mid is None:
+                continue
+            for j_mid in j_mids:
+                r_j = nb_ratings.get(j_mid)
+                if r_j is not None:
+                    dev_sum[(mid, j_mid)] += r_mid - r_j
+                    freq[(mid, j_mid)] += 1
+        result = {}
+        for key, f in freq.items():
+            if f >= self.min_common:
+                result[key] = (dev_sum[key] / f, f)
+        return result
 
     def predict(self, user_id, movie_id):
         ctx = self.ctx
+        uid = user_id
         mid = movie_id
-        user_ratings = ctx['user_ratings_dict'].get(user_id, {})
+        user_ratings = ctx['user_ratings_dict'].get(uid, {})
 
         if not user_ratings:
             return float(ctx['movie_means'][ctx['movie2idx'].get(mid, 0)])
 
-        # 公式 (3-5), (3-6): 用邻居集合过滤后计算局域偏差
+        # 获取该用户的邻居集合
+        nb_set = self.user_neighbor_sets.get(uid, set())
+
+        # 如果没有邻居，直接使用全局偏差（回退到传统 Slope One）
+        if not nb_set:
+            num = 0.0
+            den = 0.0
+            for j_mid, r_uj in user_ratings.items():
+                if j_mid == mid:
+                    continue
+                key = (mid, j_mid)
+                if key in self.global_deviation:
+                    num += r_uj + self.global_deviation[key]
+                    den += 1.0
+            if den > 0:
+                return float(num / den)
+            return float(ctx['movie_means'][ctx['movie2idx'].get(mid, 0)])
+
+        # 公式 (3-5), (3-6): 邻域筛选 + 局域偏差预测
+        # 一次性扫描邻居，批量收集所有 (mid, j_mid) 对的局域偏差
+        j_mid_list = [j for j in user_ratings.keys() if j != mid]
+        local_devs = self._batch_local_devs(nb_set, mid, j_mid_list)
+
         num = 0.0
         den = 0.0
 
@@ -751,12 +822,45 @@ class ImprovedSlopeOne(BaseModel):
             if j_mid == mid:
                 continue
             key = (mid, j_mid)
-            if key in self.local_deviation:
-                num += r_uj + self.local_deviation[key]
+
+            if key in local_devs:
+                dev_val, cnt = local_devs[key]
+                # 使用局域偏差
+                pass  # dev_val 已就绪
+            elif key in self.global_deviation:
+                dev_val = self.global_deviation[key]
+            else:
+                continue
+
+            num += r_uj + dev_val
+            den += 1.0
+
+        # 策略 2: 如果正向偏差覆盖不足，尝试反向 (j_mid, mid) 取 -dev
+        if den < 1:
+            # 反向局域偏差：直接复用已计算的 local_devs
+            # dev_local(mid, j_mid) = -dev_local(j_mid, mid)
+            for j_mid, r_uj in user_ratings.items():
+                if j_mid == mid:
+                    continue
+                rev_key = (j_mid, mid)
+
+                # 先试局域（取反）
+                if rev_key in local_devs:
+                    dev_val = -local_devs[rev_key][0]
+                elif rev
+                    dev_val = -local_devs[rev_key][0]
+                elif rev_key in self.global_deviation:
+                    dev_val = -self.global_deviation[rev_key]
+                else:
+                    continue
+
+                num += r_uj + dev_val
                 den += 1.0
 
         if den > 0:
             return float(num / den)
+
+        # 完全无可用偏差时，回退到电影均值
         return float(ctx['movie_means'][ctx['movie2idx'].get(mid, 0)])
 
 

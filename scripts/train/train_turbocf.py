@@ -29,6 +29,7 @@ from scipy.sparse import csr_matrix, issparse
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
 from threadpoolctl import threadpool_limits
+from train_logger import log_output, verbose_init, verbose_step, verbose_close
 
 # ─── CPU 线程控制 ─────────────────────────────────────────────
 _N_CPUS = int(os.environ.get("TRAIN_N_JOBS", str(os.cpu_count() or 1)))
@@ -56,20 +57,26 @@ DEFAULT_EXTEND_RANGE = 1
 DEFAULT_N_NEIGHBORS = 30
 
 
-def load_data():
+def load_data(verbose=False):
     print("=" * 60)
+    verbose_step("数据加载", "开始读取评分数据文件...", verbose)
     print("[加载数据] 读取评分数据...")
     ratings_df = pd.read_csv(
         os.path.join(DATA_DIR, 'test_ratings.csv'),
         dtype={'user_id': np.int32, 'movie_id': np.int32, 'rating': np.float32},
     )
-    print(f"  评分数据: {len(ratings_df)} 条, "
-          f"用户 {ratings_df['user_id'].nunique()} 个, "
-          f"电影 {ratings_df['movie_id'].nunique()} 部")
+    n_records = len(ratings_df)
+    n_users = ratings_df['user_id'].nunique()
+    n_movies = ratings_df['movie_id'].nunique()
+    print(f"  评分数据: {n_records} 条, "
+          f"用户 {n_users} 个, "
+          f"电影 {n_movies} 部")
+    verbose_step("数据加载", f"完成: {n_records} 条, {n_users} 用户, {n_movies} 电影", verbose)
     return ratings_df
 
 
-def build_mappings(train_df):
+def build_mappings(train_df, verbose=False):
+    verbose_step("映射构建", "开始构建用户-电影映射表...", verbose)
     all_users = np.sort(train_df['user_id'].unique())
     all_movies = np.sort(train_df['movie_id'].unique())
     user2idx = {int(uid): i for i, uid in enumerate(all_users)}
@@ -83,6 +90,7 @@ def build_mappings(train_df):
     m_idx = np.array([movie2idx[mid] for mid in train_df['movie_id']], dtype=np.int32)
     r_val = train_df['rating'].values.astype(np.float32)
 
+    verbose_step("映射构建", f"完成: {n_users} 用户, {n_movies} 电影, {len(r_val)} 条评分", verbose)
     return (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
             n_users, n_movies, u_idx, m_idx, r_val)
 
@@ -94,7 +102,8 @@ def build_mappings(train_df):
 def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
                    n_neighbors=DEFAULT_N_NEIGHBORS,
                    extend_range=DEFAULT_EXTEND_RANGE,
-                   kmeans_max_iter=300, kmeans_n_init=10):
+                   kmeans_max_iter=300, kmeans_n_init=10,
+                   verbose=False):
     """
     Turbo-CF 训练主函数
 
@@ -112,6 +121,8 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
         K-Means 最大迭代次数
     kmeans_n_init : int
         K-Means 不同初始化的次数
+    verbose : bool
+        是否输出详细步骤日志
 
     Returns
     -------
@@ -126,24 +137,29 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     start_time = time.time()
 
     # ─── 1. 构建映射和数据结构 ────────────────────────────────
+    verbose_step("TurboCF", "构建映射和数据结构...", verbose)
     (all_users, all_movies, user2idx, movie2idx, idx2user, idx2movie,
-     n_users, n_movies, u_idx, m_idx, r_val) = build_mappings(train_df)
+     n_users, n_movies, u_idx, m_idx, r_val) = build_mappings(train_df, verbose=verbose)
 
     print(f"  用户数: {n_users}  |  电影数: {n_movies}  |  评分: {len(train_df)}")
     turbo_enabled = n_users >= TURBO_CF_USER_THRESHOLD
     status_msg = f"已启用 (用户数 >= {TURBO_CF_USER_THRESHOLD})" if turbo_enabled else f"未启用 (用户数 < {TURBO_CF_USER_THRESHOLD})"
     print(f"  Turbo-CF 模式: {status_msg}")
+    verbose_step("TurboCF", f"映射完成: {n_users} 用户, {n_movies} 电影, Turbo-CF 模式: {status_msg}", verbose)
 
     # ─── 2. 计算用户均值（中心化用） ──────────────────────────
+    verbose_step("TurboCF", "计算用户均值...", verbose)
     user_means = np.zeros(n_users, dtype=np.float32)
     np.add.at(user_means, u_idx, r_val)
     counts = np.bincount(u_idx, minlength=n_users).astype(np.float32)
     counts[counts == 0] = 1
     user_means /= counts
     print(f"  用户均值计算完成")
+    verbose_step("TurboCF", f"用户均值计算完成, {n_users} 用户", verbose)
 
     # ─── 3. 构建用户-电影评分矩阵 ──────────────────────────
     # 用于聚类和相似度计算
+    verbose_step("TurboCF", "构建用户-电影稀疏评分矩阵...", verbose)
     centered_vals = r_val - user_means[u_idx]
     sparse_R = csr_matrix(
         (centered_vals, (u_idx, m_idx)),
@@ -153,11 +169,13 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     non_zero = sparse_R.nnz
     density = non_zero / (n_users * n_movies) * 100
     print(f"  稀疏矩阵: ({n_users}, {n_movies}), 非零: {non_zero:,} ({density:.4f}%)")
+    verbose_step("TurboCF", f"稀疏矩阵: ({n_users}, {n_movies}), 非零: {non_zero:,} ({density:.4f}%)", verbose)
 
     # ─── 步骤一：离线聚类 ─────────────────────────────────
     # 使用 K-Means 对用户进行聚类
     # 特征向量：用户在所有电影上的中心化评分（CSR 行向量）
     print(f"\n  [步骤一] K-Means 用户聚类 (C={n_clusters})...")
+    verbose_step("TurboCF", f"步骤一: K-Means 用户聚类 (C={n_clusters})...", verbose)
 
     cluster_start = time.time()
     kmeans = KMeans(
@@ -169,6 +187,7 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
         algorithm='elkan',
     )
 
+    verbose_step("TurboCF", "执行 K-Means 聚类拟合...", verbose)
     # 对于 K-Means 拟合稀疏数据，需要转换为稠密或使用 MiniBatch K-Means
     # 当电影数很大时，直接使用稀疏 CSR 矩阵进行聚类
     # sklearn 的 K-Means 支持 CSR 矩阵
@@ -178,18 +197,22 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     cluster_centers = kmeans.cluster_centers_
     cluster_time = time.time() - cluster_start
     print(f"  K-Means 聚类完成 | 耗时: {cluster_time:.2f}秒")
+    verbose_step("TurboCF", f"K-Means 聚类完成, 耗时: {cluster_time:.2f}秒", verbose)
 
     # 统计各簇用户数
     cluster_sizes = np.bincount(user_labels, minlength=n_clusters)
     for c in range(n_clusters):
         print(f"    簇 {c}: {cluster_sizes[c]} 个用户")
     print(f"    簇平均规模: {n_users / n_clusters:.0f} 个用户")
+    verbose_step("TurboCF", f"聚类完成: {n_clusters} 簇, 簇平均 {n_users / n_clusters:.0f} 用户", verbose)
 
     # ─── 步骤二/三：簇内邻居搜索 ────────────────────────────
     print(f"\n  [步骤二/三] 簇内局部邻居搜索 (扩展范围 t={extend_range})...")
+    verbose_step("TurboCF", f"步骤二/三: 簇内局部邻居搜索 (扩展范围 t={extend_range})...", verbose)
 
     # 计算簇间距离矩阵，用于扩展邻居搜索范围
     # 簇中心之间的余弦距离
+    verbose_step("TurboCF", "计算簇间距离矩阵...", verbose)
     cluster_dist_matrix = cosine_distances(cluster_centers)
     # 对每个簇，按距离排序得到邻近簇列表（排除自身）
     cluster_neighbors_ordered = np.argsort(cluster_dist_matrix, axis=1)
@@ -210,12 +233,15 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     user_neighbors = {}  # {uid: [(neighbor_uid, similarity), ...]}
 
     # 预处理用户所在簇的映射
+    verbose_step("TurboCF", "预处理用户-簇映射...", verbose)
     user_label_map = {}  # {uid: cluster_id}
     for i, uid in enumerate(all_users):
         user_label_map[int(uid)] = int(user_labels[i])
 
     # 对每个簇，在其扩展搜索空间内计算用户相似度
     # 使用分簇并行处理
+    verbose_step("TurboCF", f"对 {n_clusters} 个簇并行计算局部邻居...", verbose)
+
     def _process_cluster(cluster_id):
         """处理单个簇：在该簇的扩展搜索空间内计算所有用户的邻居"""
         with threadpool_limits(limits=1, user_api='blas'):
@@ -306,11 +332,14 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     total_neighbors = sum(len(v) for v in user_neighbors.values())
     print(f"  邻居搜索完成: {users_with_neighbors}/{n_users} 用户有邻居, "
           f"平均 {total_neighbors / max(1, users_with_neighbors):.1f} 个邻居/用户")
+    verbose_step("TurboCF", f"邻居搜索完成: {users_with_neighbors}/{n_users} 用户有邻居, 平均 {total_neighbors / max(1, users_with_neighbors):.1f} 个邻居/用户", verbose)
 
     # ─── 步骤四：RMSE 评估 ──────────────────────────────────
     print(f"\n  [步骤四] 评分预测 & RMSE 计算（{_N_CPUS} 进程并行）...")
+    verbose_step("TurboCF", f"步骤四: 评分预测 & RMSE 计算, {_N_CPUS} 进程并行", verbose)
 
     # 构建用户到评分样本索引的映射
+    verbose_step("TurboCF", "构建用户-评分索引映射...", verbose)
     user_to_indices = defaultdict(list)
     for i in range(len(train_df)):
         user_to_indices[int(train_df['user_id'].iloc[i])].append(i)
@@ -321,6 +350,7 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     batch_size = max(200, min(2000, n_users_total // max(1, _N_CPUS)))
     batches = [user_ids_list[i:i + batch_size] for i in range(0, n_users_total, batch_size)]
     print(f"  批次数: {len(batches)} (batch_size={batch_size})")
+    verbose_step("TurboCF", f"共 {n_users_total} 个评分用户, {len(batches)} 批次", verbose)
 
     def _predict_user_batch(batch_uids):
         """批量预测评分"""
@@ -373,6 +403,7 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
 
             return (idxs_local, preds_local)
 
+    verbose_step("TurboCF", "开始并行评分预测...", verbose)
     from joblib import Parallel, delayed
     results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
         delayed(_predict_user_batch)(batch) for batch in batches
@@ -387,14 +418,17 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     elapsed = time.time() - start_time
     print(f"  训练 RMSE: {rmse:.4f}")
     print(f"  Turbo-CF 训练耗时: {elapsed:.2f} 秒")
+    verbose_step("TurboCF", f"RMSE={rmse:.4f}, 总耗时: {elapsed:.2f} 秒", verbose)
 
     # ─── 构建用户评分电影集 ────────────────────────────────
+    verbose_step("TurboCF", "构建用户评分电影集...", verbose)
     user_movies = defaultdict(set)
     for uid_val, mid_val in zip(train_df['user_id'], train_df['movie_id']):
         user_movies[int(uid_val)].add(int(mid_val))
 
     # ─── 整理模型输出 ──────────────────────────────────────
     # 将用户-簇映射保存为可序列化格式
+    verbose_step("TurboCF", "整理模型输出数据...", verbose)
     user_cluster_map = {int(all_users[i]): int(user_labels[i]) for i in range(n_users)}
 
     # 将簇中心保存为可序列化格式（转换为列表）
@@ -404,6 +438,7 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     print(f"    全量搜索复杂度: O({n_users})")
     print(f"    簇内搜索复杂度: O({n_users // n_clusters}) (C={n_clusters})")
     print(f"    理论加速比: {n_users / max(1, n_users // n_clusters):.1f}x")
+    verbose_step("TurboCF", f"加速比估算: 全量 O({n_users}) -> 簇内 O({n_users // n_clusters}), 加速 {n_users / max(1, n_users // n_clusters):.1f}x", verbose)
 
     return {
         'algorithm': 'turbo_cf',
@@ -444,21 +479,25 @@ def train_turbo_cf(train_df, n_clusters=DEFAULT_N_CLUSTERS,
     }
 
 
-def save_model(model, name='turbo_cf_model'):
+def save_model(model, name='turbo_cf_model', verbose=False):
     path = os.path.join(MODEL_DIR, f'{name}.pkl')
     print(f"\n[保存模型] {path}")
+    verbose_step("模型保存", f"开始保存模型至 {path}...", verbose)
     with open(path, 'wb') as f:
         pickle.dump(model, f)
     size_mb = os.path.getsize(path) / (1024 * 1024)
     print(f"  模型大小: {size_mb:.2f} MB")
+    verbose_step("模型保存", f"模型文件大小: {size_mb:.2f} MB", verbose)
 
     meta = {k: v for k, v in model.items()
             if isinstance(v, (str, int, float, bool, list))}
     meta['turbo_enabled'] = model.get('turbo_enabled', False)
     meta_path = os.path.join(MODEL_DIR, f'{name}_meta.json')
+    verbose_step("模型保存", "保存元信息 JSON...", verbose)
     with open(meta_path, 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
     print(f"  元数据: {meta_path}")
+    verbose_step("模型保存", f"元数据已保存至 {meta_path}", verbose)
     return path
 
 
@@ -478,6 +517,7 @@ def main():
                         help='K-Means 初始化次数 (default: 10)')
     parser.add_argument('--model-name', type=str, default='turbo_cf_model',
                         help='模型名称 (default: turbo_cf_model)')
+    parser.add_argument('--verbose', action='store_true', help='输出详细步骤日志到 logs/verbose/')
     args = parser.parse_args()
 
     if args.n_jobs is not None:
@@ -485,13 +525,18 @@ def main():
         _N_CPUS = args.n_jobs
         os.environ["LOKY_MAX_CPU_COUNT"] = str(_N_CPUS)
 
+    verbose_init('train_turbocf', args.verbose)
+
     print(f"[系统] CPU 核心: {os.cpu_count()} | 使用进程数: {_N_CPUS}")
     print(f"        Turbo-CF 配置: C={args.n_clusters}, K={args.n_neighbors}, t={args.extend_range}")
     print(f"        阈值: >= {TURBO_CF_USER_THRESHOLD} 用户自动启用")
 
     overall_start = time.time()
-    ratings_df = load_data()
+    verbose_step("数据加载", "从数据库加载评分数据...", args.verbose)
+    ratings_df = load_data(verbose=args.verbose)
+    verbose_step("数据加载完成", f"加载 {len(ratings_df)} 条评分记录", args.verbose)
 
+    verbose_step("开始训练", f"聚类数={args.n_clusters}, 邻居数={args.n_neighbors}", args.verbose)
     model = train_turbo_cf(
         ratings_df,
         n_clusters=args.n_clusters,
@@ -499,14 +544,22 @@ def main():
         extend_range=args.extend_range,
         kmeans_max_iter=args.kmeans_max_iter,
         kmeans_n_init=args.kmeans_n_init,
+        verbose=args.verbose,
     )
-    save_model(model, args.model_name)
+    verbose_step("训练完成", "K-Means聚类+局部邻居搜索+评分预测完成", args.verbose)
+
+    verbose_step("保存模型", "持久化模型文件...", args.verbose)
+    save_model(model, args.model_name, verbose=args.verbose)
+    verbose_step("模型保存完成", "模型已保存至 models/", args.verbose)
 
     total = time.time() - overall_start
     print(f"\n{'=' * 60}")
     print(f"  Turbo-CF 训练完成！总耗时: {total:.2f} 秒")
     print(f"{'=' * 60}\n")
+    verbose_step("全部完成", f"总耗时: {total:.2f} 秒", args.verbose)
+    verbose_close()
 
 
 if __name__ == '__main__':
-    main()
+    with log_output('train_turbocf'):
+        main()
