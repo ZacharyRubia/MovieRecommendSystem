@@ -919,3 +919,329 @@ exports.changeAdminPassword = async (req, res) => {
     res.status(500).json({ success: false, message: '修改密码失败' });
   }
 };
+
+// ==================== A/B 测试实验管理 ====================
+
+/**
+ * POST /api/admin/experiments
+ * 创建新实验（含策略列表）
+ */
+exports.createExperiment = async (req, res) => {
+  try {
+    const { name, description, splitMode, startTime, endTime, strategies } = req.body;
+
+    if (!name || !strategies || !Array.isArray(strategies) || strategies.length === 0) {
+      return res.status(400).json({ success: false, message: '实验名称和策略列表不能为空' });
+    }
+    if (!['fixed', 'bandit'].includes(splitMode)) {
+      return res.status(400).json({ success: false, message: 'splitMode 必须为 fixed 或 bandit' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // 插入实验主表
+      const expResult = await conn.query(
+        `INSERT INTO ab_experiments (name, description, split_mode, start_time, end_time, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+        [name, description || '', splitMode, startTime || null, endTime || null]
+      );
+      const experimentId = expResult.insertId;
+
+      // 插入策略
+      for (const s of strategies) {
+        await conn.query(
+          `INSERT INTO ab_strategies (experiment_id, name, algorithm, traffic_percentage, weight_source, bandit_alpha, bandit_beta, is_control, min_traffic, coldstart_end_time)
+           VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?, DATE_ADD(NOW(), INTERVAL 2 HOUR))`,
+          [
+            experimentId,
+            s.name || '未命名策略',
+            s.algorithm || 'hybrid',
+            s.trafficPercentage || 0,
+            s.weightSource || 'fixed',
+            s.isControl ? 1 : 0,
+            s.minTraffic || 5
+          ]
+        );
+      }
+
+      await conn.commit();
+      res.json({ success: true, message: '实验创建成功', data: { id: experimentId } });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error('创建实验失败:', err);
+    res.status(500).json({ success: false, message: '创建实验失败: ' + err.message });
+  }
+};
+
+/**
+ * PUT /api/admin/experiments/:id
+ * 修改实验配置
+ */
+exports.updateExperiment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, splitMode, startTime, endTime, status } = req.body;
+
+    // 仅允许修改进行中或未开始的实验
+    const existing = await db.query('SELECT id, status FROM ab_experiments WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '实验不存在' });
+    }
+    if (['stopped', 'archived'].includes(existing[0].status)) {
+      return res.status(400).json({ success: false, message: '已停止或归档的实验不可修改' });
+    }
+
+    const updates = [];
+    const params = [];
+    if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+    if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+    if (splitMode !== undefined) { updates.push('split_mode = ?'); params.push(splitMode); }
+    if (startTime !== undefined) { updates.push('start_time = ?'); params.push(startTime); }
+    if (endTime !== undefined) { updates.push('end_time = ?'); params.push(endTime); }
+    if (status !== undefined) { updates.push('status = ?'); params.push(status); }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: '没有可更新的字段' });
+    }
+
+    updates.push('updated_at = NOW()');
+    params.push(id);
+
+    await db.query(`UPDATE ab_experiments SET ${updates.join(', ')} WHERE id = ?`, params);
+    res.json({ success: true, message: '实验更新成功' });
+  } catch (err) {
+    console.error('更新实验失败:', err);
+    res.status(500).json({ success: false, message: '更新实验失败: ' + err.message });
+  }
+};
+
+/**
+ * GET /api/admin/experiments
+ * 获取所有实验列表，支持按状态筛选
+ */
+exports.getExperiments = async (req, res) => {
+  try {
+    const { status } = req.query;
+    let sql = `
+      SELECT e.*,
+        (SELECT COUNT(*) FROM ab_strategies WHERE experiment_id = e.id) AS strategy_count
+      FROM ab_experiments e
+    `;
+    const params = [];
+    if (status) {
+      sql += ' WHERE e.status = ?';
+      params.push(status);
+    }
+    sql += ' ORDER BY e.created_at DESC';
+
+    const experiments = await db.query(sql, params);
+
+    // 为每个实验加载策略详情
+    for (const exp of experiments) {
+      const strategies = await db.query(
+        'SELECT * FROM ab_strategies WHERE experiment_id = ? ORDER BY id',
+        [exp.id]
+      );
+      exp.strategies = strategies;
+    }
+
+    res.json({ success: true, data: experiments });
+  } catch (err) {
+    console.error('获取实验列表失败:', err);
+    res.status(500).json({ success: false, message: '获取实验列表失败' });
+  }
+};
+
+/**
+ * GET /api/admin/experiments/:id
+ * 获取单个实验详情及当前各策略实时指标
+ */
+exports.getExperimentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const experiments = await db.query('SELECT * FROM ab_experiments WHERE id = ?', [id]);
+    if (experiments.length === 0) {
+      return res.status(404).json({ success: false, message: '实验不存在' });
+    }
+
+    const exp = experiments[0];
+    exp.strategies = await db.query(
+      'SELECT * FROM ab_strategies WHERE experiment_id = ? ORDER BY id',
+      [id]
+    );
+
+    // 尝试从 ab_results 获取最新指标
+    for (const strat of exp.strategies) {
+      const results = await db.query(
+        'SELECT * FROM ab_results WHERE experiment_id = ? AND strategy_id = ? ORDER BY analyzed_at DESC LIMIT 1',
+        [id, strat.id]
+      );
+      strat.latestMetrics = results.length > 0 ? results[0] : null;
+    }
+
+    res.json({ success: true, data: exp });
+  } catch (err) {
+    console.error('获取实验详情失败:', err);
+    res.status(500).json({ success: false, message: '获取实验详情失败' });
+  }
+};
+
+/**
+ * POST /api/admin/experiments/:id/stop
+ * 手动终止实验：全量推优（推选胜出策略）或回退默认
+ */
+exports.stopExperiment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { pushStrategyId, fallbackToDefault } = req.body;
+
+    const experiments = await db.query('SELECT * FROM ab_experiments WHERE id = ?', [id]);
+    if (experiments.length === 0) {
+      return res.status(404).json({ success: false, message: '实验不存在' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // 更新实验状态
+      await conn.query('UPDATE ab_experiments SET status = ?, updated_at = NOW() WHERE id = ?', ['stopped', id]);
+
+      if (pushStrategyId) {
+        // 将指定策略推全：更新其 traffic_percentage 为 100%
+        await conn.query(
+          'UPDATE ab_strategies SET traffic_percentage = 100, weight_source = ? WHERE id = ?',
+          ['promoted', pushStrategyId]
+        );
+        // 其他策略流量归零
+        await conn.query(
+          'UPDATE ab_strategies SET traffic_percentage = 0 WHERE experiment_id = ? AND id != ?',
+          [id, pushStrategyId]
+        );
+
+        // 记录推全日志
+        await conn.query(
+          'INSERT INTO ab_results (experiment_id, strategy_id, summary, analyzed_at) VALUES (?, ?, ?, NOW())',
+          [id, pushStrategyId, JSON.stringify({ action: 'promoted', message: '手动推全' })]
+        );
+      }
+
+      if (fallbackToDefault) {
+        // 回退：将所有策略权重重置为初始值
+        await conn.query(
+          'UPDATE ab_strategies SET traffic_percentage = 0, weight_source = ? WHERE experiment_id = ?',
+          ['reset', id]
+        );
+      }
+
+      await conn.commit();
+      res.json({ success: true, message: '实验已终止' });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error('终止实验失败:', err);
+    res.status(500).json({ success: false, message: '终止实验失败: ' + err.message });
+  }
+};
+
+/**
+ * POST /api/admin/experiments/:id/archive
+ * 归档实验
+ */
+exports.archiveExperiment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await db.query(
+      'UPDATE ab_experiments SET status = ?, updated_at = NOW() WHERE id = ? AND status = ?',
+      ['archived', id, 'stopped']
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(400).json({ success: false, message: '只有已停止的实验才能归档' });
+    }
+
+    res.json({ success: true, message: '实验已归档' });
+  } catch (err) {
+    console.error('归档实验失败:', err);
+    res.status(500).json({ success: false, message: '归档实验失败' });
+  }
+};
+
+/**
+ * GET /api/admin/experiments/:id/metrics
+ * 返回实验各策略实时指标及趋势图数据
+ */
+exports.getExperimentMetrics = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { timeRange } = req.query; // 可选: 7d, 30d, 90d
+
+    const lookbackDays = timeRange ? parseInt(timeRange.replace('d', '')) : 7;
+
+    // 获取策略列表
+    const strategies = await db.query(
+      'SELECT id, name, algorithm FROM ab_strategies WHERE experiment_id = ? ORDER BY id',
+      [id]
+    );
+
+    // 获取各策略的聚合指标
+    const metricsByStrategy = {};
+    for (const strat of strategies) {
+      const metrics = await db.query(
+        `SELECT
+           COUNT(*) AS total_exposures,
+           SUM(CASE WHEN behavior_type IN ('click', 'rate', 'collect') THEN 1 ELSE 0 END) AS total_positive,
+           COUNT(DISTINCT user_id) AS unique_users,
+           AVG(CASE WHEN behavior_type = 'rate' THEN rating_value ELSE NULL END) AS avg_rating,
+           ROUND(SUM(CASE WHEN behavior_type IN ('click', 'rate', 'collect') THEN 1 ELSE 0 END) / COUNT(*) * 100, 4) AS ctr
+         FROM users_movies_behaviors
+         WHERE experiment_id = ? AND strategy_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)`,
+        [id, strat.id, lookbackDays]
+      );
+
+      // 获取最近 7 天的时序趋势
+      const trend = await db.query(
+        `SELECT DATE(created_at) AS date,
+                COUNT(*) AS exposures,
+                SUM(CASE WHEN behavior_type IN ('click', 'rate', 'collect') THEN 1 ELSE 0 END) AS positives
+         FROM users_movies_behaviors
+         WHERE experiment_id = ? AND strategy_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+         GROUP BY DATE(created_at) ORDER BY date`,
+        [id, strat.id, lookbackDays]
+      );
+
+      metricsByStrategy[strat.id] = {
+        ...metrics[0],
+        trend
+      };
+    }
+
+    res.json({
+      success: true,
+      data: {
+        experimentId: parseInt(id),
+        strategies: strategies.map(s => ({
+          ...s,
+          metrics: metricsByStrategy[s.id] || null
+        })),
+        lookbackDays
+      }
+    });
+  } catch (err) {
+    console.error('获取实验指标失败:', err);
+    res.status(500).json({ success: false, message: '获取实验指标失败: ' + err.message });
+  }
+};

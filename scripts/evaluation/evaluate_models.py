@@ -847,8 +847,6 @@ class ImprovedSlopeOne(BaseModel):
                 # 先试局域（取反）
                 if rev_key in local_devs:
                     dev_val = -local_devs[rev_key][0]
-                elif rev
-                    dev_val = -local_devs[rev_key][0]
                 elif rev_key in self.global_deviation:
                     dev_val = -self.global_deviation[rev_key]
                 else:
@@ -864,7 +862,133 @@ class ImprovedSlopeOne(BaseModel):
         return float(ctx['movie_means'][ctx['movie2idx'].get(mid, 0)])
 
 
-# ─── 2.7 SVD 模型（调用已有模型） ──────────────────────────────
+# ─── 2.7 Turbo-CF（加载已有模型） ─────────────────────────────
+
+class TurboCFModel(BaseModel):
+    """
+    Turbo-CF（加速协同过滤）
+    - K-Means 用户聚类 + 簇内局部邻居 + 加权平均预测
+    - 使用 train_turbocf.py 训练的 turbo_cf_model.pkl
+
+    预测公式:
+      pred(u,i) = mean_u + ( Σ sim(u,v) · (r_vi - mean_v) ) / Σ |sim(u,v)|
+    """
+    def __init__(self, model_path=None):
+        super().__init__('turbo_cf')
+        self.model_path = model_path
+
+    def train(self, ctx):
+        print(f"\n{'=' * 60}")
+        print(f"[{self.name}] 训练/加载 Turbo-CF 模型...")
+        t0 = time.time()
+
+        self.ctx = ctx
+
+        # 从已有模型文件加载
+        if self.model_path and os.path.exists(self.model_path):
+            print(f"  从文件加载: {self.model_path}")
+            with open(self.model_path, 'rb') as f:
+                model_data = pickle.load(f)
+            self.turbo_model = model_data
+            n_clusters = model_data.get('n_clusters', '?')
+            n_users = model_data.get('n_users', '?')
+            nb_count = sum(len(v) for v in model_data.get('user_neighbors', {}).values())
+            print(f"  簇数: {n_clusters}  |  用户: {n_users}  |  邻居总数: {nb_count}")
+            self.trained = True
+            print(f"  耗时: {time.time() - t0:.2f}s")
+            return
+
+        print("  [警告] Turbo-CF 模型文件不存在，回退至全量计算...")
+        # 如果模型文件不存在，采用全量 User-CF（Pearson）作为回退
+        from sklearn.neighbors import NearestNeighbors
+        n_users = ctx['n_users']
+        rating_matrix = ctx['rating_matrix']
+        user_means = ctx['user_means']
+        all_users = ctx['all_users']
+
+        centered = rating_matrix.copy().astype(np.float32)
+        row_indices = np.repeat(np.arange(n_users), np.diff(rating_matrix.indptr))
+        centered.data -= user_means[row_indices.astype(np.int32)]
+
+        nn = NearestNeighbors(
+            n_neighbors=min(31, n_users),
+            metric='cosine',
+            algorithm='brute',
+            n_jobs=-1,
+        )
+        nn.fit(centered)
+        distances, indices = nn.kneighbors(centered, return_distance=True)
+
+        # 构建简单用户邻居字典（与 train_turbocf.py 输出结构一致）
+        turbo_model = {
+            'algorithm': 'turbo_cf',
+            'n_clusters': n_users,
+            'user_neighbors': {},
+            'user_means': {int(uid): float(user_means[i])
+                           for i, uid in enumerate(all_users)},
+            'all_users': [int(u) for u in all_users],
+            'n_users': n_users,
+            'n_movies': ctx['n_movies'],
+        }
+        for i in range(n_users):
+            uid = int(all_users[i])
+            nb_list = []
+            for j in range(1, min(31, n_users)):
+                nb_uid = int(all_users[indices[i, j]])
+                sim = 1.0 - distances[i, j]
+                if sim > 0:
+                    total_sim = sum(abs(1.0 - distances[i, k])
+                                    for k in range(1, min(31, n_users)))
+                    if total_sim > 0:
+                        sim_norm = sim / total_sim
+                        nb_list.append((nb_uid, sim_norm))
+            turbo_model['user_neighbors'][uid] = nb_list
+
+        self.turbo_model = turbo_model
+        self.trained = True
+        print(f"  回退训练完成（全量 Pearson User-CF） | 耗时: {time.time() - t0:.2f}s")
+
+    def predict(self, user_id, movie_id):
+        """预测评分：使用 Turbo-CF 的加权平均公式"""
+        model = getattr(self, 'turbo_model', None)
+        if model is None:
+            ctx = self.ctx
+            return float(ctx['user_means'][ctx['user2idx'].get(user_id, 0)])
+        ctx = self.ctx
+
+        uid = user_id
+        mid = movie_id
+
+        user_means = model.get('user_means', {})
+        mean_u = user_means.get(uid)
+        if mean_u is None:
+            u_idx = ctx['user2idx'].get(uid)
+            if u_idx is not None:
+                mean_u = float(ctx['user_means'][u_idx])
+            else:
+                return 3.0
+
+        neighbors = model.get('user_neighbors', {}).get(uid, [])
+        if not neighbors:
+            return float(mean_u)
+
+        # 预测公式: pred = mean_u + Σ sim·(r_vi - mean_v) / Σ |sim|
+        num = 0.0
+        den = 0.0
+        for nb_uid, sim in neighbors:
+            nb_ratings = ctx['user_ratings_dict'].get(nb_uid, {})
+            if mid in nb_ratings:
+                mean_v = user_means.get(nb_uid, mean_u)
+                num += sim * (nb_ratings[mid] - mean_v)
+                den += abs(sim)
+
+        if den > 0:
+            pred = float(mean_u + num / den)
+            return max(1.0, min(5.0, pred))
+        return float(mean_u)
+
+
+# ─── 2.8 SVD 模型（调用已有模型） ──────────────────────────────
 
 class SVDModel(BaseModel):
     """
@@ -943,7 +1067,7 @@ class SVDModel(BaseModel):
         return pred
 
 
-# ─── 2.8 混合推荐：公式 (3-7) ─────────────────────────────────
+# ─── 2.9 混合推荐：公式 (3-7) ─────────────────────────────────
 
 class HybridModel(BaseModel):
     """
@@ -1237,7 +1361,12 @@ def run_evaluation(test_size=None):
     models['svd'] = SVDModel(n_factors=50, model_path=svd_model_path)
     models['svd'].train(ctx)
 
-    # 4.8 混合推荐 (使用所有已训练模型)
+    # 4.8 Turbo-CF (加速协同过滤)
+    turbo_cf_model_path = os.path.join(MODEL_DIR, 'turbo_cf_model.pkl')
+    models['turbo_cf'] = TurboCFModel(model_path=turbo_cf_model_path)
+    models['turbo_cf'].train(ctx)
+
+    # 4.9 混合推荐 (使用所有已训练模型)
     hybrid_models = {name: models[name] for name in models}
     models['hybrid'] = HybridModel(hybrid_models)
     models['hybrid'].train(ctx)

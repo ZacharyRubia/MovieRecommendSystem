@@ -46,4 +46,13 @@ router.get('/profile/:id', cacheResponse(CACHE_KEYS.ADMIN_PROFILE), adminControl
 router.put('/profile/:id', clearCache(CACHE_KEYS.ADMIN_PROFILE), adminController.updateAdminProfile);
 router.put('/profile/:id/password', clearCache(CACHE_KEYS.ADMIN_PROFILE), adminController.changeAdminPassword);
 
+// ==================== A/B 测试实验管理 ====================
+router.get('/experiments', adminController.getExperiments);
+router.get('/experiments/:id', adminController.getExperimentById);
+router.post('/experiments', adminController.createExperiment);
+router.put('/experiments/:id', adminController.updateExperiment);
+router.post('/experiments/:id/stop', adminController.stopExperiment);
+router.post('/experiments/:id/archive', adminController.archiveExperiment);
+router.get('/experiments/:id/metrics', adminController.getExperimentMetrics);
+
 module.exports = router;

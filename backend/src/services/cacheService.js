@@ -393,4 +393,4 @@ const writeBehindQueue = new WriteBehindQueue();
   }
 })();
 
-module.exports = { cacheService, writeBehindQueue, CACHE_KEYS };
+module.exports = { cacheService, writeBehindQueue, CACHE_KEYS, getRedisClient: () => redis };

@@ -97,9 +97,20 @@ app.use('/api/movies', moviesRouter);
 app.use('/api/transcode', transcodeRouter);
 // 管理员路由
 app.use('/api/admin', adminRouter);
-// 推荐路由
+// A/B 测试中间件与实验服务
+const abTestMiddleware = require('./src/middleware/abTestMiddleware');
+const abTestService = require('./src/services/abTestService');
+
+// 推荐路由（应用 A/B 测试中间件）
 const recommendRouter = require('./src/routes/recommend');
-app.use('/api/recommend', recommendRouter);
+app.use('/api/recommend', abTestMiddleware.createABTestMiddleware({
+  routes: ['/'],
+  requireUser: false
+}), recommendRouter);
+
+// 内部实验数据接口（供 Python 分析脚本使用）
+const abInternalRouter = require('./src/routes/abInternal');
+app.use('/api/internal', abInternalRouter);
 
 // 异步预加载 AI 推荐模型（不阻塞启动）
 const { warmupModels } = require('./src/services/recommendEngine');

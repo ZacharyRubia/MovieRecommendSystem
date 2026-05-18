@@ -489,6 +489,9 @@ async function aiModelRecommend(req, res) {
     effectiveAlgoDisplay = 'popular';
   }
 
+  // 从中间件获取实验信息
+  const experiment = req.experiment || null;
+
   // 返回格式兼容前端（含 source: 'ai-model' 标识）
   res.json({
     success: true,
@@ -501,7 +504,8 @@ async function aiModelRecommend(req, res) {
       recommendations: enriched,
       degraded,
       elapsed: result.elapsed,
-      fromCache: result.fromCache
+      fromCache: result.fromCache,
+      experiment
     }
   });
   } catch (error) {
