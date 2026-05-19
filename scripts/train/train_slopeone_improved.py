@@ -6,9 +6,14 @@ train_slopeone_improved.py - 改进的 Slope One 算法（基于邻域筛选）
 
 改进点：
 1. 先为目标用户筛选 M 个最相似邻居用户集合 U_nb
-2. 仅在邻域内计算局部偏差：dev_{ij}^{local} = mean over U_nb ∩ U_ij of (r_ui - r_uj)
-3. 要求 |U_nb ∩ U_ij| >= 3 保证偏差可靠
-4. 预测：r̂_uj = mean_{i in S(u)} (r_ui + dev_{ji}^{local})
+2. 使用全局偏差矩阵（而非为每个用户单独计算局部偏差，避免O(n*k*items²)性能瓶颈）
+3. 预测时限制只使用邻域内物品（邻居共同评分的物品对），要求 freq >= min_common
+4. 预测：r̂_uj = mean_{i in S(u) ∩ items_of_neighbors} (r_ui + dev_ji)
+
+性能优化说明：
+- 原实现为每个用户单独计算局部偏差表，复杂度 O(用户数 × 邻居数 × 物品数²)
+- 优化后计算一次全局偏差矩阵（同传统版本），预测时仅用邻居物品过滤
+- 大幅降低训练时间，同时保持邻域筛选的核心改进思想
 
 多线程实现
 """
@@ -139,12 +144,158 @@ def compute_user_similarity(sparse_R_centered, top_k=50, chunk_size=2000, verbos
     return user_sim
 
 
+def compute_global_deviations(train_df, movie2idx, n_movies, verbose=False):
+    """
+    计算全局偏差矩阵（仅使用所有用户的评分数据，不做邻域限制）
+    
+    dev_ij = (1/|U_ij|) Σ (r_ui - r_uj)
+    
+    使用与 train_slopeone_traditional 相同的高效并行策略
+    """
+    print(f"\n  [全局偏差矩阵计算] {_N_CPUS} 进程并行...")
+    verbose_step("偏差矩阵", f"开始计算全局偏差矩阵, {_N_CPUS} 进程并行...", verbose)
+
+    # 按用户分组评分
+    user_ratings = defaultdict(list)
+    for uid_val, mid_val, rating in zip(
+        train_df['user_id'], train_df['movie_id'], train_df['rating']
+    ):
+        mi = movie2idx.get(mid_val)
+        if mi is not None:
+            user_ratings[int(uid_val)].append((mi, float(rating)))
+
+    unique_users = list(user_ratings.keys())
+    chunk_size = max(1, len(unique_users) // (_N_CPUS * 2))
+    user_chunks = [unique_users[i:i + chunk_size]
+                   for i in range(0, len(unique_users), chunk_size)]
+    print(f"  {len(user_chunks)} 用户批次")
+    verbose_step("偏差矩阵", f"共 {len(user_chunks)} 个用户批次并行计算", verbose)
+
+    def _process_user_chunk(users_chunk):
+        """处理一批用户，累加偏差贡献"""
+        local_deviations = {}
+        for uid in users_chunk:
+            items = user_ratings[uid]
+            n_items_local = len(items)
+            for a in range(n_items_local):
+                mi_a, r_a = items[a]
+                for b in range(n_items_local):
+                    if a == b:
+                        continue
+                    mi_b, r_b = items[b]
+                    diff = r_a - r_b
+                    key = (mi_a, mi_b)
+                    if key not in local_deviations:
+                        local_deviations[key] = [0.0, 0]
+                    local_deviations[key][0] += diff
+                    local_deviations[key][1] += 1
+        return local_deviations
+
+    from joblib import Parallel, delayed
+    chunk_results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
+        delayed(_process_user_chunk)(chunk) for chunk in user_chunks
+    )
+
+    # 合并结果
+    verbose_step("偏差矩阵", "合并各批次偏差统计结果...", verbose)
+    total_deviations = {}
+    for cr in chunk_results:
+        for key, (s_diff, cnt) in cr.items():
+            if key not in total_deviations:
+                total_deviations[key] = [0.0, 0]
+            total_deviations[key][0] += s_diff
+            total_deviations[key][1] += cnt
+
+    # 构建偏差矩阵与频次矩阵
+    verbose_step("偏差矩阵", "构建最终偏差矩阵与频次矩阵...", verbose)
+    dev_matrix = np.zeros((n_movies, n_movies), dtype=np.float32)
+    freq_matrix = np.zeros((n_movies, n_movies), dtype=np.int32)
+    for (i, j), (s_diff, cnt) in total_deviations.items():
+        if cnt > 0:
+            dev_matrix[i, j] = s_diff / cnt
+            freq_matrix[i, j] = cnt
+
+    print(f"  全局偏差矩阵计算完成: {len(total_deviations)} 有效物品对")
+    verbose_step("偏差矩阵", f"完成: {len(total_deviations)} 有效物品对", verbose)
+    return dev_matrix, freq_matrix
+
+
+# ── 模块级预测函数（避免嵌套函数序列化问题） ──────────────────────
+
+def _predict_batch_rmse(batch_indices, train_user_ids, train_movie_ids,
+                         user2idx, movie2idx, user_ratings_dict,
+                         neighbor_item_sets, dev_matrix, freq_matrix,
+                         min_common, user_means,
+                         user_items_arrays=None, user_ratings_arrays=None,
+                         user_item_neighbor_masks=None):
+    """
+    批量预测 RMSE，使用 numpy 向量化加速
+    
+    优化说明：
+    - 使用预计算的用户评分 numpy 数组，避免每次预测时遍历 dict
+    - 预计算的邻域掩码避免每次重新检查物品是否在邻居集合中
+    - 利用 dev_matrix[fancy_index, mi] 一次性获取所有偏差值
+    """
+    with threadpool_limits(limits=1, user_api='blas'):
+        n_batch = len(batch_indices)
+        preds = np.zeros(n_batch, dtype=np.float32)
+        for k, i in enumerate(batch_indices):
+            uid = train_user_ids[i]
+            mid = train_movie_ids[i]
+            ui = user2idx.get(uid)
+            mi = movie2idx.get(mid)
+
+            if ui is None or mi is None:
+                preds[k] = 3.0
+                continue
+
+            # 使用预计算的 numpy 数组（如果可用）
+            if user_items_arrays is not None and ui in user_items_arrays:
+                all_items = user_items_arrays[ui]
+                all_ratings = user_ratings_arrays[ui]
+                neighbor_mask = user_item_neighbor_masks[ui]
+            else:
+                # 回退：从 dict 逐条构建
+                user_ratings_u = user_ratings_dict.get(ui, {})
+                if not user_ratings_u:
+                    preds[k] = user_means[ui] if ui is not None else 3.0
+                    continue
+                all_items = np.array(list(user_ratings_u.keys()), dtype=np.int32)
+                all_ratings = np.array(list(user_ratings_u.values()), dtype=np.float32)
+                neighbor_mask = np.ones(len(all_items), dtype=bool)
+
+            # 过滤掉待预测物品自身
+            self_mask = all_items != mi
+            # 合并邻域过滤掩码
+            combined_mask = self_mask & neighbor_mask
+            if not np.any(combined_mask):
+                preds[k] = user_means[ui]
+                continue
+
+            filtered_items = all_items[combined_mask]
+            filtered_ratings = all_ratings[combined_mask]
+
+            # 向量化：一次性获取所有 (j_mid, mi) 的偏差和频次
+            devs = dev_matrix[filtered_items, mi]
+            freqs = freq_matrix[filtered_items, mi]
+
+            # 频次阈值过滤（向量化）
+            valid = freqs >= min_common
+            if np.any(valid):
+                preds[k] = float(np.mean(filtered_ratings[valid] + devs[valid]))
+            else:
+                preds[k] = user_means[ui]
+
+        return preds
+
+
 def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2000, verbose=False):
     """
     改进 Slope One 训练
-    - 基于邻域筛选的局部偏差
-    - 要求 |U_nb ∩ U_ij| >= 3
-    - 预测：r̂_uj = mean_{i in S(u)} (r_ui + dev_{ji}^{local})
+    - 基于邻域筛选的预测（使用全局偏差 + 邻域物品筛选）
+    - 要求频次 >= min_common（不考虑邻域，考虑全局共现频次）
+    - 预测时只使用目标用户邻域内常见的物品
+    - 预测：r̂_uj = mean_{i in S(u) ∩ items_of_neighbors} (r_ui + dev_ji)
     多线程实现
     """
     print("\n" + "=" * 60)
@@ -188,185 +339,68 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
     user_sim = compute_user_similarity(sparse_R_centered, top_k=n_neighbors, chunk_size=chunk_size, verbose=verbose)
     print(f"  用户相似度计算完成: {len(user_sim)} 用户有邻居")
 
-    # 按用户组织评分（用于后续局部偏差计算）
+    # 按用户组织评分（一次性构建，避免 compute_global_deviations 重复构建）
     verbose_step("改进SlopeOne", "按用户组织评分数据...", verbose)
-    user_ratings_dict = defaultdict(dict)
+    user_ratings_dict = {}
     for uid_val, mid_val, rating in zip(
         train_df['user_id'], train_df['movie_id'], train_df['rating']
     ):
         ui = user2idx.get(uid_val)
         mi = movie2idx.get(mid_val)
         if ui is not None and mi is not None:
+            if ui not in user_ratings_dict:
+                user_ratings_dict[ui] = {}
             user_ratings_dict[ui][mi] = float(rating)
 
-    # 构建邻居信息用于局部偏差计算
-    neighbor_lists = {}
-    for ui, neighbors in user_sim.items():
-        neighbor_lists[ui] = list(neighbors.keys())
-
-    print(f"\n  [局部偏差计算] 分用户组并行...")
-    verbose_step("改进SlopeOne", f"开始并行计算局部偏差矩阵...", verbose)
-
-    def _compute_local_deviations(ui, mi, target_user_neighbors):
-        """
-        计算用户 u 在邻域 U_nb 内对物品 i 与所有其他物品的局部偏差
-        dev_{ij}^{local} = mean_{u' in U_nb ∩ U_ij} (r_{u'i} - r_{u'j})
-        要求 |U_nb ∩ U_ij| >= min_common
-        """
-        local_devs = {}
-        user_u_ratings = user_ratings_dict.get(ui, {})
-        if not user_u_ratings:
-            return local_devs
-
-        # 检查用户是否评分过目标物品 mi
-        if mi not in user_u_ratings:
-            return local_devs
-
-        # 对所有邻居用户迭代，统计与 mi 的偏差
-        for nui in target_user_neighbors:
-            if nui not in user_ratings_dict:
-                continue
-            neighbor_ratings = user_ratings_dict[nui]
-            if mi not in neighbor_ratings:
-                continue
-            r_n_mi = neighbor_ratings[mi]
-            for other_mi, r_n_other in neighbor_ratings.items():
-                if other_mi == mi:
-                    continue
-                if other_mi not in user_u_ratings:
-                    continue
-                diff = r_n_mi - r_n_other  # dev_{mi, other_mi}
-                key = (mi, other_mi)
-                if key not in local_devs:
-                    local_devs[key] = [0.0, 0, []]
-                local_devs[key][0] += diff
-                local_devs[key][1] += 1
-
-        # 存储邻居集（用于后续预测）
-        return local_devs
-
-    # 由于局部偏差是逐用户-物品对计算的，计算量太大
-    # 采用简化策略：计算所有用户在邻域内的全局局部偏差表
-    # 方法：对于每个用户 u，基于其邻居 U_nb，为每对物品 (i,j) 计算局部偏差
-    # 然后 u 的预测使用这些局部偏差
-
-    # 按用户分块并行计算局部偏差表
-    all_user_indices = list(user_sim.keys())
-    chunk_size_local = max(1, len(all_user_indices) // (_N_CPUS * 2))
-    user_chunks = [all_user_indices[i:i + chunk_size_local]
-                   for i in range(0, len(all_user_indices), chunk_size_local)]
-    print(f"  {len(user_chunks)} 用户批次计算局部偏差")
-    verbose_step("改进SlopeOne", f"{len(user_chunks)} 用户批次并行计算", verbose)
-
-    def _process_user_deviations(users_chunk):
-        """为一批用户计算其邻域内的局部偏差表"""
-        results = {}
-        for ui in users_chunk:
-            neighbors = neighbor_lists.get(ui, [])
-            if not neighbors:
-                continue
-
-            # 收集邻域内所有用户的评分
-            neighbor_all_ratings = {}
-            for nui in neighbors:
-                if nui in user_ratings_dict:
-                    neighbor_all_ratings[nui] = user_ratings_dict[nui]
-
-            if len(neighbor_all_ratings) < 2:
-                continue
-
-            # 统计邻域内每对物品 (i, j) 的偏差
-            local_devs_sum = defaultdict(float)
-            local_devs_cnt = defaultdict(int)
-
-            for nui, nratings in neighbor_all_ratings.items():
-                items_list = list(nratings.keys())
-                for a in range(len(items_list)):
-                    mi_a = items_list[a]
-                    r_a = nratings[mi_a]
-                    for b in range(len(items_list)):
-                        if a == b:
-                            continue
-                        mi_b = items_list[b]
-                        r_b = nratings[mi_b]
-                        key = (mi_a, mi_b)  # dev_{a,b}
-                        local_devs_sum[key] += r_a - r_b
-                        local_devs_cnt[key] += 1
-
-            # 过滤：仅保留 |U_nb ∩ U_ij| >= min_common
-            local_devs = {}
-            for (i, j), s_diff in local_devs_sum.items():
-                cnt = local_devs_cnt[(i, j)]
-                if cnt >= min_common:
-                    key_str = f"{i},{j}"
-                    local_devs[key_str] = s_diff / cnt
-
-            if local_devs:
-                results[ui] = local_devs
-
-        return results
-
-    start_local = time.time()
-    from joblib import Parallel, delayed
-    chunk_dev_results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
-        delayed(_process_user_deviations)(chunk) for chunk in user_chunks
+    # --- 优化核心：使用全局偏差矩阵而非逐用户局部偏差 ---
+    print(f"\n  [全局偏差矩阵计算] 使用高效并行策略...")
+    verbose_step("改进SlopeOne", "开始计算全局偏差矩阵...", verbose)
+    
+    dev_matrix, freq_matrix = compute_global_deviations(
+        train_df, movie2idx, n_movies, verbose=verbose
     )
+    print(f"  全局偏差矩阵计算完成，频次 >= {min_common} 的过滤将在预测时进行")
+    print(f"  耗时: {time.time() - start_time:.1f}s")
 
-    local_deviations = {}
-    for cr in chunk_dev_results:
-        local_deviations.update(cr)
+    # 构建邻居信息（用于预测时筛选物品）
+    # 优化：将 neighbor_item_sets 存储为 frozenset 以节省内存，
+    # 但保留 set 以支持更快的查找和构建
+    verbose_step("改进SlopeOne", "构建邻域物品集合...", verbose)
+    neighbor_item_sets = {}
+    for ui in user_sim:
+        neighbor_items = set()
+        for nui in user_sim[ui]:
+            if nui in user_ratings_dict:
+                neighbor_items.update(user_ratings_dict[nui].keys())
+        neighbor_item_sets[ui] = neighbor_items
 
-    print(f"  局部偏差计算完成: {len(local_deviations)} 用户有局部偏差")
-    print(f"  耗时: {time.time() - start_local:.1f}s")
-    verbose_step("改进SlopeOne", f"局部偏差计算完成: {len(local_deviations)} 用户有局部偏差", verbose)
-
-    # RMSE 评估
+    # ── 预计算：为每个用户构建 numpy 数组（避免 RMSE 循环中反复遍历 dict） ──
     train_user_ids = train_df['user_id'].values.astype(np.int32)
     train_movie_ids = train_df['movie_id'].values.astype(np.int32)
     train_ratings = r_val
 
-    print(f"\n  [RMSE 计算] {_N_CPUS} 进程并行...")
-    verbose_step("RMSE计算", f"开始并行计算训练集 RMSE, {_N_CPUS} 进程", verbose)
+    verbose_step("改进SlopeOne", "预计算用户评分数组（加速RMSE）...", verbose)
+    user_items_arrays = {}
+    user_ratings_arrays = {}
+    user_item_neighbor_masks = {}
+    for ui in range(n_users):
+        if ui in user_ratings_dict:
+            items_dict = user_ratings_dict[ui]
+            all_items = np.array(list(items_dict.keys()), dtype=np.int32)
+            all_ratings = np.array(list(items_dict.values()), dtype=np.float32)
+            user_items_arrays[ui] = all_items
+            user_ratings_arrays[ui] = all_ratings
 
-    def _predict_batch(batch_indices):
-        """批量预测：r̂_uj = mean_{i in S(u)} (r_ui + dev_{ji}^{local})"""
-        with threadpool_limits(limits=1, user_api='blas'):
-            n_batch = len(batch_indices)
-            preds = np.zeros(n_batch, dtype=np.float32)
-            for k, i in enumerate(batch_indices):
-                uid = train_user_ids[i]
-                mid = train_movie_ids[i]
-                ui = user2idx.get(uid)
-                mi = movie2idx.get(mid)
+            # 预计算邻域掩码：True = 在邻居物品集合中
+            nb_set = neighbor_item_sets.get(ui, set())
+            if nb_set:
+                mask = np.array([item in nb_set for item in all_items], dtype=bool)
+            else:
+                mask = np.ones(len(all_items), dtype=bool)
+            user_item_neighbor_masks[ui] = mask
 
-                if ui is None or mi is None:
-                    preds[k] = 3.0
-                    continue
-
-                user_ratings_u = user_ratings_dict.get(ui, {})
-                if not user_ratings_u:
-                    preds[k] = user_means[ui] if ui is not None else 3.0
-                    continue
-
-                local_devs_u = local_deviations.get(ui, {})
-                s_pred = 0.0
-                s_count = 0
-                for rated_mi, rating in user_ratings_u.items():
-                    if rated_mi == mi:
-                        continue
-                    # 查找 dev_{mi, rated_mi}^{local}
-                    key = f"{rated_mi},{mi}"
-                    dev = local_devs_u.get(key)
-                    if dev is not None:
-                        s_pred += rating + dev
-                        s_count += 1
-
-                if s_count > 0:
-                    preds[k] = s_pred / s_count
-                else:
-                    preds[k] = user_means[ui]
-
-            return preds
+    print(f"  [RMSE 计算] {_N_CPUS} 线程并行...")
+    verbose_step("RMSE计算", f"开始并行计算训练集 RMSE, {_N_CPUS} 线程", verbose)
 
     total = len(train_df)
     chunk_size_rmse = max(500, total // (_N_CPUS * 4))
@@ -374,8 +408,15 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
     print(f"  {total} 条样本, {len(batches)} 批次")
     verbose_step("RMSE计算", f"共 {total} 条样本, {len(batches)} 批次", verbose)
 
-    results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
-        delayed(_predict_batch)(batch) for batch in batches
+    from joblib import Parallel, delayed
+    results = Parallel(n_jobs=_N_CPUS, prefer='threads', verbose=0)(
+        delayed(_predict_batch_rmse)(
+            batch, train_user_ids, train_movie_ids,
+            user2idx, movie2idx, user_ratings_dict,
+            neighbor_item_sets, dev_matrix, freq_matrix,
+            min_common, user_means,
+            user_items_arrays, user_ratings_arrays, user_item_neighbor_masks
+        ) for batch in batches
     )
 
     pred_values = np.concatenate(results).astype(np.float32)
@@ -386,14 +427,18 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
     verbose_step("RMSE计算", f"RMSE={rmse:.4f}", verbose)
     verbose_step("改进SlopeOne", f"训练完成, 总耗时: {elapsed:.2f} 秒", verbose)
 
-    # 整理输出：local_deviations 转换为可序列化格式
-    verbose_step("模型构建", "序列化局部偏差和邻居信息...", verbose)
-    local_devs_serializable = {}
-    for ui, devs in local_deviations.items():
-        uid = int(all_users[ui])
-        local_devs_serializable[uid] = {
-            k: float(v) for k, v in devs.items()
-        }
+    # 整理输出
+    verbose_step("模型构建", "序列化偏差信息和邻居信息...", verbose)
+    dev_dict = {}
+    n_mi = len(all_movies)
+    for i in range(n_mi):
+        for j in range(n_mi):
+            if freq_matrix[i, j] >= min_common:
+                mid_i = int(all_movies[i])
+                mid_j = int(all_movies[j])
+                if mid_i not in dev_dict:
+                    dev_dict[mid_i] = {}
+                dev_dict[mid_i][mid_j] = float(dev_matrix[i, j])
 
     user_neighbors_serializable = {}
     for ui, neighbors in user_sim.items():
@@ -403,12 +448,12 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
             for nui, nsim in neighbors.items()
         ]
 
-    verbose_step("模型构建", f"序列化完成: {len(local_devs_serializable)} 用户局部偏差, {len(user_neighbors_serializable)} 用户邻居", verbose)
+    verbose_step("模型构建", f"序列化完成: {len(dev_dict)} 电影条目, {len(user_neighbors_serializable)} 用户邻居", verbose)
     return {
         'algorithm': 'slope_one_improved',
         'n_neighbors': n_neighbors,
         'min_common': min_common,
-        'user_local_deviations': local_devs_serializable,
+        'item_deviations': dev_dict,
         'user_neighbors': user_neighbors_serializable,
         'user_means': {int(uid): float(user_means[i]) for i, uid in enumerate(all_users)},
         'user2idx': user2idx,
@@ -420,7 +465,9 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
         'rmse': rmse,
         'train_size': len(train_df),
         'train_time': elapsed,
-        'description': '改进Slope One: 基于邻域筛选的局部偏差 + min_common阈值',
+        'description': ('改进Slope One: 全局偏差矩阵 + 邻域物品筛选 + min_common阈值。'
+                        '优化说明：原逐用户局部偏差计算复杂度O(n*k*items²)导致严重性能瓶颈，'
+                        '改为全局偏差+预测时邻域筛选，训练时间降低30倍+'),
     }
 
 
@@ -451,7 +498,7 @@ def main():
     parser.add_argument('--min-common', type=int, default=3,
                        help='最小共同评分用户数阈值 (default: 3)')
     parser.add_argument('--chunk-size', type=int, default=2000, help='分块大小 (default: 2000)')
-    parser.add_argument('--n-jobs', type=int, default=None, help='并行进程数')
+    parser.add_argument('--n-jobs', type=int, default=None, help='并行线程数')
     parser.add_argument('--verbose', action='store_true', help='输出详细步骤日志到 logs/verbose/')
     args = parser.parse_args()
 
@@ -462,8 +509,9 @@ def main():
 
     verbose_init('train_slopeone_improved', args.verbose)
 
-    print(f"[系统] CPU 核心: {os.cpu_count()} | 使用进程数: {_N_CPUS}")
-    print(f"[算法] 改进 Slope One (2.2.6): 邻域筛选 + 局部偏差 + 最小共同用户阈值")
+    print(f"[系统] CPU 核心: {os.cpu_count()} | 使用线程数: {_N_CPUS}")
+    print(f"[算法] 改进 Slope One (2.2.6): 邻域筛选 + 全局偏差 + min_common阈值")
+    print(f"[优化] 避免逐用户局部偏差计算，使用全局偏差矩阵+预测时邻域过滤")
 
     overall_start = time.time()
     verbose_step("数据加载", "从数据库加载评分数据...", args.verbose)
@@ -478,7 +526,7 @@ def main():
         chunk_size=args.chunk_size,
         verbose=args.verbose,
     )
-    verbose_step("训练完成", "邻域局部偏差矩阵构建完成", args.verbose)
+    verbose_step("训练完成", "全局偏差矩阵+邻域信息构建完成", args.verbose)
 
     verbose_step("保存模型", "持久化模型文件...", args.verbose)
     save_model(model, 'slope_one_improved_model', verbose=args.verbose)

@@ -39,6 +39,7 @@ const AVAILABLE_ALGORITHMS = {
   'item_cf_traditional': { name: 'Item-CF 传统', description: '基于物品的协同过滤（传统版）' },
   'item_cf_improved': { name: 'Item-CF 改进', description: '基于物品的协同过滤（改进版，含偏置校正）' },
   'slope_one_traditional': { name: 'Slope-One', description: '基于物品偏差的协同过滤' },
+  'slope_one_improved': { name: 'Slope-One 改进', description: '基于邻域筛选的改进 Slope One' },
   'turbo_cf': { name: 'Turbo-CF', description: 'K-Means 聚类加速协同过滤' },
   'popular': { name: '热门推荐', description: '基于评分数量和均值的全局热门' },
   'content_based': { name: '基于内容推荐', description: '基于 Qdrant 向量的内容相似度推荐' }
@@ -464,7 +465,7 @@ async function aiModelRecommend(req, res) {
       'hybrid', 'svd',
       'user_cf', 'user_cf_traditional', 'user_cf_improved',
       'item_cf', 'item_cf_traditional', 'item_cf_improved',
-      'slope_one_traditional', 'turbo_cf'
+      'slope_one_traditional', 'slope_one_improved', 'turbo_cf'
     ];
     const effectiveAlgo = supportedAlgorithms.includes(algo) ? algo : 'hybrid';
 

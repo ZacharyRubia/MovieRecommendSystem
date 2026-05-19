@@ -22,6 +22,7 @@ const MODEL_FILE_MAP = {
   item_cf_traditional: 'item_cf_traditional_model.json',
   item_cf_improved: 'item_cf_improved_model.json',
   slope_one_traditional: 'slope_one_traditional_model.json',
+  slope_one_improved: 'slope_one_improved_model.json',
   turbo_cf: 'turbo_cf_model.json',
 };
 
@@ -428,6 +429,86 @@ function recommendSlopeOne(model, userId, topN = 10) {
 }
 
 // ============================================================
+// Slope-One Improved Recommendation (基于邻域筛选)
+// 数据结构:
+//   item_deviations: {movieIdStr: {otherMovieIdStr: deviation, ...}}
+//   user_neighbors: {userIdStr: [[neighborId, sim], ...]}
+//   user_movies: {userIdStr: [movieId, ...]}
+//   user_means: {userIdStr: meanRating}
+//   all_movies: [movieId, ...]
+// ============================================================
+function recommendSlopeOneImproved(model, userId, topN = 10) {
+  const { item_deviations, user_neighbors, user_movies, user_means, all_movies } = model;
+
+  const uidStr = String(userId);
+  if (!(uidStr in user_movies)) return [];
+
+  const userRatedList = (user_movies[uidStr] || []).map(String);
+  const ratedMovies = new Set(userRatedList);
+
+  if (userRatedList.length === 0) return [];
+
+  const neighbors = user_neighbors[uidStr] || [];
+  if (neighbors.length === 0) {
+    return recommendSlopeOne(model, userId, topN);
+  }
+
+  const n_neighbors = model.n_neighbors || 30;
+  const topNeighbors = neighbors.slice(0, n_neighbors);
+
+  // 构建邻域电影集合：邻居评分过的所有电影
+  const neighborMovieSet = new Set();
+  for (const [nuid] of topNeighbors) {
+    const nMovies = user_movies[String(nuid)];
+    if (nMovies) {
+      for (const mid of nMovies) {
+        neighborMovieSet.add(String(mid));
+      }
+    }
+  }
+
+  // 筛选用户评分电影中也在邻域集合中的电影
+  const filteredRatedMovies = userRatedList.filter(m => neighborMovieSet.has(m));
+  if (filteredRatedMovies.length === 0) {
+    return recommendSlopeOne(model, userId, topN);
+  }
+
+  const uidMean = user_means[uidStr] || 3.5;
+  const candidateMoviesList = all_movies || Object.keys(item_deviations || {});
+  const maxCandidates = Math.min(candidateMoviesList.length, 2000);
+  const candidateMovies = candidateMoviesList
+    .filter(m => {
+      const mStr = String(m);
+      return !ratedMovies.has(mStr);
+    })
+    .slice(0, maxCandidates);
+
+  const predictions = [];
+
+  for (const mid of candidateMovies) {
+    const midStr = String(mid);
+    const devDict = item_deviations[midStr];
+    if (!devDict || Object.keys(devDict).length === 0) continue;
+
+    let num = 0, den = 0;
+    for (const ratedMidStr of filteredRatedMovies) {
+      const dev = devDict[ratedMidStr];
+      if (dev !== undefined) {
+        num += uidMean + dev;
+        den += 1;
+      }
+    }
+
+    if (den > 0) {
+      predictions.push({ movieId: parseInt(midStr, 10), score: num / den });
+    }
+  }
+
+  predictions.sort((a, b) => b.score - a.score);
+  return predictions.slice(0, topN);
+}
+
+// ============================================================
 // Turbo-CF Recommendation (K-Means 聚类加速协同过滤)
 // ============================================================
 function recommendTurboCF(model, userId, topN = 10) {
@@ -488,6 +569,7 @@ const RECOMMEND_FUNCTIONS = {
   item_cf_traditional: recommendItemCF,
   item_cf_improved: recommendItemCFImproved,
   slope_one_traditional: recommendSlopeOne,
+  slope_one_improved: recommendSlopeOneImproved,
   turbo_cf: recommendTurboCF,
 };
 
@@ -497,13 +579,14 @@ const RECOMMEND_FUNCTIONS = {
 function recommendHybridAll(modelMap, userId, topN = 10) {
   // 默认权重: svd + user_cf + item_cf + turbo_cf + slope_one
   const weights = {
-    svd: 0.25,
-    user_cf: 0.15,
-    item_cf: 0.15,
-    turbo_cf: 0.20,
-    slope_one_traditional: 0.10,
+    svd: 0.22,
+    user_cf: 0.13,
+    item_cf: 0.13,
+    turbo_cf: 0.18,
+    slope_one_traditional: 0.08,
+    slope_one_improved: 0.08,
     user_cf_improved: 0.08,
-    item_cf_improved: 0.07,
+    item_cf_improved: 0.10,
   };
 
   // 旧版兼容: 只有4个基础算法时的混合
@@ -521,6 +604,7 @@ function recommendHybridAll(modelMap, userId, topN = 10) {
   // 确定使用哪些算法: 检查已加载的模型
   const availableAlgos = Object.keys(weights).filter(algo => modelMap[algo] || _models[algo]);
   const hasAdvancedAlgos = availableAlgos.includes('slope_one_traditional') ||
+    availableAlgos.includes('slope_one_improved') ||
     availableAlgos.includes('user_cf_improved');
 
   const activeWeights = hasAdvancedAlgos ? weights : legacyWeights;
