@@ -281,7 +281,6 @@
       background-color: #000000;
       color: #ffffff;
     }
-    /* AI 算法切换标签样式 */
     .ai-tab-btn {
       padding: 8px 18px;
       background-color: #ffffff;
@@ -333,30 +332,32 @@
       <p>欢迎使用电影推荐系统，浏览精彩电影，享受观影体验！</p>
     </div>
 
-    <!-- 推荐电影区域（使用 AI 模型混合推荐，快速加载） -->
+    <!-- 推荐电影区域（混合推荐，加载 10 部） -->
     <div class="recommend-section" id="recommendSection">
       <h3 class="section-title">
-        推荐给你
-        <span class="section-subtitle">AI 混合推荐引擎</span>
+        混合推荐
       </h3>
       <div id="recommendContainer">
-        <div class="recommend-loading">🎬 正在为你生成个性化推荐...</div>
+        <div class="recommend-loading">🎬 正在为你生成推荐...</div>
       </div>
     </div>
 
     <!-- AI 模型推荐区域（独立切换不同算法） -->
     <div class="recommend-section" id="aiRecommendSection">
       <h3 class="section-title">
-        🤖 AI 智能推荐
-        <span class="section-subtitle">切换不同模型查看推荐结果</span>
+        普通推荐
       </h3>
       
       <!-- 算法切换标签 -->
       <div id="aiTabContainer" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <button class="ai-tab-btn active" data-algorithm="svd" onclick="switchAiAlgorithm('svd')">SVD 模型</button>
-        <button class="ai-tab-btn" data-algorithm="user_cf" onclick="switchAiAlgorithm('user_cf')">User-CF 模型</button>
-        <button class="ai-tab-btn" data-algorithm="item_cf" onclick="switchAiAlgorithm('item_cf')">Item-CF 模型</button>
-        <button class="ai-tab-btn" data-algorithm="turbo_cf" onclick="switchAiAlgorithm('turbo_cf')">Turbo-CF 模型</button>
+        <button class="ai-tab-btn active" data-algorithm="hybrid" onclick="switchAiAlgorithm('hybrid')">混合推荐</button>
+        <button class="ai-tab-btn" data-algorithm="svd" onclick="switchAiAlgorithm('svd')">SVD</button>
+        <button class="ai-tab-btn" data-algorithm="user_cf_traditional" onclick="switchAiAlgorithm('user_cf_traditional')">User-CF传统</button>
+        <button class="ai-tab-btn" data-algorithm="user_cf_improved" onclick="switchAiAlgorithm('user_cf_improved')">User-CF改进</button>
+        <button class="ai-tab-btn" data-algorithm="item_cf_traditional" onclick="switchAiAlgorithm('item_cf_traditional')">Item-CF传统</button>
+        <button class="ai-tab-btn" data-algorithm="item_cf_improved" onclick="switchAiAlgorithm('item_cf_improved')">Item-CF改进</button>
+        <button class="ai-tab-btn" data-algorithm="slope_one_traditional" onclick="switchAiAlgorithm('slope_one_traditional')">SlopeOne</button>
+        <button class="ai-tab-btn" data-algorithm="turbo_cf" onclick="switchAiAlgorithm('turbo_cf')">Turbo-CF</button>
         <span id="aiStatusBadge" style="margin-left:auto;font-size:13px;color:#888;padding:6px 0;"></span>
       </div>
       
@@ -364,7 +365,7 @@
       <div id="aiModelInfo" style="margin-bottom:16px;font-size:13px;color:#666;display:none;"></div>
       
       <div id="aiRecommendContainer">
-        <div class="recommend-empty">🤔 加载中，请稍候...</div>
+        <div class="recommend-empty">⏳ 加载中，请稍候...</div>
       </div>
     </div>
 
@@ -390,7 +391,6 @@
     if (!currentUser) {
       window.location.href = '/index.html';
     } else {
-      // 如果是管理员，跳转到管理页面
       if (currentUser.role_id === 1) {
         window.location.href = '/user-management.html';
       }
@@ -463,10 +463,8 @@
       const paginationContainer = document.getElementById('pagination');
       let html = '';
 
-      // 上一页
       html += `<button onclick="loadMovies(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
 
-      // 页码
       for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
           html += `<button class="${i === currentPage ? 'current-page' : ''}" onclick="loadMovies(${i})">${i}</button>`;
@@ -475,7 +473,6 @@
         }
       }
 
-      // 下一页
       html += `<button onclick="loadMovies(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
 
       paginationContainer.innerHTML = html;
@@ -487,25 +484,23 @@
     }
 
     // =============================================
-    // 推荐电影 - 优先使用 AI 模型（快速加载）
+    // 推荐电影 - 混合推荐
     // =============================================
 
     async function loadRecommendations() {
       const container = document.getElementById('recommendContainer');
       const userId = currentUser.id;
-      container.innerHTML = '<div class="recommend-loading">🎬 正在为你生成个性化推荐...</div>';
+      container.innerHTML = '<div class="recommend-loading">🎬 正在为你生成推荐...</div>';
 
       try {
-        // 步骤 1: 优先调用 AI 混合推荐
-        // 首次加载需等待模型文件加载（svd_model.json ~67MB + user_cf + item_cf），放宽到 120 秒
+        // 调用 AI 混合推荐，首次加载放宽到 120 秒
         const aiResult = await tryAiRecommendation(userId, 'hybrid', 10, 120000);
         if (aiResult && aiResult.length > 0) {
-          // AI 推荐成功，将返回的 movieId 映射为电影信息
-          await renderSimpleRecommendCards(container, aiResult, 'AI 混合推荐');
+          await renderSimpleRecommendCards(container, aiResult);
           return;
         }
 
-        // 步骤 2: AI 推荐失败或为空，降级为热门推荐（更快）
+        // 降级为热门推荐
         console.log('[推荐] AI 无结果，降级到热门推荐');
         const popularRes = await fetch(`${API_BASE}/recommend/popular?page=1&pageSize=10`);
         const popularData = await popularRes.json();
@@ -514,11 +509,10 @@
             movieId: r.movieId,
             predictedRating: r.predictedRating || r.avgRating || 0
           }));
-          await renderSimpleRecommendCards(container, enriched, '热门推荐');
+          await renderSimpleRecommendCards(container, enriched);
           return;
         }
 
-        // 步骤 3: 兜底为空
         container.innerHTML = `<div class="recommend-empty">暂无推荐结果，去评分更多电影吧！🎥</div>`;
       } catch (error) {
         console.error('加载推荐失败:', error);
@@ -552,12 +546,11 @@
     }
 
     /**
-     * 渲染推荐卡片（从 AI 返回的 raw movieId 批量获取电影信息）
+     * 渲染推荐卡片
      */
-    async function renderSimpleRecommendCards(container, rawRecommendations, label) {
+    async function renderSimpleRecommendCards(container, rawRecommendations) {
       const movieIds = rawRecommendations.map(r => r.movieId);
       
-      // 批量查询电影信息
       let movieInfoMap = {};
       try {
         const response = await fetch(`${API_BASE}/movies?ids=${movieIds.join(',')}`);
@@ -588,7 +581,7 @@
                 <span>★ ${r.predictedRating ? r.predictedRating.toFixed(2) : '?'}</span>
               </div>
               <span class="recommend-badge">
-                推荐度 ${r.predictedRating ? ((r.predictedRating / 5) * 100).toFixed(0) + '%' : '?'}
+                ${r.predictedRating ? ((r.predictedRating / 5) * 100).toFixed(0) + '%' : '?'}
               </span>
             </div>
           </div>
@@ -597,8 +590,7 @@
 
       container.innerHTML = `
         <div style="margin-bottom:6px;font-size:12px;color:#888;">
-          <span>来源: <strong>${label}</strong></span>
-          <span style="margin-left:12px;">📊 推荐 ${rawRecommendations.length} 部电影</span>
+          <span>推荐10部电影</span>
         </div>
         <div class="recommend-scroll">
           ${cards}
@@ -610,7 +602,7 @@
     // AI 模型推荐（独立区域，切换算法）
     // =============================================
 
-    let currentAiAlgorithm = 'svd';
+    let currentAiAlgorithm = 'hybrid';
     let aiModelMeta = null;
 
     /**
@@ -637,35 +629,36 @@
         const healthRes = await fetch(`${API_BASE}/recommend/ai/health`);
         const health = await healthRes.json();
         if (health.success) {
-          badge.innerHTML = '✅ AI 服务在线';
+          badge.innerHTML = '✅ 服务在线';
           badge.style.color = '#2e7d32';
 
-          // 加载模型信息
           const modelsRes = await fetch(`${API_BASE}/recommend/ai/models`);
           const models = await modelsRes.json();
           if (models.success) {
             aiModelMeta = models.data;
-            renderAiModelInfo();
           }
         } else {
-          badge.innerHTML = '❌ AI 服务离线';
+          badge.innerHTML = '❌ 服务离线';
           badge.style.color = '#d32f2f';
         }
       } catch (e) {
-        badge.innerHTML = '❌ AI 服务离线';
+        badge.innerHTML = '❌ 服务离线';
         badge.style.color = '#d32f2f';
-        console.warn('AI 服务健康检查失败:', e.message);
+        console.warn('服务健康检查失败:', e.message);
       }
     }
 
-    /**
-     * 渲染 AI 模型信息
-     */
-    function renderAiModelInfo() {
-      // 不再显示模型名称/类型信息
-      const infoDiv = document.getElementById('aiModelInfo');
-      infoDiv.style.display = 'none';
-    }
+    // 算法中文名映射
+    const algorithmNames = {
+      'hybrid': '混合推荐',
+      'svd': 'SVD',
+      'user_cf_traditional': 'User-CF传统',
+      'user_cf_improved': 'User-CF改进',
+      'item_cf_traditional': 'Item-CF传统',
+      'item_cf_improved': 'Item-CF改进',
+      'slope_one_traditional': 'SlopeOne',
+      'turbo_cf': 'Turbo-CF'
+    };
 
     /**
      * 加载 AI 模型推荐
@@ -673,26 +666,19 @@
     async function loadAiRecommendations() {
       const container = document.getElementById('aiRecommendContainer');
       const userId = currentUser.id;
-      const algorithmNames = {
-        'svd': 'SVD 模型',
-        'user_cf': 'User-CF 模型',
-        'item_cf': 'Item-CF 模型',
-        'turbo_cf': 'Turbo-CF 模型'
-      };
 
-      container.innerHTML = `<div class="recommend-loading">🤖 正在使用 ${algorithmNames[currentAiAlgorithm] || currentAiAlgorithm} 生成推荐...</div>`;
+      container.innerHTML = `<div class="recommend-loading">⏳ 加载中...</div>`;
 
-      // 确保模型列表已加载，若未加载则在此处同步获取
+      // 首次加载用 120s，后续用 30s
       if (!aiModelMeta) {
         try {
           const modelsRes = await fetch(`${API_BASE}/recommend/ai/models`);
           const models = await modelsRes.json();
           if (models.success) aiModelMeta = models.data;
         } catch (e) {
-          console.warn('[AI 推荐] 模型列表加载失败，使用默认超时:', e.message);
+          console.warn('[普通推荐] 模型列表加载失败:', e.message);
         }
       }
-      // 未注册过 meta（首次）→ 120s；已加载模型列表（非首次）→ 30s
       const isFirstLoad = !aiModelMeta || !aiModelMeta.models;
       const timeoutMs = isFirstLoad ? 120000 : 30000;
 
@@ -711,16 +697,16 @@
         if (data.success && data.data && data.data.recommendations && data.data.recommendations.length > 0) {
           renderAiRecommendations(data.data);
         } else if (data.success) {
-          container.innerHTML = `<div class="recommend-empty">🤔 ${algorithmNames[currentAiAlgorithm]} 暂时没有推荐结果。去评分更多电影吧！</div>`;
+          container.innerHTML = `<div class="recommend-empty">${algorithmNames[currentAiAlgorithm] || currentAiAlgorithm} 暂时没有推荐结果。去评分更多电影吧！</div>`;
         } else {
-          container.innerHTML = `<div class="recommend-error">😿 ${data.message || '推荐请求失败'}</div>`;
+          container.innerHTML = `<div class="recommend-error">${data.message || '推荐请求失败'}</div>`;
         }
       } catch (error) {
-        console.error('AI 推荐失败:', error);
+        console.error('普通推荐失败:', error);
         if (error.name === 'AbortError') {
-          container.innerHTML = '<div class="recommend-error">⏰ AI 推荐请求超时，请稍后再试</div>';
+          container.innerHTML = '<div class="recommend-error">⏰ 推荐请求超时，请稍后再试</div>';
         } else {
-          container.innerHTML = '<div class="recommend-error">😿 AI 推荐服务暂不可用，请稍后再试</div>';
+          container.innerHTML = '<div class="recommend-error">推荐服务暂不可用，请稍后再试</div>';
         }
       }
     }
@@ -732,26 +718,21 @@
       const container = document.getElementById('aiRecommendContainer');
       const recommendations = data.recommendations || [];
 
-      // 显示耗时和数量信息
       const infoHtml = `
         <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;color:#666;">
-          <span>⚡ 耗时: ${data.elapsed || '?'}s</span>
-          <span>📊 结果: ${data.total} 部</span>
+          <span>${data.total}部</span>
         </div>
       `;
 
-      // 由于 AI 模型返回的是 raw movieId，需要获取电影信息
       renderAiRecommendCards(container, recommendations, infoHtml);
     }
 
     /**
-     * 渲染 AI 推荐卡片（带电影信息查询）
+     * 渲染 AI 推荐卡片
      */
     async function renderAiRecommendCards(container, rawRecommendations, infoHtml) {
-      // 提取 movieId 列表
       const movieIds = rawRecommendations.map(r => r.movieId);
       
-      // 批量查询电影信息
       let movieInfoMap = {};
       try {
         const response = await fetch(`${API_BASE}/movies?ids=${movieIds.join(',')}`);
@@ -762,7 +743,7 @@
           });
         }
       } catch (e) {
-        console.warn('获取 AI 推荐电影信息失败:', e.message);
+        console.warn('获取推荐电影信息失败:', e.message);
       }
 
       const cards = rawRecommendations.map(r => {
@@ -802,13 +783,9 @@
     // =============================================
     // 页面初始化
     // =============================================
-    // 1. 立即加载"推荐给你"（AI 混合推荐，快）
     loadRecommendations();
-    // 2. 加载 AI 服务状态（异步）
     checkAiServiceHealth();
-    // 3. 加载"AI 智能推荐"区域（等 health check 完再自动加载，利用 cached 信息）
     setTimeout(() => loadAiRecommendations(), 500);
-    // 4. 加载电影列表
     loadMovies(1);
   </script>
 </body>

@@ -46,7 +46,87 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'extract_test_subset_test')
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'evaluation_results')
+EVAL_CACHE_DIR = os.path.join(BASE_DIR, 'evaluation_cache')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(EVAL_CACHE_DIR, exist_ok=True)
+
+
+# ─── 缓存辅助函数 ──────────────────────────────────────────────
+
+def _get_cache_fingerprint(train_df):
+    """
+    根据训练数据生成缓存指纹（哈希值）
+    确保当训练数据变化时，缓存自动失效
+    """
+    import hashlib
+    # 使用训练集的用户数、电影数、评分条数和用户ID列表的哈希
+    n_users = int(train_df['user_id'].nunique())
+    n_movies = int(train_df['movie_id'].nunique())
+    n_ratings = len(train_df)
+
+    # 对用户ID排序后取哈希（确保稳定性）
+    user_ids_hash = hashlib.md5(
+        str(sorted(train_df['user_id'].unique())).encode()
+    ).hexdigest()[:12]
+
+    # 对电影ID排序后取哈希
+    movie_ids_hash = hashlib.md5(
+        str(sorted(train_df['movie_id'].unique())).encode()
+    ).hexdigest()[:12]
+
+    fingerprint = f"U{n_users}_M{n_movies}_R{n_ratings}_u{user_ids_hash}_m{movie_ids_hash}"
+    return fingerprint
+
+
+def _get_cache_path(cache_dir, fingerprint, model_name):
+    """获取模型缓存文件路径"""
+    cache_subdir = os.path.join(cache_dir, fingerprint)
+    os.makedirs(cache_subdir, exist_ok=True)
+    return os.path.join(cache_subdir, f"{model_name}.pkl")
+
+
+def _save_trained_model(cache_dir, fingerprint, model):
+    """
+    保存训练好的模型状态（不包括 ctx）
+    只保存模型预测所需的核心数据，大幅减少缓存体积
+    """
+    cache_path = _get_cache_path(cache_dir, fingerprint, model.name)
+
+    # 提取模型状态（排除 ctx）
+    state = {}
+    for key, value in model.__dict__.items():
+        if key != 'ctx':
+            state[key] = value
+
+    with open(cache_path, 'wb') as f:
+        pickle.dump(state, f)
+
+    size_mb = os.path.getsize(cache_path) / (1024 * 1024)
+    print(f"  [缓存] {model.name} 已保存 ({size_mb:.2f} MB)")
+    return cache_path
+
+
+def _load_trained_model(cache_dir, fingerprint, model, ctx):
+    """
+    从缓存加载模型状态
+    返回 True 表示加载成功，False 表示缓存不存在
+    """
+    cache_path = _get_cache_path(cache_dir, fingerprint, model.name)
+    if not os.path.exists(cache_path):
+        return False
+
+    with open(cache_path, 'rb') as f:
+        state = pickle.load(f)
+
+    # 恢复模型状态
+    for key, value in state.items():
+        setattr(model, key, value)
+    model.ctx = ctx
+    model.trained = True
+
+    size_mb = os.path.getsize(cache_path) / (1024 * 1024)
+    print(f"  [缓存] {model.name} 已加载 ({size_mb:.2f} MB)")
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1307,7 +1387,7 @@ def evaluate_model(model, test_df, train_df, ctx, top_n=10):
     }
 
 
-def run_evaluation(test_size=None):
+def run_evaluation(test_size=None, no_cache=False):
     """运行完整评估流程"""
     overall_start = time.time()
 
@@ -1325,6 +1405,14 @@ def run_evaluation(test_size=None):
     # ── 3. 构建评分矩阵上下文 ──
     ctx = build_rating_matrices(train_df)
 
+    # ── 生成缓存指纹 ──
+    if no_cache:
+        fingerprint = None
+        print(f"  [缓存] 已禁用 (--no-cache)")
+    else:
+        fingerprint = _get_cache_fingerprint(train_df)
+        print(f"  [缓存] 指纹: {fingerprint}")
+
     # ── 4. 训练/初始化所有模型 ──
     print(f"\n{'=' * 60}")
     print("模型训练阶段")
@@ -1332,39 +1420,58 @@ def run_evaluation(test_size=None):
 
     models = {}
 
+    def _train_or_load(model, ctx, fingerprint, no_cache):
+        """辅助函数：尝试从缓存加载，否则训练再保存"""
+        cache_loaded = False
+        if fingerprint and not no_cache:
+            cache_loaded = _load_trained_model(EVAL_CACHE_DIR, fingerprint, model, ctx)
+        if not cache_loaded:
+            model.train(ctx)
+            if fingerprint and not no_cache:
+                _save_trained_model(EVAL_CACHE_DIR, fingerprint, model)
+        return model
+
     # 4.1 传统 User-CF
-    models['traditional_user_cf'] = TraditionalUserCF(n_neighbors=30)
-    models['traditional_user_cf'].train(ctx)
+    model = TraditionalUserCF(n_neighbors=30)
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['traditional_user_cf'] = model
 
     # 4.2 改进 User-CF
-    models['improved_user_cf'] = ImprovedUserCF(n_neighbors=30, use_stability=True)
-    models['improved_user_cf'].train(ctx)
+    model = ImprovedUserCF(n_neighbors=30, use_stability=True)
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['improved_user_cf'] = model
 
     # 4.3 传统 Item-CF
-    models['traditional_item_cf'] = TraditionalItemCF(n_neighbors=30)
-    models['traditional_item_cf'].train(ctx)
+    model = TraditionalItemCF(n_neighbors=30)
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['traditional_item_cf'] = model
 
     # 4.4 改进 Item-CF
-    models['improved_item_cf'] = ImprovedItemCF(n_neighbors=30)
-    models['improved_item_cf'].train(ctx)
+    model = ImprovedItemCF(n_neighbors=30)
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['improved_item_cf'] = model
 
     # 4.5 传统 Slope One
-    models['traditional_slope_one'] = TraditionalSlopeOne()
-    models['traditional_slope_one'].train(ctx)
+    model = TraditionalSlopeOne()
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['traditional_slope_one'] = model
 
     # 4.6 改进 Slope One
-    models['improved_slope_one'] = ImprovedSlopeOne(n_neighbors=30, svd_factors=50)
-    models['improved_slope_one'].train(ctx)
+    model = ImprovedSlopeOne(n_neighbors=30, svd_factors=50)
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['improved_slope_one'] = model
 
     # 4.7 SVD
     svd_model_path = os.path.join(MODEL_DIR, 'svd_model.pkl')
-    models['svd'] = SVDModel(n_factors=50, model_path=svd_model_path)
-    models['svd'].train(ctx)
+    model = SVDModel(n_factors=50, model_path=svd_model_path)
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['svd'] = model
 
     # 4.8 Turbo-CF (加速协同过滤)
     turbo_cf_model_path = os.path.join(MODEL_DIR, 'turbo_cf_model.pkl')
-    models['turbo_cf'] = TurboCFModel(model_path=turbo_cf_model_path)
-    models['turbo_cf'].train(ctx)
+    model = TurboCFModel(model_path=turbo_cf_model_path)
+    _train_or_load(model, ctx, fingerprint, no_cache)
+    models['turbo_cf'] = model
 
     # 4.9 混合推荐 (使用所有已训练模型)
     hybrid_models = {name: models[name] for name in models}
@@ -1463,9 +1570,11 @@ def main():
                         help='限制测试样本数 (调试用)')
     parser.add_argument('--top-n', type=int, default=10,
                         help='推荐列表长度 (默认: 10)')
+    parser.add_argument('--no-cache', action='store_true',
+                        help='禁用模型缓存，每次从头训练')
     args = parser.parse_args()
 
-    run_evaluation(test_size=args.test_size)
+    run_evaluation(test_size=args.test_size, no_cache=args.no_cache)
 
 
 if __name__ == '__main__':

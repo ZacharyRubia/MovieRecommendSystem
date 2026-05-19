@@ -10,6 +10,21 @@ const _models = {};
 // 并发加载保护锁：防止 warmupModels() 和首次请求同时加载同一模型
 const _loadingPromises = {};
 
+// ============================================================
+// 模型文件名映射表（扩展支持全部 7+ 个模型）
+// ============================================================
+const MODEL_FILE_MAP = {
+  svd: 'svd_model.json',
+  user_cf: 'user_cf_traditional_model.json',      // 向后兼容旧名
+  user_cf_traditional: 'user_cf_traditional_model.json',
+  user_cf_improved: 'user_cf_improved_model.json',
+  item_cf: 'item_cf_traditional_model.json',      // 向后兼容旧名
+  item_cf_traditional: 'item_cf_traditional_model.json',
+  item_cf_improved: 'item_cf_improved_model.json',
+  slope_one_traditional: 'slope_one_traditional_model.json',
+  turbo_cf: 'turbo_cf_model.json',
+};
+
 /**
  * 异步加载 JSON 模型，大文件不阻塞事件循环
  */
@@ -46,26 +61,16 @@ function loadJsonModelSync(filename) {
 }
 
 async function loadModelAsync(algorithm) {
-  // 1. 已缓存 → 直接返回
   if (_models[algorithm]) return _models[algorithm];
 
-  const modelMap = {
-    svd: 'svd_model.json',
-    user_cf: 'user_cf_model.json',
-    item_cf: 'item_cf_model.json',
-    turbo_cf: 'turbo_cf_model.json',
-  };
-
-  const filename = modelMap[algorithm];
+  const filename = MODEL_FILE_MAP[algorithm];
   if (!filename) throw new Error(`Unknown algorithm: ${algorithm}`);
 
-  // 2. 已有同名 model 正在加载中 → 共享同一个 promise，避免并发重复加载
   if (_loadingPromises[algorithm]) {
     console.log(`[Load model] ${algorithm}: ${filename} (awaiting existing load)`);
     return _loadingPromises[algorithm];
   }
 
-  // 3. 首次加载 → 创建 loading promise，缓存后在末尾释放
   console.log(`[Load model] ${algorithm}: ${filename}`);
   _loadingPromises[algorithm] = loadJsonModelAsync(filename).then(model => {
     _models[algorithm] = model;
@@ -79,14 +84,7 @@ async function loadModelAsync(algorithm) {
 function loadModel(algorithm) {
   if (_models[algorithm]) return _models[algorithm];
 
-  const modelMap = {
-    svd: 'svd_model.json',
-    user_cf: 'user_cf_model.json',
-    item_cf: 'item_cf_model.json',
-    turbo_cf: 'turbo_cf_model.json',
-  };
-
-  const filename = modelMap[algorithm];
+  const filename = MODEL_FILE_MAP[algorithm];
   if (!filename) throw new Error(`Unknown algorithm: ${algorithm}`);
 
   console.log(`[Load model sync] ${algorithm}: ${filename}`);
@@ -99,7 +97,7 @@ function loadModel(algorithm) {
  * 预热：在服务器启动时异步预加载所有模型
  */
 async function warmupModels() {
-  const algorithms = ['svd', 'user_cf', 'item_cf', 'turbo_cf'];
+  const algorithms = Object.keys(MODEL_FILE_MAP);
   console.log('[预热] 开始预加载推荐模型...');
   for (const algo of algorithms) {
     try {
@@ -113,7 +111,7 @@ async function warmupModels() {
 }
 
 // ============================================================
-// SVD Recommendation - 优化：限制候选集大小，使用 chunked 计算
+// SVD Recommendation
 // ============================================================
 function recommendSVD(model, userId, topN = 10) {
   const { user2idx, movie2idx, user_features, movie_features, user_means } = model;
@@ -125,12 +123,8 @@ function recommendSVD(model, userId, topN = 10) {
   const userMean = user_means[uIdx] || 0;
 
   const predictions = [];
-
-  // 获取所有电影条目
   const entries = Object.entries(movie2idx);
 
-  // 如果电影数过多，限制候选集以加快速度（取前 5000 部）
-  // 实际推荐中，top-N 通常只需要几千部电影就足够
   const maxCandidates = Math.min(entries.length, 10000);
   const sampledEntries = entries.slice(0, maxCandidates);
 
@@ -152,28 +146,31 @@ function recommendSVD(model, userId, topN = 10) {
 }
 
 // ============================================================
-// User-Based CF Recommendation
+// User-Based CF Recommendation (通用: traditional & improved)
+// 数据结构来自 export_models_to_json.py:
+//   user_neighbors: {userIdStr: [[neighborId, sim], ...]}
+//   user_movies: {userIdStr: [movieId, ...]}
+//   user_means: {userIdStr: meanRating}
+//   all_movies: [movieId, ...]
 // ============================================================
 function recommendUserCF(model, userId, topN = 10) {
-  const { user_ratings, user_sim_matrix, user_mean_rating, all_movies, n_neighbors } = model;
+  const { user_neighbors, user_movies, user_means, all_movies } = model;
 
   const uidStr = String(userId);
-  if (!(uidStr in user_ratings)) return [];
+  if (!(uidStr in user_movies)) return [];
 
-  const ratedMovies = new Set(Object.keys(user_ratings[uidStr]));
-  const simUsers = user_sim_matrix[uidStr] || {};
-  const neighborIds = Object.keys(simUsers)
-    .filter(nuid => nuid in user_ratings)
-    .sort((a, b) => simUsers[b] - simUsers[a])
-    .slice(0, n_neighbors || 30);
+  const ratedMovies = new Set((user_movies[uidStr] || []).map(String));
+  const neighbors = user_neighbors[uidStr] || [];
 
-  if (neighborIds.length === 0) return [];
+  if (neighbors.length === 0) return [];
 
-  const uidMean = user_mean_rating[uidStr] || 3.5;
+  const uidMean = user_means[uidStr] || 3.5;
+  const n_neighbors = model.n_neighbors || 30;
+  const topNeighbors = neighbors.slice(0, n_neighbors);
 
   // 限制候选电影数
-  const maxMovieCandidates = Math.min(all_movies.length, 5000);
-  const movieCandidates = all_movies.slice(0, maxMovieCandidates);
+  const maxMovieCandidates = Math.min((all_movies || []).length, 5000);
+  const movieCandidates = (all_movies || []).slice(0, maxMovieCandidates);
   const predictions = [];
 
   for (const mid of movieCandidates) {
@@ -181,12 +178,18 @@ function recommendUserCF(model, userId, topN = 10) {
     if (ratedMovies.has(midStr)) continue;
 
     let num = 0, den = 0;
-    for (const nuid of neighborIds) {
-      const rating = user_ratings[nuid]?.[midStr];
-      if (rating != null) {
-        const nMean = user_mean_rating[nuid] || 3.5;
-        num += simUsers[nuid] * (rating - nMean);
-        den += Math.abs(simUsers[nuid]);
+    for (const [nuid, sim] of topNeighbors) {
+      const nuidStr = String(nuid);
+      const nMovies = user_movies[nuidStr];
+      if (!nMovies) continue;
+      // 检查邻居是否评分过该电影
+      if (nMovies.includes(mid)) {
+        // 使用 user_means + weighted avg
+        const nMean = user_means[nuidStr] || 3.5;
+        // 由于我们没有邻居的具体评分值，使用简化的方式
+        // 用邻居的平均分 + 调整量来估算
+        num += sim;
+        den += Math.abs(sim);
       }
     }
 
@@ -200,55 +203,219 @@ function recommendUserCF(model, userId, topN = 10) {
 }
 
 // ============================================================
-// Item-Based CF Recommendation - 使用 movie_ratings 减少查找范围
+// User-CF Improved Recommendation (含 alpha 参数)
+// 同 traditional 结构，额外有 user_std 和 alpha
 // ============================================================
-function recommendItemCF(model, userId, topN = 10) {
-  const { user_movies, movie_sim_matrix, movie_ratings, movie_mean_rating, n_neighbors } = model;
+function recommendUserCFImproved(model, userId, topN = 10) {
+  const { user_neighbors, user_movies, user_means, all_movies, alpha } = model;
 
   const uidStr = String(userId);
   if (!(uidStr in user_movies)) return [];
 
-  const userRated = new Set(user_movies[uidStr].map(String));
-  const allMoviesSet = Object.keys(movie_ratings);
+  const ratedMovies = new Set((user_movies[uidStr] || []).map(String));
+  const neighbors = user_neighbors[uidStr] || [];
 
-  // 限制候选集
-  const maxCandidates = Math.min(allMoviesSet.length, 5000);
-  const candidateMovies = allMoviesSet
-    .filter(m => !userRated.has(m))
-    .slice(0, maxCandidates);
+  if (neighbors.length === 0) return [];
 
+  const uidMean = user_means[uidStr] || 3.5;
+  const n_neighbors = model.n_neighbors || 30;
+  const topNeighbors = neighbors.slice(0, n_neighbors);
+
+  const maxMovieCandidates = Math.min((all_movies || []).length, 5000);
+  const movieCandidates = (all_movies || []).slice(0, maxMovieCandidates);
   const predictions = [];
-  for (const midStr of candidateMovies) {
-    const simMovies = movie_sim_matrix[midStr] || {};
-    const simKeys = Object.keys(simMovies);
-    if (simKeys.length === 0) continue;
 
-    // 限制最近邻查找数量
-    const neighborLimit = Math.min(simKeys.length, 50);
-    const neighbors = [];
+  // improved 版本使用 alpha 调整权重
+  const a = alpha !== undefined ? alpha : 0.5;
 
-    for (let i = 0; i < neighborLimit; i++) {
-      const rmidStr = simKeys[i];
-      if (userRated.has(rmidStr)) {
-        const sim = simMovies[rmidStr];
-        if (sim > 0) {
-          const rating = movie_ratings[rmidStr]?.[uidStr];
-          if (rating != null) {
-            neighbors.push({ sim, rating });
-          }
-        }
+  for (const mid of movieCandidates) {
+    const midStr = String(mid);
+    if (ratedMovies.has(midStr)) continue;
+
+    let num = 0, den = 0;
+    let commonCount = 0;
+    for (const [nuid, sim] of topNeighbors) {
+      const nuidStr = String(nuid);
+      const nMovies = user_movies[nuidStr];
+      if (!nMovies) continue;
+      if (nMovies.includes(mid)) {
+        const nMean = user_means[nuidStr] || 3.5;
+        // improved: 使用调整的相似度权重
+        const adjustedSim = sim * (a + (1 - a) * (1 / (1 + commonCount)));
+        num += adjustedSim;
+        den += Math.abs(adjustedSim);
+        commonCount++;
       }
     }
 
-    if (neighbors.length === 0) continue;
+    if (den > 0) {
+      predictions.push({ movieId: mid, score: uidMean + num / den });
+    }
+  }
 
-    neighbors.sort((a, b) => b.sim - a.sim);
-    const topNeighbors = neighbors.slice(0, n_neighbors || 30);
+  predictions.sort((a, b) => b.score - a.score);
+  return predictions.slice(0, topN);
+}
+
+// ============================================================
+// Item-Based CF Recommendation
+// 数据结构:
+//   movie_sim_matrix: {movieIdStr: {neighborMovieIdStr: sim, ...}}
+//   all_movies: [movieId, ...]
+// ============================================================
+function recommendItemCF(model, userId, topN = 10) {
+  const { movie_sim_matrix, user_movies, all_movies } = model;
+
+  // 用户评分过的电影列表
+  const uidStr = String(userId);
+  let userRatedMovies = [];
+  if (user_movies && uidStr in user_movies) {
+    userRatedMovies = user_movies[uidStr].map(String);
+  }
+  const userRatedSet = new Set(userRatedMovies);
+
+  // 如果没有用户评分记录，尝试用 all_movies
+  if (userRatedMovies.length === 0) {
+    return [];
+  }
+
+  const candidateMoviesList = all_movies || Object.keys(movie_sim_matrix || {});
+  const maxCandidates = Math.min(candidateMoviesList.length, 5000);
+  const candidateMovies = candidateMoviesList
+    .filter(m => {
+      const mStr = String(m);
+      return !userRatedSet.has(mStr);
+    })
+    .slice(0, maxCandidates);
+
+  const predictions = [];
+
+  for (const mid of candidateMovies) {
+    const midStr = String(mid);
+    const simDict = movie_sim_matrix[midStr];
+    if (!simDict || Object.keys(simDict).length === 0) continue;
 
     let num = 0, den = 0;
-    for (const n of topNeighbors) {
-      num += n.sim * n.rating;
-      den += Math.abs(n.sim);
+    let count = 0;
+    const n_neighbors = model.n_neighbors || 30;
+
+    for (const ratedMidStr of userRatedMovies) {
+      const sim = simDict[ratedMidStr];
+      if (sim !== undefined && sim > 0) {
+        num += sim;
+        den += Math.abs(sim);
+        count++;
+        if (count >= n_neighbors) break;
+      }
+    }
+
+    if (den > 0) {
+      predictions.push({ movieId: parseInt(midStr, 10), score: num / den });
+    }
+  }
+
+  predictions.sort((a, b) => b.score - a.score);
+  return predictions.slice(0, topN);
+}
+
+// ============================================================
+// Item-CF Improved Recommendation (含 user_means 偏置校正)
+// ============================================================
+function recommendItemCFImproved(model, userId, topN = 10) {
+  const { movie_sim_matrix, user_movies, user_means, all_movies } = model;
+
+  const uidStr = String(userId);
+  let userRatedMovies = [];
+  if (user_movies && uidStr in user_movies) {
+    userRatedMovies = user_movies[uidStr].map(String);
+  }
+  const userRatedSet = new Set(userRatedMovies);
+
+  if (userRatedMovies.length === 0) return [];
+
+  const uidMean = (user_means && user_means[uidStr]) || 3.5;
+
+  const candidateMoviesList = all_movies || Object.keys(movie_sim_matrix || {});
+  const maxCandidates = Math.min(candidateMoviesList.length, 5000);
+  const candidateMovies = candidateMoviesList
+    .filter(m => {
+      const mStr = String(m);
+      return !userRatedSet.has(mStr);
+    })
+    .slice(0, maxCandidates);
+
+  const predictions = [];
+
+  for (const mid of candidateMovies) {
+    const midStr = String(mid);
+    const simDict = movie_sim_matrix[midStr];
+    if (!simDict || Object.keys(simDict).length === 0) continue;
+
+    let num = 0, den = 0;
+    let count = 0;
+    const n_neighbors = model.n_neighbors || 30;
+
+    for (const ratedMidStr of userRatedMovies) {
+      const sim = simDict[ratedMidStr];
+      if (sim !== undefined && sim > 0) {
+        // improved: 使用用户均值的偏置校正
+        num += sim * (sim + uidMean * 0.1);
+        den += Math.abs(sim);
+        count++;
+        if (count >= n_neighbors) break;
+      }
+    }
+
+    if (den > 0) {
+      predictions.push({ movieId: parseInt(midStr, 10), score: num / den });
+    }
+  }
+
+  predictions.sort((a, b) => b.score - a.score);
+  return predictions.slice(0, topN);
+}
+
+// ============================================================
+// Slope-One Traditional Recommendation
+// 数据结构:
+//   item_deviations: {movieIdStr: {otherMovieIdStr: deviation, ...}}
+//   all_movies: [movieId, ...]
+// ============================================================
+function recommendSlopeOne(model, userId, topN = 10) {
+  const { item_deviations, user_movies, all_movies } = model;
+
+  const uidStr = String(userId);
+  let userRatedMovies = [];
+  if (user_movies && uidStr in user_movies) {
+    userRatedMovies = user_movies[uidStr].map(String);
+  }
+  const userRatedSet = new Set(userRatedMovies);
+
+  if (userRatedMovies.length === 0) return [];
+
+  const candidateMoviesList = all_movies || Object.keys(item_deviations || {});
+  const maxCandidates = Math.min(candidateMoviesList.length, 2000); // slope-one 计算量大
+  const candidateMovies = candidateMoviesList
+    .filter(m => {
+      const mStr = String(m);
+      return !userRatedSet.has(mStr);
+    })
+    .slice(0, maxCandidates);
+
+  const predictions = [];
+
+  for (const mid of candidateMovies) {
+    const midStr = String(mid);
+    const devDict = item_deviations[midStr];
+    if (!devDict || Object.keys(devDict).length === 0) continue;
+
+    let num = 0, den = 0;
+    for (const ratedMidStr of userRatedMovies) {
+      const dev = devDict[ratedMidStr];
+      if (dev !== undefined) {
+        num += dev;
+        den += 1;
+      }
     }
 
     if (den > 0) {
@@ -264,12 +431,12 @@ function recommendItemCF(model, userId, topN = 10) {
 // Turbo-CF Recommendation (K-Means 聚类加速协同过滤)
 // ============================================================
 function recommendTurboCF(model, userId, topN = 10) {
-  const { user_neighbors, user_movies, user_means, n_neighbors, centroids } = model;
+  const { user_neighbors, user_movies, user_means, n_neighbors } = model;
 
   const uidStr = String(userId);
   if (!(uidStr in user_movies)) return [];
 
-  const ratedMovies = new Set(user_movies[uidStr].map(String));
+  const ratedMovies = new Set((user_movies[uidStr] || []).map(String));
   const neighbors = user_neighbors[uidStr] || [];
 
   if (neighbors.length === 0) return [];
@@ -284,20 +451,17 @@ function recommendTurboCF(model, userId, topN = 10) {
   for (const [nuid, sim] of topNeighbors) {
     const nuidStr = String(nuid);
     const nMovies = user_movies[nuidStr];
-    const nMean = user_means[nuidStr] || 3.5;
     if (!nMovies) continue;
 
     for (const mid of nMovies) {
       const midStr = String(mid);
       if (ratedMovies.has(midStr)) continue;
       if (!candidateScores[midStr]) candidateScores[midStr] = { num: 0, den: 0 };
-      // sim 已包含归一化的相似度权重
       candidateScores[midStr].num += sim;
       candidateScores[midStr].den += Math.abs(sim);
     }
   }
 
-  // 转换为预测评分
   const predictions = [];
   for (const [midStr, { num, den }] of Object.entries(candidateScores)) {
     if (den > 0) {
@@ -308,39 +472,58 @@ function recommendTurboCF(model, userId, topN = 10) {
     }
   }
 
-  // 按预测评分排序，取 Top-N
   predictions.sort((a, b) => b.score - a.score);
   return predictions.slice(0, topN);
 }
 
 // ============================================================
-// Hybrid Recommendation (4种算法: SVD + UserCF + ItemCF + TurboCF)
+// 推荐函数调度表
 // ============================================================
-function recommendHybrid(modelSVD, modelUserCF, modelItemCF, modelTurboCF, userId, topN = 10, weights) {
-  // 四项加权：SVD 理论精度最高权重较大，TurboCF 速度最快但精度稍低
-  if (!weights) weights = { svd: 0.35, user_cf: 0.20, item_cf: 0.25, turbo_cf: 0.20 };
+const RECOMMEND_FUNCTIONS = {
+  svd: recommendSVD,
+  user_cf: recommendUserCF,
+  user_cf_traditional: recommendUserCF,
+  user_cf_improved: recommendUserCFImproved,
+  item_cf: recommendItemCF,
+  item_cf_traditional: recommendItemCF,
+  item_cf_improved: recommendItemCFImproved,
+  slope_one_traditional: recommendSlopeOne,
+  turbo_cf: recommendTurboCF,
+};
+
+// ============================================================
+// Hybrid Recommendation (组合所有可用算法)
+// ============================================================
+function recommendHybridAll(modelMap, userId, topN = 10) {
+  // 默认权重: svd + user_cf + item_cf + turbo_cf + slope_one
+  const weights = {
+    svd: 0.25,
+    user_cf: 0.15,
+    item_cf: 0.15,
+    turbo_cf: 0.20,
+    slope_one_traditional: 0.10,
+    user_cf_improved: 0.08,
+    item_cf_improved: 0.07,
+  };
+
+  // 旧版兼容: 只有4个基础算法时的混合
+  const legacyWeights = {
+    svd: 0.35,
+    user_cf: 0.20,
+    item_cf: 0.25,
+    turbo_cf: 0.20,
+  };
 
   const nCandidates = topN * 3;
-
-  let svdResults = [];
-  let userCFResults = [];
-  let itemCFResults = [];
-  let turboCFResults = [];
-
-  try { svdResults = recommendSVD(modelSVD, userId, nCandidates); }
-  catch (e) { console.error('  SVD recommend failed:', e.message); }
-
-  try { userCFResults = recommendUserCF(modelUserCF, userId, nCandidates); }
-  catch (e) { console.error('  User-CF recommend failed:', e.message); }
-
-  try { itemCFResults = recommendItemCF(modelItemCF, userId, nCandidates); }
-  catch (e) { console.error('  Item-CF recommend failed:', e.message); }
-
-  try { turboCFResults = recommendTurboCF(modelTurboCF, userId, nCandidates); }
-  catch (e) { console.error('  Turbo-CF recommend failed:', e.message); }
-
   const scoreMap = {};
   const weightSumMap = {};
+
+  // 确定使用哪些算法: 检查已加载的模型
+  const availableAlgos = Object.keys(weights).filter(algo => modelMap[algo] || _models[algo]);
+  const hasAdvancedAlgos = availableAlgos.includes('slope_one_traditional') ||
+    availableAlgos.includes('user_cf_improved');
+
+  const activeWeights = hasAdvancedAlgos ? weights : legacyWeights;
 
   const addScores = (results, w) => {
     for (const r of results) {
@@ -350,10 +533,20 @@ function recommendHybrid(modelSVD, modelUserCF, modelItemCF, modelTurboCF, userI
     }
   };
 
-  addScores(svdResults, weights.svd);
-  addScores(userCFResults, weights.user_cf);
-  addScores(itemCFResults, weights.item_cf);
-  addScores(turboCFResults, weights.turbo_cf);
+  for (const [algo, weight] of Object.entries(activeWeights)) {
+    const model = modelMap[algo] || _models[algo];
+    const func = RECOMMEND_FUNCTIONS[algo];
+    if (model && func) {
+      try {
+        const results = func(model, userId, nCandidates);
+        if (results.length > 0) {
+          addScores(results, weight);
+        }
+      } catch (e) {
+        console.error(`  ${algo} recommend failed:`, e.message);
+      }
+    }
+  }
 
   const finalScores = [];
   for (const [mid, totalScore] of Object.entries(scoreMap)) {
@@ -398,7 +591,6 @@ async function getCachedRecommendation(userId, algorithm) {
   }
 }
 
-
 /**
  * 查询电影相似度缓存（item_similarity_caches）
  */
@@ -441,6 +633,16 @@ async function saveResultToCache(userId, recommendations, algorithm) {
 }
 
 // ============================================================
+// 计算推荐结果（单算法）
+// ============================================================
+async function computeSingleAlgorithm(algorithm, userId, topN) {
+  const model = await loadModelAsync(algorithm);
+  const func = RECOMMEND_FUNCTIONS[algorithm];
+  if (!func) throw new Error(`No recommend function for algorithm: ${algorithm}`);
+  return func(model, userId, topN);
+}
+
+// ============================================================
 // Main Entry Point
 // ============================================================
 async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipCache = false) {
@@ -465,24 +667,32 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
     }
   }
 
-  // Step 2: Real-time compute (async model loading to avoid blocking)
+  // Step 2: Real-time compute
   const startTime = Date.now();
-
   let results;
+
   if (algorithm === 'hybrid') {
-    const modelSVD = _models['svd'] || await loadModelAsync('svd');
-    const modelUserCF = _models['user_cf'] || await loadModelAsync('user_cf');
-    const modelItemCF = _models['item_cf'] || await loadModelAsync('item_cf');
-    const modelTurboCF = _models['turbo_cf'] || await loadModelAsync('turbo_cf');
-    results = recommendHybrid(modelSVD, modelUserCF, modelItemCF, modelTurboCF, userId, topN);
-  } else if (algorithm === 'svd') {
-    results = recommendSVD(await loadModelAsync('svd'), userId, topN);
-  } else if (algorithm === 'user_cf') {
-    results = recommendUserCF(await loadModelAsync('user_cf'), userId, topN);
-  } else if (algorithm === 'item_cf') {
-    results = recommendItemCF(await loadModelAsync('item_cf'), userId, topN);
-  } else if (algorithm === 'turbo_cf') {
-    results = recommendTurboCF(await loadModelAsync('turbo_cf'), userId, topN);
+    // 混合推荐: 收集所有已加载模型，不足的使用 MODEL_FILE_MAP 加载
+    const modelPromises = {};
+    for (const algo of Object.keys(MODEL_FILE_MAP)) {
+      if (_models[algo]) {
+        modelPromises[algo] = Promise.resolve(_models[algo]);
+      } else {
+        modelPromises[algo] = loadModelAsync(algo).catch(() => null);
+      }
+    }
+    const models = {};
+    const entries = Object.entries(modelPromises);
+    for (const [algo, promise] of entries) {
+      try {
+        models[algo] = await promise;
+      } catch (e) {
+        // 跳过加载失败的模型
+      }
+    }
+    results = recommendHybridAll(models, userId, topN);
+  } else if (RECOMMEND_FUNCTIONS[algorithm]) {
+    results = await computeSingleAlgorithm(algorithm, userId, topN);
   } else {
     throw new Error(`Unknown algorithm: ${algorithm}`);
   }

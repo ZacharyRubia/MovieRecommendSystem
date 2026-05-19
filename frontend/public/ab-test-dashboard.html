@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A/B 测试管理 - 电影推荐系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f0f0f0;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* 侧边栏 */
+    .sidebar {
+      width: 250px;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      left: 0; top: 0;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+      z-index: 100;
+    }
+    .sidebar-header { padding: 30px 20px; border-bottom: 1px solid #333; flex-shrink: 0; }
+    .sidebar-header h1 { font-size: 20px; font-weight: 600; }
+    .sidebar-header p { font-size: 12px; opacity: 0.5; margin-top: 5px; }
+    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    .sidebar-nav::-webkit-scrollbar { width: 4px; }
+    .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .nav-item {
+      display: flex; align-items: center; padding: 15px 25px;
+      color: #888; cursor: pointer; transition: all 0.3s;
+      border-left: 3px solid transparent; text-decoration: none;
+    }
+    .nav-item:hover { background: #222; color: #fff; }
+    .nav-item.active { background: #1a1a1a; color: #fff; border-left-color: #fff; }
+    .nav-item svg { width: 20px; height: 20px; margin-right: 12px; }
+    .nav-item span { font-size: 14px; font-weight: 500; }
+    .sidebar-footer { padding: 20px; border-top: 1px solid #333; }
+    .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .user-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: #333; display: flex; align-items: center;
+      justify-content: center; font-weight: 600; font-size: 16px;
+    }
+    .user-details p { font-size: 14px; font-weight: 500; }
+    .user-details small { font-size: 11px; opacity: 0.5; }
+    .btn-logout {
+      width: 100%; padding: 10px;
+      background: transparent; border: 1px solid #444;
+      color: #888; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;
+    }
+    .btn-logout:hover { background: #222; color: #fff; border-color: #888; }
+    @media (max-width: 768px) {
+      .sidebar { width: 60px; }
+      .sidebar-header h1, .sidebar-header p, .nav-item span, .user-info, .sidebar-footer { display: none; }
+      .sidebar-header { padding: 15px; text-align: center; }
+      .nav-item { padding: 15px; justify-content: center; border-left: none; border-right: 3px solid transparent; }
+      .nav-item.active { border-right-color: #fff; border-left-color: transparent; }
+      .main-content { margin-left: 60px; }
+    }
+
+    /* 主内容区 */
+    .main-content {
+      flex: 1; margin-left: 250px; height: 100vh; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: #ccc transparent; padding: 30px;
+    }
+    .main-content::-webkit-scrollbar { width: 4px; }
+    .main-content::-webkit-scrollbar-track { background: transparent; }
+    .main-content::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+    .page-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;
+    }
+    .page-header h2 { font-size: 24px; font-weight: 600; color: #222; }
+    .page-header .subtitle { font-size: 14px; color: #666; margin-top: 4px; }
+
+    .btn {
+      padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 14px; font-weight: 500; transition: all 0.2s;
+    }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-primary:hover { background: #0056b3; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #1e7e34; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #b02a37; }
+    .btn-warning { background: #ffc107; color: #222; }
+    .btn-warning:hover { background: #e0a800; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-outline { background: transparent; border: 1px solid #007bff; color: #007bff; }
+    .btn-outline:hover { background: #007bff; color: white; }
+
+    /* 实验卡片 */
+    .experiment-card {
+      background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .experiment-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #eee;
+    }
+    .experiment-title { font-size: 18px; font-weight: 600; color: #222; }
+    .experiment-meta { font-size: 13px; color: #888; margin-top: 4px; }
+    .experiment-meta span { margin-right: 16px; }
+
+    /* 状态标签 */
+    .status-badge {
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    }
+    .status-draft { background: #eee; color: #666; }
+    .status-running { background: #d4edda; color: #155724; }
+    .status-stopped { background: #f8d7da; color: #721c24; }
+    .status-archived { background: #e2e3e5; color: #383d41; }
+
+    /* 策略指标表格 */
+    .strategies-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    .strategies-table th {
+      background: #f8f9fa; padding: 10px 12px; text-align: left;
+      font-size: 12px; font-weight: 600; color: #666; border-bottom: 2px solid #dee2e6;
+    }
+    .strategies-table td {
+      padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; color: #333;
+    }
+    .strategies-table tr:hover { background: #f8f9fa; }
+
+    .strategy-name { font-weight: 500; }
+    .winner-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; background: #28a745; color: white;
+    }
+    .metric-value { font-weight: 600; font-size: 14px; color: #222; }
+    .metric-ci { font-size: 11px; color: #888; }
+    .p-value { font-weight: 500; }
+    .p-significant { color: #28a745; }
+    .p-not-significant { color: #dc3545; }
+
+    /* 流量分配图（简单条） */
+    .traffic-bar-container { display: flex; height: 24px; border-radius: 12px; overflow: hidden; }
+    .traffic-bar-segment {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; color: white; transition: width 0.5s;
+    }
+
+    /* 收敛状态指示 */
+    .converged-yes { color: #28a745; font-weight: 600; }
+    .converged-no { color: #ffc107; font-weight: 600; }
+
+    /* 模态框 */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: white; border-radius: 12px; padding: 32px; width: 560px;
+      max-width: 90vw; max-height: 80vh; overflow-y: auto;
+    }
+    .modal h3 { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #222; }
+    .modal label { display: block; font-size: 13px; font-weight: 500; color: #555; margin: 12px 0 4px; }
+    .modal input, .modal select, .modal textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+      font-size: 14px; transition: border-color 0.2s;
+    }
+    .modal input:focus, .modal select:focus, .modal textarea:focus {
+      outline: none; border-color: #007bff;
+    }
+    .modal textarea { resize: vertical; min-height: 60px; }
+    .modal .btn-row { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+    .modal .btn-row .btn { min-width: 100px; }
+
+    /* 策略列表（创建实验用） */
+    .strategies-panel { margin: 16px 0; }
+    .strategy-row {
+      display: flex; gap: 12px; align-items: center; margin-bottom: 8px;
+      padding: 12px; background: #f8f9fa; border-radius: 8px;
+    }
+    .strategy-row input, .strategy-row select { width: auto; }
+    .strategy-row .str-name { flex: 2; }
+    .strategy-row .str-algo { flex: 1; }
+    .strategy-row .str-weight { flex: 0 0 100px; }
+    .strategy-row .str-remove { flex: 0 0 auto; }
+    .add-strategy-btn { margin-top: 8px; }
+
+    /* 详情弹窗 */
+    .detail-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;
+    }
+    .detail-item {
+      background: #f8f9fa; padding: 16px; border-radius: 8px;
+    }
+    .detail-item .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .detail-item .value { font-size: 18px; font-weight: 600; color: #222; }
+    .detail-item .trend { font-size: 12px; margin-top: 2px; }
+
+    .section-title {
+      font-size: 16px; font-weight: 600; color: #444; margin: 24px 0 16px;
+    }
+
+    /* 空状态 */
+    .empty-state {
+      text-align: center; padding: 60px 20px; color: #888;
+    }
+    .empty-state svg { width: 80px; height: 80px; opacity: 0.3; margin-bottom: 16px; }
+    .empty-state p { font-size: 16px; }
+    .empty-state .hint { font-size: 13px; margin-top: 8px; }
+
+    /* 加载 */
+    .loading {
+      text-align: center; padding: 40px; color: #888;
+    }
+    .spinner {
+      display: inline-block; width: 32px; height: 32px;
+      border: 3px solid #ddd; border-top-color: #007bff;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast {
+      position: fixed; top: 20px; right: 20px; padding: 12px 24px;
+      border-radius: 8px; color: white; font-size: 14px; z-index: 9999;
+      animation: slideIn 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .toast-success { background: #28a745; }
+    .toast-error { background: #dc3545; }
+    .toast-info { background: #007bff; }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* 颜色方案 */
+    .color-1 { background: #007bff; }
+    .color-2 { background: #28a745; }
+    .color-3 { background: #ffc107; color: #333; }
+    .color-4 { background: #dc3545; }
+    .color-5 { background: #17a2b8; }
+    .color-6 { background: #6f42c1; }
+    .color-7 { background: #fd7e14; }
+    .color-8 { background: #20c997; }
+    .color-9 { background: #e83e8c; }
+    .color-10 { background: #6610f2; }
+  </style>
+</head>
+<body>
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>🎬 电影管理系统</h1>
+      <p>推荐系统 A/B 测试</p>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="user-management.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span>仪表盘</span>
+      </a>
+      <div class="nav-item active" data-page="abtest">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+        <span>A/B 测试实验</span>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="sidebarAvatar">管</div>
+        <div class="user-details">
+          <p id="sidebarName">管理员</p>
+          <small>在线</small>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="logout()">退出登录</button>
+    </div>
+  </aside>
+
+  <!-- 主内容 -->
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <h2>A/B 测试实验管理</h2>
+        <p class="subtitle">创建、管理和监控推荐算法的在线对比实验</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" onclick="refreshData()">🔄 刷新</button>
+        <button class="btn btn-primary" onclick="openCreateModal()">+ 创建实验</button>
+      </div>
+    </div>
+    <div id="experimentList">
+      <div class="loading" id="loadingIndicator">
+        <div class="spinner"></div>
+        <p style="margin-top:12px;">加载实验中...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 创建/编辑模态框 -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal">
+      <h3 id="modalTitle">创建新实验</h3>
+      <input type="hidden" id="editId" value="">
+      <label>实验名称 *</label>
+      <input id="expName" placeholder="例如: Hybrid vs SVD 对比测试" required>
+      <label>描述</label>
+      <textarea id="expDesc" placeholder="实验目的、预期效果等"></textarea>
+      <label>分流模式</label>
+      <select id="splitMode">
+        <option value="fixed">固定比例（Fixed）</option>
+        <option value="bandit">自适应（Bandit）</option>
+      </select>
+      <label>开始时间 *</label>
+      <input id="startTime" type="datetime-local" required>
+      <label>结束时间</label>
+      <input id="endTime" type="datetime-local">
+      <label>实验策略配置</label>
+      <div class="strategies-panel" id="strategiesPanel">
+        <div class="strategy-row" data-idx="0">
+          <input class="str-name" placeholder="策略名称" value="对照组">
+          <select class="str-algo">
+            <option value="svd">SVD</option>
+            <option value="usercf">UserCF</option>
+            <option value="itemcf">ItemCF</option>
+            <option value="hybrid" selected>Hybrid</option>
+            <option value="slopeone">SlopeOne</option>
+            <option value="turbocf">TurboCF</option>
+          </select>
+          <input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重">
+          <button class="btn btn-danger btn-sm str-remove" onclick="removeStrategy(this)">×</button>
+        </div>
+      </div>
+      <button class="btn btn-outline btn-sm add-strategy-btn" onclick="addStrategy()">+ 添加策略</button>
+      <div class="btn-row">
+        <button class="btn btn-warning" onclick="closeModal('createModal')">取消</button>
+        <button class="btn btn-success" onclick="saveExperiment()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 详情模态框 -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal" style="width:700px;">
+      <h3 id="detailTitle">实验详情</h3>
+      <div id="detailContent"></div>
+      <div class="btn-row">
+        <button class="btn btn-warning" onclick="closeModal('detailModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/admin';
+
+    // ===== 登录检查 =====
+    function checkAuth() {
+      if (localStorage.getItem('isAdminLoggedIn') !== 'true') {
+        window.location.href = 'admin-login.html';
+      }
+      const admin = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+      if (admin.username) {
+        document.getElementById('sidebarName').textContent = admin.username;
+        document.getElementById('sidebarAvatar').textContent = admin.username.charAt(0);
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('isAdminLoggedIn');
+      localStorage.removeItem('adminInfo');
+      window.location.href = 'admin-login.html';
+    }
+
+    // ===== Toast 提示 =====
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ===== 模态框控制 =====
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    function openCreateModal() {
+      document.getElementById('modalTitle').textContent = '创建新实验';
+      document.getElementById('editId').value = '';
+      document.getElementById('expName').value = '';
+      document.getElementById('expDesc').value = '';
+      document.getElementById('splitMode').value = 'fixed';
+      document.getElementById('startTime').value = '';
+      document.getElementById('endTime').value = '';
+      document.getElementById('strategiesPanel').innerHTML = `
+        <div class="strategy-row" data-idx="0">
+          <input class="str-name" placeholder="策略名称" value="对照组">
+          <select class="str-algo">
+            <option value="svd">SVD</option>
+            <option value="usercf">UserCF</option>
+            <option value="itemcf">ItemCF</option>
+            <option value="hybrid" selected>Hybrid</option>
+            <option value="slopeone">SlopeOne</option>
+            <option value="turbocf">TurboCF</option>
+          </select>
+          <input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重">
+          <button class="btn btn-danger btn-sm str-remove" onclick="removeStrategy(this)">×</button>
+        </div>
+      `;
+      openModal('createModal');
+    }
+
+    function closeAllModals() {
+      document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+    }
+
+    // 点击蒙层关闭
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('active');
+      });
+    });
+
+    // ===== 策略管理 =====
+    let strategyCounter = 1;
+    function addStrategy() {
+      const panel = document.getElementById('strategiesPanel');
+      const row = document.createElement('div');
+      row.className = 'strategy-row';
+      row.dataset.idx = strategyCounter;
+      row.innerHTML = `
+        <input class="str-name" placeholder="策略名称" value="实验组 ${strategyCounter}">
+        <select class="str-algo">
+          <option value="svd">SVD</option>
+          <option value="usercf">UserCF</option>
+          <option value="itemcf">ItemCF</option>
+          <option value="hybrid" selected>Hybrid</option>
+          <option value="slopeone">SlopeOne</option>
+          <option value="turbocf">TurboCF</option>
+        </select>
+        <input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重">
+        <button class="btn btn-danger btn-sm str-remove" onclick="removeStrategy(this)">×</button>
+      `;
+      panel.appendChild(row);
+      strategyCounter++;
+    }
+
+    function removeStrategy(btn) {
+      const panel = document.getElementById('strategiesPanel');
+      if (panel.children.length <= 1) {
+        showToast('至少需要一个策略', 'error');
+        return;
+      }
+      btn.closest('.strategy-row').remove();
+    }
+
+    // ===== 加载实验列表 =====
+    async function loadExperiments() {
+      const container = document.getElementById('experimentList');
+      const loading = document.getElementById('loadingIndicator');
+      loading.style.display = 'block';
+      container.innerHTML = '<div class="loading" id="loadingIndicator"><div class="spinner"></div><p style="margin-top:12px;">加载实验中...</p></div>';
+
+      try {
+        const res = await fetch(`${API_BASE}/experiments`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        renderExperiments(json.data || []);
+      } catch (err) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p>无法连接到服务器</p>
+            <p class="hint">${err.message} — 请确认后端服务已启动</p>
+          </div>
+        `;
+        showToast('加载实验失败: ' + err.message, 'error');
+      }
+    }
+
+    // ===== 渲染实验列表 =====
+    function renderExperiments(experiments) {
+      const container = document.getElementById('experimentList');
+      if (!experiments || experiments.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            <p>暂无 A/B 测试实验</p>
+            <p class="hint">点击「创建实验」按钮开始第一个在线对比实验</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = experiments.map((exp, idx) => {
+        const statusClass = `status-${exp.status || 'draft'}`;
+        const statusLabel = ({draft:'草稿',running:'进行中',stopped:'已停止',archived:'已归档'})[exp.status] || exp.status;
+        const strategies = exp.strategies || [];
+
+        return `
+          <div class="experiment-card">
+            <div class="experiment-header">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span class="experiment-title">${exp.name}</span>
+                  <span class="status-badge ${statusClass}">${statusLabel}</span>
+                  ${exp.winner_strategy_id ? `<span class="winner-badge">✓ 已决出胜者</span>` : ''}
+                </div>
+                <div class="experiment-meta">
+                  <span>🆔 ${exp.id}</span>
+                  <span>📋 ${exp.split_mode === 'bandit' ? '自适应(Bandit)' : '固定比例(Fixed)'}</span>
+                  <span>🕐 ${exp.start_time ? formatDate(exp.start_time) : '-'}</span>
+                  ${exp.end_time ? `<span>⏰ ${formatDate(exp.end_time)}</span>` : ''}
+                  <span>📊 ${strategies.length} 个策略</span>
+                </div>
+                ${exp.description ? `<p style="font-size:13px;color:#666;margin-top:6px;">${exp.description}</p>` : ''}
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button class="btn btn-outline btn-sm" onclick="showDetail(${exp.id})">详情</button>
+                ${exp.status === 'running' ? `<button class="btn btn-danger btn-sm" onclick="stopExperiment(${exp.id})">终止</button>` : ''}
+                ${exp.status === 'stopped' ? `<button class="btn btn-warning btn-sm" onclick="archiveExperiment(${exp.id})">归档</button>` : ''}
+              </div>
+            </div>
+
+            <!-- 流量分配条 -->
+            ${renderTrafficBar(strategies, idx)}
+
+            <!-- 策略指标表格 -->
+            <table class="strategies-table">
+              <thead>
+                <tr>
+                  <th style="width:140px;">策略</th>
+                  <th>算法</th>
+                  <th>流量%</th>
+                  <th>曝光</th>
+                  <th>CTR</th>
+                  <th>95% 置信区间</th>
+                  <th>p 值</th>
+                  <th>获胜概率</th>
+                  <th>收敛</th>
+                  <th>用户数</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${strategies.map((s, si) => renderStrategyRow(s, si, exp.status)).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderTrafficBar(strategies, expIdx) {
+      if (!strategies || strategies.length === 0) return '';
+      const colors = ['color-1','color-2','color-3','color-4','color-5','color-6','color-7','color-8','color-9','color-10'];
+      return `
+        <div style="margin:12px 0;">
+          <div style="font-size:12px;color:#888;margin-bottom:4px;">流量分配</div>
+          <div class="traffic-bar-container">
+            ${strategies.map((s, i) => {
+              const pct = s.traffic_percentage || s.initial_weight * 100 || 0;
+              return `<div class="traffic-bar-segment ${colors[i % colors.length]}" style="width:${pct}%;min-width:${pct > 0 ? 20 : 0}px;">${pct > 5 ? Math.round(pct)+'%' : ''}</div>`;
+            }).join('')}
+          </div>
+          <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">
+            ${strategies.map((s, i) => {
+              const pct = s.traffic_percentage || s.initial_weight * 100 || 0;
+              return `<span style="font-size:11px;color:#888;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;${colors[i % colors.length].replace('background','background-color')};margin-right:4px;"></span>${s.name}: ${Math.round(pct)}%</span>`;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderStrategyRow(s, idx, status) {
+      const m = s.latestMetrics || {};
+      const ctr = s.metrics ? s.metrics.ctr : (s.ctr || '-');
+      const ciLower = m.ctr_ci_lower || '-';
+      const ciUpper = m.ctr_ci_upper || '-';
+      const pVal = m.p_value;
+      const pClass = pVal !== undefined && pVal < 0.05 ? 'p-significant' : (pVal !== undefined ? 'p-not-significant' : '');
+      const pDisplay = pVal !== undefined ? pVal.toFixed(4) : '-';
+      const winProb = m.win_probability !== undefined ? (m.win_probability * 100).toFixed(1) + '%' : '-';
+      const convergent = m.is_converged !== undefined ? (m.is_converged ? '✅ 已收敛' : '⏳ 收集中') : '-';
+      const users = s.metrics ? (s.metrics.unique_users || '-') : '-';
+      const exposures = s.metrics ? (s.metrics.total_exposures || s.metrics.exposures || 0) : 0;
+      const trafficPct = s.traffic_percentage || (s.initial_weight * 100) || '-';
+
+      return `
+        <tr>
+          <td>
+            <span class="strategy-name">${s.name}</span>
+            ${s.is_winner ? '<span class="winner-badge" style="margin-left:6px;">🏆 胜出</span>' : ''}
+            ${status === 'running' && s.weight_source === 'adaptive' ? '<span style="font-size:11px;color:#17a2b8;margin-left:4px;">自适应</span>' : ''}
+          </td>
+          <td><code>${s.algorithm || '-'}</code></td>
+          <td>${trafficPct}%</td>
+          <td>${exposures.toLocaleString()}</td>
+          <td class="metric-value">${typeof ctr === 'number' ? ctr.toFixed(2) + '%' : ctr}</td>
+          <td>
+            <span class="metric-ci">
+              ${ciLower !== '-' ? '[' + ciLower.toFixed(2) + '%' : '['}
+              ${ciUpper !== '-' ? ', ' + ciUpper.toFixed(2) + '%]' : '-]'}
+            </span>
+          </td>
+          <td class="p-value ${pClass}">${pDisplay}</td>
+          <td>${winProb}</td>
+          <td class="${m.is_converged ? 'converged-yes' : 'converged-no'}">${convergent}</td>
+          <td>${users}</td>
+        </tr>
+      `;
+    }
+
+    // ===== 创建/编辑实验 =====
+    async function saveExperiment() {
+      const editId = document.getElementById('editId').value;
+      const name = document.getElementById('expName').value.trim();
+      const description = document.getElementById('expDesc').value.trim();
+      const splitMode = document.getElementById('splitMode').value;
+      const startTime = document.getElementById('startTime').value;
+      const endTime = document.getElementById('endTime').value || null;
+
+      if (!name) { showToast('请输入实验名称', 'error'); return; }
+      if (!startTime) { showToast('请选择开始时间', 'error'); return; }
+
+      const strategyRows = document.querySelectorAll('#strategiesPanel .strategy-row');
+      const strategies = [];
+      strategyRows.forEach((row, i) => {
+        const name = row.querySelector('.str-name').value.trim() || `策略 ${i+1}`;
+        const algo = row.querySelector('.str-algo').value;
+        const weight = parseFloat(row.querySelector('.str-weight').value) || 0.1;
+        strategies.push({ name, algorithm_key: algo, initial_weight: weight });
+      });
+
+      if (strategies.length < 1) {
+        showToast('至少需要一个策略', 'error');
+        return;
+      }
+
+      // 权重归一化
+      const totalWeight = strategies.reduce((sum, s) => sum + s.initial_weight, 0);
+      strategies.forEach(s => s.initial_weight = s.initial_weight / totalWeight);
+
+      const body = {
+        name,
+        description,
+        split_mode: splitMode,
+        start_time: startTime,
+        end_time: endTime,
+        strategies
+      };
+
+      try {
+        let res;
+        if (editId) {
+          res = await fetch(`${API_BASE}/experiments/${editId}`, {
+            method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+          });
+        } else {
+          res = await fetch(`${API_BASE}/experiments`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+          });
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${res.status}`);
+        }
+        showToast(editId ? '实验已更新' : '实验创建成功', 'success');
+        closeModal('createModal');
+        loadExperiments();
+      } catch (err) {
+        showToast('保存失败: ' + err.message, 'error');
+      }
+    }
+
+    // ===== 终止实验 =====
+    async function stopExperiment(id) {
+      if (!confirm('确认终止该实验？终止后获胜策略将被推全至 100% 流量。')) return;
+      try {
+        const res = await fetch(`${API_BASE}/experiments/${id}/stop`, { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showToast('实验已终止', 'success');
+        loadExperiments();
+      } catch (err) {
+        showToast('终止失败: ' + err.message, 'error');
+      }
+    }
+
+    // ===== 归档实验 =====
+    async function archiveExperiment(id) {
+      if (!confirm('确认归档该实验？')) return;
+      try {
+        const res = await fetch(`${API_BASE}/experiments/${id}/archive`, { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showToast('实验已归档', 'success');
+        loadExperiments();
+      } catch (err) {
+        showToast('归档失败: ' + err.message, 'error');
+      }
+    }
+
+    // ===== 查看详情 =====
+    async function showDetail(id) {
+      const modal = document.getElementById('detailModal');
+      const title = document.getElementById('detailTitle');
+      const content = document.getElementById('detailContent');
+      title.textContent = '加载中...';
+      content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      openModal('detailModal');
+
+      try {
+        const res = await fetch(`${API_BASE}/experiments/${id}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const exp = json.data || json;
+        title.textContent = `📊 ${exp.name} — 详细数据`;
+
+        const strategies = exp.strategies || [];
+        content.innerHTML = `
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="label">状态</div>
+              <div class="value">${({draft:'草稿',running:'进行中',stopped:'已停止',archived:'已归档'})[exp.status] || exp.status}</div>
+            </div>
+            <div class="detail-item">
+              <div class="label">分流模式</div>
+              <div class="value">${exp.split_mode === 'bandit' ? '自适应(Bandit)' : '固定比例(Fixed)'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="label">开始时间</div>
+              <div class="value" style="font-size:14px;">${exp.start_time ? formatDate(exp.start_time) : '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="label">结束时间</div>
+              <div class="value" style="font-size:14px;">${exp.end_time ? formatDate(exp.end_time) : '进行中'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="label">策略总数</div>
+              <div class="value">${strategies.length}</div>
+            </div>
+            <div class="detail-item">
+              <div class="label">总曝光</div>
+              <div class="value">${strategies.reduce((sum,s) => sum + (s.metrics?.total_exposures || 0), 0).toLocaleString()}</div>
+            </div>
+            <div class="detail-item">
+              <div class="label">总用户数</div>
+              <div class="value">${strategies.reduce((sum,s) => sum + (s.metrics?.unique_users || 0), 0).toLocaleString()}</div>
+            </div>
+            <div class="detail-item">
+              <div class="label">获胜策略</div>
+              <div class="value">${strategies.find(s => s.is_winner)?.name || '暂无'}</div>
+            </div>
+          </div>
+
+          <div class="section-title">各策略指标详情</div>
+          <table class="strategies-table">
+            <thead>
+              <tr>
+                <th>策略名</th>
+                <th>算法</th>
+                <th>曝光</th>
+                <th>点击</th>
+                <th>CTR</th>
+                <th>置信区间</th>
+                <th>p值</th>
+                <th>获胜概率</th>
+                <th>收敛</th>
+                <th>用户数</th>
+                <th>α</th>
+                <th>β</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${strategies.map(s => {
+                const m = s.latestMetrics || {};
+                const ctr = s.metrics?.ctr || (s.ctr || '-');
+                return `<tr>
+                  <td><strong>${s.name}</strong> ${s.is_winner ? '🏆' : ''}</td>
+                  <td><code>${s.algorithm || '-'}</code></td>
+                  <td>${(s.metrics?.total_exposures || 0).toLocaleString()}</td>
+                  <td>${(s.metrics?.total_positive || s.metrics?.clicks || 0).toLocaleString()}</td>
+                  <td class="metric-value">${typeof ctr === 'number' ? ctr.toFixed(2)+'%' : ctr}</td>
+                  <td class="metric-ci">${m.ctr_ci_lower !== undefined ? '['+m.ctr_ci_lower.toFixed(2)+'%' : '['}${m.ctr_ci_upper !== undefined ? ', '+m.ctr_ci_upper.toFixed(2)+'%]' : '-]'}</td>
+                  <td class="${m.p_value !== undefined && m.p_value < 0.05 ? 'p-significant' : ''}">${m.p_value !== undefined ? m.p_value.toFixed(4) : '-'}</td>
+                  <td>${m.win_probability !== undefined ? (m.win_probability*100).toFixed(1)+'%' : '-'}</td>
+                  <td class="${m.is_converged ? 'converged-yes' : 'converged-no'}">${m.is_converged !== undefined ? (m.is_converged ? '✅' : '⏳') : '-'}</td>
+                  <td>${s.metrics?.unique_users || '-'}</td>
+                  <td>${s.alpha ?? '-'}</td>
+                  <td>${s.beta ?? '-'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+
+          ${strategies.some(s => s.alpha) ? `
+          <div class="section-title">Thompson Sampling 后验分布</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            ${strategies.filter(s => s.alpha).map(s => {
+              const expected = s.alpha / (s.alpha + s.beta);
+              return `<div style="flex:1;min-width:150px;padding:12px;background:#f8f9fa;border-radius:8px;">
+                <div style="font-size:12px;color:#888;">${s.name}</div>
+                <div style="font-size:16px;font-weight:600;">期望 θ = ${(expected*100).toFixed(1)}%</div>
+                <div style="font-size:12px;color:#666;">α=${s.alpha} β=${s.beta}</div>
+              </div>`;
+            }).join('')}
+          </div>` : ''}
+
+          ${exp.description ? `<div class="section-title">描述</div><p style="color:#666;font-size:13px;">${exp.description}</p>` : ''}
+        `;
+      } catch (err) {
+        content.innerHTML = `<div class="empty-state"><p>加载详情失败: ${err.message}</p></div>`;
+        showToast('加载详情失败', 'error');
+      }
+    }
+
+    // ===== 工具函数 =====
+    function formatDate(str) {
+      const d = new Date(str);
+      return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+    }
+
+    function refreshData() {
+      showToast('刷新数据中...', 'info');
+      loadExperiments();
+    }
+
+    // ===== 自动刷新（每 60 秒） =====
+    checkAuth();
+    loadExperiments();
+    setInterval(loadExperiments, 60000);
+  </script>
+</body>
+</html>

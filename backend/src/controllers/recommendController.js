@@ -28,15 +28,20 @@ const MAX_PAGE_SIZE = 100;      // 单页最大条数
 const MAX_K = 200;              // 邻居数量上限
 const MAX_TOP_N = 200;          // 推荐数上限
 
-// 可用算法列表
+// 可用算法列表（扩展支持全部 8 个模型）
 const AVAILABLE_ALGORITHMS = {
-  'hybrid': { name: '混合推荐 (Hybrid CF)', description: '融合 SVD + UserCF + ItemCF + TurboCF 四种算法加权组合' },
-  'svd': { name: 'SVD 矩阵分解推荐', description: '基于矩阵分解的评分预测' },
-  'user_cf': { name: '基于用户的协同过滤 (User-Based CF)', description: '基于相似用户的评分预测' },
-  'item_cf': { name: '基于物品的协同过滤 (Item-Based CF)', description: '基于相似物品的评分预测' },
-  'turbo_cf': { name: 'Turbo-CF (K-Means 聚类加速协同过滤)', description: 'K-Means 用户聚类压缩邻居搜索空间，O(U) → O(U/C) 加速' },
-  'popular': { name: '热门推荐 (Popular)', description: '基于评分数量和均值的全局热门' },
-  'content_based': { name: '基于内容的推荐 (Content-Based)', description: '基于 Qdrant 向量的内容相似度推荐' }
+  'hybrid': { name: '混合推荐', description: '融合全部算法加权组合' },
+  'svd': { name: 'SVD 矩阵分解', description: '基于矩阵分解的评分预测' },
+  'user_cf': { name: 'User-CF 传统', description: '基于用户的协同过滤（传统版）' },
+  'user_cf_traditional': { name: 'User-CF 传统', description: '基于用户的协同过滤（传统版）' },
+  'user_cf_improved': { name: 'User-CF 改进', description: '基于用户的协同过滤（改进版，含 alpha 权重调整）' },
+  'item_cf': { name: 'Item-CF 传统', description: '基于物品的协同过滤（传统版）' },
+  'item_cf_traditional': { name: 'Item-CF 传统', description: '基于物品的协同过滤（传统版）' },
+  'item_cf_improved': { name: 'Item-CF 改进', description: '基于物品的协同过滤（改进版，含偏置校正）' },
+  'slope_one_traditional': { name: 'Slope-One', description: '基于物品偏差的协同过滤' },
+  'turbo_cf': { name: 'Turbo-CF', description: 'K-Means 聚类加速协同过滤' },
+  'popular': { name: '热门推荐', description: '基于评分数量和均值的全局热门' },
+  'content_based': { name: '基于内容推荐', description: '基于 Qdrant 向量的内容相似度推荐' }
 };
 
 // =============================================
@@ -454,8 +459,13 @@ async function aiModelRecommend(req, res) {
     const algo = (algorithm || 'hybrid').toLowerCase();
     const n = parseInt(topN) || 10;
 
-    // 支持的算法列表
-    const supportedAlgorithms = ['hybrid', 'svd', 'user_cf', 'item_cf', 'turbo_cf'];
+    // 支持的算法列表（包含全部 8 个模型 + hybrid）
+    const supportedAlgorithms = [
+      'hybrid', 'svd',
+      'user_cf', 'user_cf_traditional', 'user_cf_improved',
+      'item_cf', 'item_cf_traditional', 'item_cf_improved',
+      'slope_one_traditional', 'turbo_cf'
+    ];
     const effectiveAlgo = supportedAlgorithms.includes(algo) ? algo : 'hybrid';
 
     console.log(`[AI 推荐] 用户 ${uid}, 算法 ${effectiveAlgo}, Top-N ${n}`);

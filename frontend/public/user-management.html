@@ -13,83 +13,39 @@
       display: flex;
       overflow: hidden;
     }
-
-    /* 侧边栏 - 纯黑 */
-    .sidebar {
-      width: 250px;
-      background: #111;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      position: fixed;
-      height: 100vh;
-      left: 0; top: 0;
-      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
-      z-index: 100;
-    }
+    .sidebar { width: 250px; background: #111; color: #fff; display: flex; flex-direction: column; position: fixed; height: 100vh; left: 0; top: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); z-index: 100; }
     .sidebar-header { padding: 30px 20px; border-bottom: 1px solid #333; flex-shrink: 0; }
     .sidebar-header h1 { font-size: 20px; font-weight: 600; }
     .sidebar-header p { font-size: 12px; opacity: 0.5; margin-top: 5px; }
-    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    .sidebar-nav { flex: 1; padding: 20px 0; overflow-y: auto; }
     .sidebar-nav::-webkit-scrollbar { width: 4px; }
-    .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
     .sidebar-nav::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-    .main-content { flex: 1; margin-left: 250px; height: 100vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ccc transparent; padding: 30px; }
+    .main-content { flex: 1; margin-left: 250px; height: 100vh; overflow-y: auto; padding: 30px; }
     .main-content::-webkit-scrollbar { width: 4px; }
-    .main-content::-webkit-scrollbar-track { background: transparent; }
     .main-content::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
-    .nav-item {
-      display: flex; align-items: center; padding: 15px 25px;
-      color: #888; cursor: pointer; transition: all 0.3s;
-      border-left: 3px solid transparent; text-decoration: none;
-    }
+    .nav-item { display: flex; align-items: center; padding: 15px 25px; color: #888; cursor: pointer; transition: all 0.3s; border-left: 3px solid transparent; text-decoration: none; }
     .nav-item:hover { background: #222; color: #fff; }
     .nav-item.active { background: #1a1a1a; color: #fff; border-left-color: #fff; }
     .nav-item svg { width: 20px; height: 20px; margin-right: 12px; }
     .nav-item span { font-size: 14px; font-weight: 500; }
     .sidebar-footer { padding: 20px; border-top: 1px solid #333; }
     .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
-    .user-avatar {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: #333;
-      display: flex; align-items: center; justify-content: center; font-weight: 600; color: #fff;
-    }
+    .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #fff; }
     .user-details p { font-size: 14px; font-weight: 500; }
     .user-details small { font-size: 11px; opacity: 0.5; }
-    .btn-logout {
-      width: 100%; padding: 10px;
-      background: #222;
-      border: 1px solid #444;
-      color: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;
-    }
+    .btn-logout { width: 100%; padding: 10px; background: #222; border: 1px solid #444; color: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
     .btn-logout:hover { background: #333; border-color: #666; }
-
     .page-header { margin-bottom: 30px; }
     .page-header h2 { font-size: 28px; color: #111; margin-bottom: 5px; }
     .page-header p { color: #666; font-size: 14px; }
-
-    /* 页面内容 */
     .page-content { display: none; }
     .page-content.active { display: block; }
-
-    /* 工具栏 */
-    .toolbar {
-      background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;
-    }
+    .toolbar { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
     .search-box { display: flex; gap: 10px; flex: 1; max-width: 400px; }
-    .search-box input {
-      flex: 1; padding: 10px 15px; border: 2px solid #ddd;
-      border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.3s;
-    }
+    .search-box input { flex: 1; padding: 10px 15px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.3s; }
     .search-box input:focus { border-color: #111; }
     .toolbar-actions { display: flex; gap: 10px; }
-    .btn {
-      padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px;
-      font-weight: 500; cursor: pointer; transition: all 0.3s;
-      display: inline-flex; align-items: center; gap: 6px;
-    }
+    .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; gap: 6px; }
     .btn-primary { background: #111; color: #fff; }
     .btn-primary:hover { background: #333; }
     .btn-success { background: #333; color: #fff; }
@@ -100,172 +56,74 @@
     .btn-secondary:hover { background: #666; }
     .btn-warning { background: #555; color: #fff; }
     .btn-warning:hover { background: #777; }
-
-    /* 数据表格 */
+    .btn-outline { background: transparent; border: 2px solid #111; color: #111; }
+    .btn-outline:hover { background: #111; color: #fff; }
     .table-container { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
     thead { background: #f5f5f5; }
-    th {
-      padding: 15px 20px; text-align: left; font-weight: 600; color: #111;
-      border-bottom: 2px solid #ddd; font-size: 14px;
-    }
-    td {
-      padding: 15px 20px; border-bottom: 1px solid #eee;
-      color: #333; font-size: 14px;
-    }
-    tbody tr { transition: background-color 0.2s; }
+    th { padding: 15px 20px; text-align: left; font-weight: 600; color: #111; border-bottom: 2px solid #ddd; font-size: 14px; }
+    td { padding: 15px 20px; border-bottom: 1px solid #eee; color: #333; font-size: 14px; }
     tbody tr:hover { background-color: #f9f9f9; }
-    tbody tr:last-child td { border-bottom: none; }
     .table-actions { display: flex; gap: 8px; }
     .btn-sm { padding: 6px 12px; font-size: 12px; }
     .btn-edit { background: #333; color: #fff; }
     .btn-edit:hover { background: #555; }
     .btn-delete { background: #cc0000; color: #fff; }
     .btn-delete:hover { background: #aa0000; }
-
-    /* 电影封面 */
     .movie-cover { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; background: #ddd; }
     .movie-info { display: flex; align-items: center; gap: 12px; }
     .movie-title { font-weight: 500; color: #111; }
     .movie-meta { font-size: 12px; color: #999; margin-top: 3px; }
-
-    /* 标签 */
-    .tag {
-      display: inline-block; padding: 3px 8px; background: #eee;
-      border-radius: 4px; font-size: 12px; margin: 2px; color: #333;
-    }
-
-    /* 角色徽章 */
-    .badge {
-      display: inline-block; padding: 4px 10px; border-radius: 20px;
-      font-size: 12px; font-weight: 500;
-    }
+    .tag { display: inline-block; padding: 3px 8px; background: #eee; border-radius: 4px; font-size: 12px; margin: 2px; color: #333; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
     .badge-admin { background: #111; color: #fff; }
     .badge-user { background: #e0e0e0; color: #333; }
-
-    /* 分页 */
     .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 20px; }
-    .pagination button {
-      padding: 8px 12px; border: 1px solid #ccc; background: #fff;
-      border-radius: 4px; cursor: pointer; transition: all 0.3s; color: #333;
-    }
+    .pagination button { padding: 8px 12px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; transition: all 0.3s; color: #333; }
     .pagination button:hover:not(:disabled) { background: #111; color: #fff; border-color: #111; }
     .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
     .pagination span { color: #666; font-size: 14px; }
-
-    /* 模态框 */
-    .modal {
-      display: none; position: fixed; top: 0; left: 0;
-      width: 100%; height: 100%; background: rgba(0,0,0,0.6);
-      z-index: 1000; justify-content: center; align-items: center;
-    }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
     .modal.active { display: flex; }
-    .modal-content {
-      background: #fff; border-radius: 10px; width: 100%;
-      max-width: 600px; max-height: 90vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent;
-    }
-    .modal-content::-webkit-scrollbar { width: 4px; }
-    .modal-content::-webkit-scrollbar-track { background: transparent; }
-    .modal-content::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
-    .modal-header {
-      padding: 20px; border-bottom: 1px solid #ddd;
-      display: flex; justify-content: space-between; align-items: center;
-    }
+    .modal-content { background: #fff; border-radius: 10px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { padding: 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
     .modal-header h3 { font-size: 20px; color: #111; }
-    .modal-close {
-      background: none; border: none; font-size: 24px; color: #999;
-      cursor: pointer; padding: 0; line-height: 1;
-    }
+    .modal-close { background: none; border: none; font-size: 24px; color: #999; cursor: pointer; padding: 0; line-height: 1; }
     .modal-close:hover { color: #111; }
     .modal-body { padding: 20px; }
-    .modal-footer {
-      padding: 20px; border-top: 1px solid #ddd;
-      display: flex; justify-content: flex-end; gap: 10px;
-    }
+    .modal-footer { padding: 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px; }
     .form-group { margin-bottom: 20px; }
-    .form-group label {
-      display: block; margin-bottom: 8px; font-size: 14px;
-      font-weight: 500; color: #111;
-    }
-    .form-group input, .form-group textarea, .form-group select {
-      width: 100%; padding: 10px 15px; border: 2px solid #ddd;
-      border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.3s;
-    }
+    .form-group label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: #111; }
+    .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px 15px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.3s; }
     .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #111; }
     .form-group textarea { min-height: 100px; resize: vertical; }
     .form-row { display: flex; gap: 15px; }
     .form-col { flex: 1; }
-
-    /* 关联选择器 */
-    .relation-selector {
-      border: 2px solid #ddd; border-radius: 6px;
-      padding: 15px; max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent;
-    }
-    .relation-selector::-webkit-scrollbar { width: 4px; }
-    .relation-selector::-webkit-scrollbar-track { background: transparent; }
-    .relation-selector::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
-    .relation-item {
-      display: flex; align-items: center; padding: 8px 0;
-      border-bottom: 1px solid #eee;
-    }
+    .relation-selector { border: 2px solid #ddd; border-radius: 6px; padding: 15px; max-height: 200px; overflow-y: auto; }
+    .relation-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
     .relation-item:last-child { border-bottom: none; }
     .relation-item input[type="checkbox"] { width: auto; margin-right: 10px; }
     .relation-item label { margin: 0; cursor: pointer; flex: 1; }
     .relation-item .role-input { width: 120px; padding: 5px 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px; }
-
-    /* 偏好选择 */
     .preferences { display: flex; flex-wrap: wrap; gap: 8px; }
     .preference-item { display: flex; align-items: center; gap: 5px; }
-
-    /* 消息提示 - 保留红/绿用于重要提示 */
-    .toast {
-      position: fixed; top: 20px; right: 20px;
-      padding: 15px 25px; border-radius: 6px; color: #fff;
-      font-weight: 500; display: none; z-index: 2000;
-      animation: slideIn 0.3s ease;
-    }
+    .toast { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 6px; color: #fff; font-weight: 500; display: none; z-index: 2000; animation: slideIn 0.3s ease; }
     .toast.success { background: #111; display: block; }
     .toast.error { background: #cc0000; display: block; }
-    @keyframes slideIn {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-
-    /* 空状态 */
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     .empty-state { text-align: center; padding: 60px 20px; color: #999; }
     .empty-state svg { width: 80px; height: 80px; margin-bottom: 20px; opacity: 0.3; }
-
-    /* 加载 */
     .loading { text-align: center; padding: 60px; color: #999; }
-
-    /* 批量导入区域 */
-    .import-area {
-      border: 2px dashed #ccc; border-radius: 8px;
-      padding: 40px; text-align: center; margin-bottom: 20px;
-      transition: all 0.3s; cursor: pointer;
-    }
+    .import-area { border: 2px dashed #ccc; border-radius: 8px; padding: 40px; text-align: center; margin-bottom: 20px; transition: all 0.3s; cursor: pointer; }
     .import-area:hover { border-color: #111; background: #f9f9f9; }
     .import-area svg { width: 60px; height: 60px; color: #999; margin-bottom: 15px; }
     .import-result { background: #f5f5f5; border-radius: 6px; padding: 15px; margin-top: 15px; }
     .import-result h4 { font-size: 14px; margin-bottom: 10px; color: #111; }
-    .import-result ul { list-style: none; max-height: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent; }
-    .import-result ul::-webkit-scrollbar { width: 4px; }
-    .import-result ul::-webkit-scrollbar-track { background: transparent; }
-    .import-result ul::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+    .import-result ul { list-style: none; max-height: 150px; overflow-y: auto; }
     .import-result li { font-size: 12px; padding: 5px 0; color: #cc0000; }
-
-    /* 统计卡片 */
     .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-bottom: 30px; }
-    .stat-card {
-      background: #fff; border-radius: 10px; padding: 20px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      border: 1px solid #e0e0e0;
-    }
-    .stat-card .stat-icon {
-      width: 50px; height: 50px; border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 15px;
-    }
+    .stat-card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; }
+    .stat-card .stat-icon { width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; }
     .stat-card .stat-icon svg { width: 24px; height: 24px; }
     .stat-card .stat-value { font-size: 28px; font-weight: 700; color: #111; margin-bottom: 5px; }
     .stat-card .stat-label { font-size: 14px; color: #888; }
@@ -274,1902 +132,388 @@
     .stat-icon.directors { background: #e0e0e0; color: #111; }
     .stat-icon.actors { background: #d8d8d8; color: #111; }
     .stat-icon.users { background: #e4e4e4; color: #111; }
-
-    /* 响应式 */
-    @media (max-width: 1200px) {
-      .stats-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-    @media (max-width: 768px) {
-      .sidebar { width: 60px; }
-      .sidebar-header h1, .sidebar-header p, .nav-item span, .user-info, .sidebar-footer { display: none; }
-      .sidebar-header { padding: 15px; text-align: center; }
-      .nav-item { padding: 15px; justify-content: center; border-left: none; border-right: 3px solid transparent; }
-      .nav-item.active { border-right-color: #fff; border-left-color: transparent; }
-      .main-content { margin-left: 60px; }
-      .stats-grid { grid-template-columns: 1fr; }
-    }
+    .page-header .subtitle { font-size: 14px; color: #888; margin-top: 4px; }
+    .experiment-card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .experiment-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+    .experiment-title { font-size: 18px; font-weight: 600; color: #222; }
+    .experiment-meta { font-size: 13px; color: #888; margin-top: 4px; }
+    .experiment-meta span { margin-right: 16px; }
+    .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .status-draft { background: #eee; color: #666; }
+    .status-running { background: #d4edda; color: #155724; }
+    .status-stopped { background: #f8d7da; color: #721c24; }
+    .status-archived { background: #e2e3e5; color: #383d41; }
+    .strategies-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    .strategies-table th { background: #f8f9fa; padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 600; color: #666; border-bottom: 2px solid #dee2e6; }
+    .strategies-table td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; color: #333; }
+    .strategy-name { font-weight: 500; }
+    .winner-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #28a745; color: white; }
+    .metric-value { font-weight: 600; font-size: 14px; color: #222; }
+    .metric-ci { font-size: 11px; color: #888; }
+    .p-value { font-weight: 500; }
+    .p-significant { color: #28a745; }
+    .p-not-significant { color: #dc3545; }
+    .traffic-bar-container { display: flex; height: 24px; border-radius: 12px; overflow: hidden; }
+    .traffic-bar-segment { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; transition: width 0.5s; }
+    .converged-yes { color: #28a745; font-weight: 600; }
+    .converged-no { color: #ffc107; font-weight: 600; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .detail-item { background: #f8f9fa; padding: 16px; border-radius: 8px; }
+    .detail-item .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .detail-item .value { font-size: 18px; font-weight: 600; color: #222; }
+    .section-title { font-size: 16px; font-weight: 600; color: #444; margin: 24px 0 16px; }
+    .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #ddd; border-top-color: #007bff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .color-1 { background: #007bff; }
+    .color-2 { background: #28a745; }
+    .color-3 { background: #ffc107; color: #333; }
+    .color-4 { background: #dc3545; }
+    .color-5 { background: #17a2b8; }
+    .color-6 { background: #6f42c1; }
+    .color-7 { background: #fd7e14; }
+    .color-8 { background: #20c997; }
+    .color-9 { background: #e83e8c; }
+    .color-10 { background: #6610f2; }
+    .ab-test-modal { max-width: 700px; }
+    .strategies-panel { margin: 16px 0; }
+    .strategy-row { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; padding: 12px; background: #f8f9fa; border-radius: 8px; }
+    .strategy-row input, .strategy-row select { width: auto; }
+    .strategy-row .str-name { flex: 2; }
+    .strategy-row .str-algo { flex: 1; }
+    .strategy-row .str-weight { flex: 0 0 100px; }
+    .strategy-row .str-remove { flex: 0 0 auto; }
+    .add-strategy-btn { margin-top: 8px; }
+    #createABTestModal .modal-content, #detailABTestModal .modal-content { max-width: 700px; }
+    #createABTestModal .form-group input, #createABTestModal .form-group select, #createABTestModal .form-group textarea { width: 100%; }
+    @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 768px) { .sidebar { width: 60px; } .sidebar-header h1, .sidebar-header p, .nav-item span, .user-info, .sidebar-footer { display: none; } .sidebar-header { padding: 15px; text-align: center; } .nav-item { padding: 15px; justify-content: center; border-left: none; border-right: 3px solid transparent; } .nav-item.active { border-right-color: #fff; border-left-color: transparent; } .main-content { margin-left: 60px; } .stats-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-
-  <!-- 侧边栏 -->
   <aside class="sidebar">
-    <div class="sidebar-header">
-      <h1>🎬 电影管理系统</h1>
-      <p>Movie Recommend Admin</p>
-    </div>
+    <div class="sidebar-header"><h1>🎬 电影管理系统</h1><p>Movie Recommend Admin</p></div>
     <nav class="sidebar-nav">
-      <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        <span>数据概览</span>
-      </div>
-      <div class="nav-item" data-page="movies" onclick="switchPage('movies')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg>
-        <span>电影管理</span>
-      </div>
-      <div class="nav-item" data-page="tags" onclick="switchPage('tags')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-        <span>标签管理</span>
-      </div>
-      <div class="nav-item" data-page="genres" onclick="switchPage('genres')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        <span>题材管理</span>
-      </div>
-      <div class="nav-item" data-page="directors" onclick="switchPage('directors')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-        <span>导演管理</span>
-      </div>
-      <div class="nav-item" data-page="actors" onclick="switchPage('actors')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span>演员管理</span>
-      </div>
-      <div class="nav-item" data-page="users" onclick="switchPage('users')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-        <span>用户管理</span>
-      </div>
-      <div class="nav-item" data-page="comments" onclick="switchPage('comments')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        <span>评论管理</span>
-      </div>
-      <a class="nav-item" href="admin-profile.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v6M9 14h6"/></svg>
-        <span>个人设置</span>
-      </a>
+      <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>数据概览</span></div>
+      <div class="nav-item" data-page="movies" onclick="switchPage('movies')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg><span>电影管理</span></div>
+      <div class="nav-item" data-page="tags" onclick="switchPage('tags')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg><span>标签管理</span></div>
+      <div class="nav-item" data-page="genres" onclick="switchPage('genres')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span>题材管理</span></div>
+      <div class="nav-item" data-page="directors" onclick="switchPage('directors')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg><span>导演管理</span></div>
+      <div class="nav-item" data-page="actors" onclick="switchPage('actors')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>演员管理</span></div>
+      <div class="nav-item" data-page="users" onclick="switchPage('users')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><span>用户管理</span></div>
+      <div class="nav-item" data-page="comments" onclick="switchPage('comments')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>评论管理</span></div>
+      <div class="nav-item" data-page="abtest" onclick="switchPage('abtest')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg><span>A/B 测试</span></div>
+      <a class="nav-item" href="admin-profile.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v6M9 14h6"/></svg><span>个人设置</span></a>
     </nav>
     <div class="sidebar-footer">
-      <div class="user-info">
-        <div class="user-avatar">管</div>
-        <div class="user-details">
-          <p id="adminName">管理员</p>
-          <small>超级管理员</small>
-        </div>
-      </div>
+      <div class="user-info"><div class="user-avatar">管</div><div class="user-details"><p id="adminName">管理员</p><small>超级管理员</small></div></div>
       <button class="btn-logout" onclick="logout()">退出登录</button>
     </div>
   </aside>
-
-  <!-- 主内容区 -->
   <main class="main-content">
-
-    <!-- ==================== 数据概览页 ==================== -->
     <div class="page-content active" id="page-dashboard">
-      <div class="page-header">
-        <h2>数据概览</h2>
-        <p>系统核心数据一览</p>
-      </div>
+      <div class="page-header"><h2>数据概览</h2><p>系统核心数据一览</p></div>
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon movies">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20"/></svg>
-          </div>
-          <div class="stat-value" id="statMovies">0</div>
-          <div class="stat-label">电影总数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon tags">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
-          </div>
-          <div class="stat-value" id="statTags">0</div>
-          <div class="stat-label">标签总数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon directors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-          </div>
-          <div class="stat-value" id="statDirectors">0</div>
-          <div class="stat-label">导演总数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon actors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </div>
-          <div class="stat-value" id="statActors">0</div>
-          <div class="stat-label">演员总数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon users">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          </div>
-          <div class="stat-value" id="statUsers">0</div>
-          <div class="stat-label">用户总数</div>
-        </div>
+        <div class="stat-card"><div class="stat-icon movies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20"/></svg></div><div class="stat-value" id="statMovies">0</div><div class="stat-label">电影总数</div></div>
+        <div class="stat-card"><div class="stat-icon tags"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg></div><div class="stat-value" id="statTags">0</div><div class="stat-label">标签总数</div></div>
+        <div class="stat-card"><div class="stat-icon directors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="stat-value" id="statDirectors">0</div><div class="stat-label">导演总数</div></div>
+        <div class="stat-card"><div class="stat-icon actors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="stat-value" id="statActors">0</div><div class="stat-label">演员总数</div></div>
+        <div class="stat-card"><div class="stat-icon users"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div><div class="stat-value" id="statUsers">0</div><div class="stat-label">用户总数</div></div>
       </div>
     </div>
-
-    <!-- ==================== 电影管理页 ==================== -->
     <div class="page-content" id="page-movies">
-      <div class="page-header">
-        <h2>电影管理</h2>
-        <p>管理系统中的所有电影资源</p>
-      </div>
+      <div class="page-header"><h2>电影管理</h2><p>管理系统中的所有电影资源</p></div>
       <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="movieSearch" placeholder="搜索电影标题...">
-          <button class="btn btn-primary" onclick="searchMovies()">搜索</button>
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-success" onclick="openImportModal()">批量导入</button>
-          <button class="btn btn-primary" onclick="openMovieModal()">添加电影</button>
-        </div>
+        <div class="search-box"><input type="text" id="movieSearch" placeholder="搜索电影标题..."><button class="btn btn-primary" onclick="searchMovies()">搜索</button></div>
+        <div class="toolbar-actions"><button class="btn btn-success" onclick="openImportModal()">批量导入</button><button class="btn btn-primary" onclick="openMovieModal()">添加电影</button></div>
       </div>
       <div class="table-container">
         <div id="moviesLoading" class="loading">加载中...</div>
-        <table id="moviesTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>电影</th>
-              <th>标签</th>
-              <th>导演</th>
-              <th>演员</th>
-              <th>年份</th>
-              <th>时长</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="moviesTableBody"></tbody>
-        </table>
-        <div id="moviesEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20"/></svg>
-          <p>暂无电影数据</p>
-        </div>
+        <table id="moviesTable" style="display:none;"><thead><tr><th>ID</th><th>电影</th><th>标签</th><th>导演</th><th>演员</th><th>年份</th><th>时长</th><th>操作</th></tr></thead><tbody id="moviesTableBody"></tbody></table>
+        <div id="moviesEmpty" class="empty-state" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20"/></svg><p>暂无电影数据</p></div>
         <div class="pagination" id="moviesPagination" style="display:none;"></div>
       </div>
     </div>
-
-    <!-- ==================== 标签管理页 ==================== -->
     <div class="page-content" id="page-tags">
-      <div class="page-header">
-        <h2>标签管理</h2>
-        <p>管理电影分类标签</p>
-      </div>
+      <div class="page-header"><h2>标签管理</h2><p>管理电影分类标签</p></div>
       <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="tagSearch" placeholder="搜索标签...">
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-primary" onclick="openTagModal()">添加标签</button>
-        </div>
+        <div class="search-box"><input type="text" id="tagSearch" placeholder="搜索标签..."></div>
+        <div class="toolbar-actions"><button class="btn btn-primary" onclick="openTagModal()">添加标签</button></div>
       </div>
       <div class="table-container">
         <div id="tagsLoading" class="loading">加载中...</div>
-        <table id="tagsTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>标签名称</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="tagsTableBody"></tbody>
-        </table>
-            <div id="tagsEmpty" class="empty-state" style="display:none;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
-              <p>暂无标签数据</p>
-            </div>
-            <div class="pagination" id="tagsPagination" style="display:none;"></div>
-          </div>
-        </div>
-
-    <!-- ==================== 导演管理页 ==================== -->
-    <div class="page-content" id="page-directors">
-      <div class="page-header">
-        <h2>导演管理</h2>
-        <p>管理电影导演信息</p>
+        <table id="tagsTable" style="display:none;"><thead><tr><th>ID</th><th>标签名称</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="tagsTableBody"></tbody></table>
+        <div id="tagsEmpty" class="empty-state" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg><p>暂无标签数据</p></div>
+        <div class="pagination" id="tagsPagination" style="display:none;"></div>
       </div>
+    </div>
+    <div class="page-content" id="page-directors">
+      <div class="page-header"><h2>导演管理</h2><p>管理电影导演信息</p></div>
       <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="directorSearch" placeholder="搜索导演...">
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-primary" onclick="openDirectorModal()">添加导演</button>
-        </div>
+        <div class="search-box"><input type="text" id="directorSearch" placeholder="搜索导演..."></div>
+        <div class="toolbar-actions"><button class="btn btn-primary" onclick="openDirectorModal()">添加导演</button></div>
       </div>
       <div class="table-container">
         <div id="directorsLoading" class="loading">加载中...</div>
-        <table id="directorsTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>导演名称</th>
-              <th>头像</th>
-              <th>简介</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="directorsTableBody"></tbody>
-        </table>
-        <div id="directorsEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-          <p>暂无导演数据</p>
-        </div>
+        <table id="directorsTable" style="display:none;"><thead><tr><th>ID</th><th>导演名称</th><th>头像</th><th>简介</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="directorsTableBody"></tbody></table>
+        <div id="directorsEmpty" class="empty-state" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>暂无导演数据</p></div>
         <div class="pagination" id="directorsPagination" style="display:none;"></div>
       </div>
     </div>
-
-    <!-- ==================== 演员管理页 ==================== -->
     <div class="page-content" id="page-actors">
-      <div class="page-header">
-        <h2>演员管理</h2>
-        <p>管理电影演员信息</p>
-      </div>
+      <div class="page-header"><h2>演员管理</h2><p>管理电影演员信息</p></div>
       <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="actorSearch" placeholder="搜索演员...">
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-primary" onclick="openActorModal()">添加演员</button>
-        </div>
+        <div class="search-box"><input type="text" id="actorSearch" placeholder="搜索演员..."></div>
+        <div class="toolbar-actions"><button class="btn btn-primary" onclick="openActorModal()">添加演员</button></div>
       </div>
       <div class="table-container">
         <div id="actorsLoading" class="loading">加载中...</div>
-        <table id="actorsTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>演员名称</th>
-              <th>头像</th>
-              <th>简介</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="actorsTableBody"></tbody>
-        </table>
-        <div id="actorsEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <p>暂无演员数据</p>
-        </div>
+        <table id="actorsTable" style="display:none;"><thead><tr><th>ID</th><th>演员名称</th><th>头像</th><th>简介</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="actorsTableBody"></tbody></table>
+        <div id="actorsEmpty" class="empty-state" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><p>暂无演员数据</p></div>
         <div class="pagination" id="actorsPagination" style="display:none;"></div>
       </div>
     </div>
-
-    <!-- ==================== 题材管理页 ==================== -->
     <div class="page-content" id="page-genres">
-      <div class="page-header">
-        <h2>题材管理</h2>
-        <p>管理电影题材分类</p>
-      </div>
+      <div class="page-header"><h2>题材管理</h2><p>管理电影题材分类</p></div>
       <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="genreSearch" placeholder="搜索题材...">
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-primary" onclick="openGenreModal()">添加题材</button>
-        </div>
+        <div class="search-box"><input type="text" id="genreSearch" placeholder="搜索题材..."></div>
+        <div class="toolbar-actions"><button class="btn btn-primary" onclick="openGenreModal()">添加题材</button></div>
       </div>
       <div class="table-container">
         <div id="genresLoading" class="loading">加载中...</div>
-        <table id="genresTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>题材名称</th>
-              <th>题材代码</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="genresTableBody"></tbody>
-        </table>
-        <div id="genresEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          <p>暂无题材数据</p>
-        </div>
+        <table id="genresTable" style="display:none;"><thead><tr><th>ID</th><th>题材名称</th><th>题材代码</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="genresTableBody"></tbody></table>
+        <div id="genresEmpty" class="empty-state" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><p>暂无题材数据</p></div>
         <div class="pagination" id="genresPagination" style="display:none;"></div>
       </div>
     </div>
-
-    <!-- ==================== 用户管理页 ==================== -->
     <div class="page-content" id="page-users">
-      <div class="page-header">
-        <h2>用户管理</h2>
-        <p>管理系统用户账号与权限</p>
-      </div>
+      <div class="page-header"><h2>用户管理</h2><p>管理系统用户账号与权限</p></div>
       <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="userSearch" placeholder="搜索用户名...">
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-primary" onclick="openUserModal()">添加用户</button>
-        </div>
+        <div class="search-box"><input type="text" id="userSearch" placeholder="搜索用户名..."></div>
+        <div class="toolbar-actions"><button class="btn btn-primary" onclick="openUserModal()">添加用户</button></div>
       </div>
       <div class="table-container">
         <div id="usersLoading" class="loading">加载中...</div>
-        <table id="usersTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>用户名</th>
-              <th>邮箱</th>
-              <th>角色</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="usersTableBody"></tbody>
-        </table>
-        <div id="usersEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          <p>暂无用户数据</p>
-        </div>
+        <table id="usersTable" style="display:none;"><thead><tr><th>ID</th><th>用户名</th><th>邮箱</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="usersTableBody"></tbody></table>
+        <div id="usersEmpty" class="empty-state" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><p>暂无用户数据</p></div>
         <div class="pagination" id="usersPagination" style="display:none;"></div>
       </div>
     </div>
-
-    <!-- ==================== 评论管理页 ==================== -->
     <div class="page-content" id="page-comments">
-      <div class="page-header">
-        <h2>评论管理</h2>
-        <p>管理所有用户评论，支持置顶和删除操作</p>
-      </div>
+      <div class="page-header"><h2>评论管理</h2><p>管理所有用户评论，支持置顶和删除操作</p></div>
       <div class="toolbar">
-        <div class="search-box">
-          <input type="text" id="commentSearch" placeholder="搜索评论内容、用户名或电影标题...">
-          <button class="btn btn-primary" onclick="searchComments()">搜索</button>
-        </div>
+        <div class="search-box"><input type="text" id="commentSearch" placeholder="搜索评论内容、用户名或电影标题..."><button class="btn btn-primary" onclick="searchComments()">搜索</button></div>
       </div>
       <div class="table-container">
         <div id="commentsLoading" class="loading">加载中...</div>
-        <table id="commentsTable" style="display:none;">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>用户</th>
-              <th>电影</th>
-              <th>评论内容</th>
-              <th>类型</th>
-              <th>置顶</th>
-              <th>时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="commentsTableBody"></tbody>
-        </table>
-        <div id="commentsEmpty" class="empty-state" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          <p>暂无评论数据</p>
-        </div>
+        <table id="commentsTable" style="display:none;"><thead><tr><th>ID</th><th>用户</th><th>电影</th><th>评论内容</th><th>类型</th><th>置顶</th><th>时间</th><th>操作</th></tr></thead><tbody id="commentsTableBody"></tbody></table>
+        <div id="commentsEmpty" class="empty-state" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><p>暂无评论数据</p></div>
         <div class="pagination" id="commentsPagination" style="display:none;"></div>
       </div>
     </div>
-
+    <div class="page-content" id="page-abtest">
+      <div class="page-header">
+        <div><h2>A/B 测试实验管理</h2><p class="subtitle">创建、管理和监控推荐算法的在线对比实验</p></div>
+        <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-outline" onclick="refreshABTest()">🔄 刷新</button><button class="btn btn-primary" onclick="openCreateABTestModal()">+ 创建实验</button></div>
+      </div>
+      <div id="abtestExperimentList"><div class="loading" id="abtestLoadingIndicator"><div class="spinner"></div><p style="margin-top:12px;">加载实验中...</p></div></div>
+    </div>
   </main>
-
-  <!-- ==================== 电影 模态框 ==================== -->
-  <div class="modal" id="movieModal">
-    <div class="modal-content" style="max-width:700px;">
-      <div class="modal-header">
-        <h3 id="movieModalTitle">添加电影</h3>
-        <button class="modal-close" onclick="closeModal('movieModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="movieForm">
-          <input type="hidden" id="movieId">
-          <div class="form-group">
-            <label for="movieTitle">电影标题 *</label>
-            <input type="text" id="movieTitle" placeholder="请输入电影标题" required>
-          </div>
-          <div class="form-group">
-            <label for="movieDescription">电影简介</label>
-            <textarea id="movieDescription" placeholder="请输入电影简介"></textarea>
-          </div>
-          <div class="form-row">
-            <div class="form-col">
-              <div class="form-group">
-                <label for="movieCoverUrl">封面URL</label>
-                <input type="text" id="movieCoverUrl" placeholder="封面图片URL">
-              </div>
-            </div>
-            <div class="form-col">
-              <div class="form-group">
-                <label for="movieVideoUrl">视频URL</label>
-                <input type="text" id="movieVideoUrl" placeholder="视频文件URL">
-              </div>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-col">
-              <div class="form-group">
-                <label for="movieReleaseYear">上映年份</label>
-                <input type="number" id="movieReleaseYear" placeholder="例如: 2024" min="1900" max="2099">
-              </div>
-            </div>
-            <div class="form-col">
-              <div class="form-group">
-                <label for="movieDuration">时长 (分钟)</label>
-                <input type="number" id="movieDuration" placeholder="例如: 120" min="1">
-              </div>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>关联标签</label>
-            <div class="relation-selector" id="movieTagSelector">
-              <div class="loading" style="padding:10px;">加载中...</div>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>关联导演</label>
-            <div class="relation-selector" id="movieDirectorSelector">
-              <div class="loading" style="padding:10px;">加载中...</div>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>关联演员</label>
-            <div class="relation-selector" id="movieActorSelector">
-              <div class="loading" style="padding:10px;">加载中...</div>
-            </div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('movieModal')">取消</button>
-        <button class="btn btn-primary" onclick="saveMovie()">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 批量导入 模态框 ==================== -->
-  <div class="modal" id="importModal">
-    <div class="modal-content" style="max-width:700px;">
-      <div class="modal-header">
-        <h3>批量导入电影</h3>
-        <button class="modal-close" onclick="closeModal('importModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="import-area" onclick="document.getElementById('importFile').click()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <p style="color:#6c757d;margin-bottom:5px;">点击选择 JSON 文件</p>
-          <p style="font-size:12px;color:#999;">支持 JSON 格式，数组结构：[{"title":"...", "description":"..."}]</p>
-        </div>
-        <input type="file" id="importFile" accept=".json" style="display:none;" onchange="handleImportFile(event)">
-        <div id="importPreview" style="display:none;">
-          <h4 style="margin-bottom:10px;">文件预览</h4>
-          <p id="importFileCount" style="font-size:14px;color:#333;margin-bottom:10px;"></p>
-        </div>
-        <div id="importResult" class="import-result" style="display:none;">
-          <h4>导入结果</h4>
-          <p id="importResultMsg"></p>
-          <ul id="importErrors"></ul>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('importModal')">关闭</button>
-        <button class="btn btn-primary" id="importBtn" onclick="doImport()" disabled>开始导入</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 题材 模态框 ==================== -->
-  <div class="modal" id="genreModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="genreModalTitle">添加题材</h3>
-        <button class="modal-close" onclick="closeModal('genreModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="genreForm">
-          <input type="hidden" id="genreId">
-          <div class="form-group">
-            <label for="genreName">题材名称 *</label>
-            <input type="text" id="genreName" placeholder="请输入题材名称（中文）" required>
-          </div>
-          <div class="form-group">
-            <label for="genreCode">题材代码 *</label>
-            <input type="text" id="genreCode" placeholder="请输入题材代码（英文）" required>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('genreModal')">取消</button>
-        <button class="btn btn-primary" onclick="saveGenre()">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 标签 模态框 ==================== -->
-  <div class="modal" id="tagModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="tagModalTitle">添加标签</h3>
-        <button class="modal-close" onclick="closeModal('tagModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="tagForm">
-          <input type="hidden" id="tagId">
-          <div class="form-group">
-            <label for="tagName">标签名称 *</label>
-            <input type="text" id="tagName" placeholder="请输入标签名称" required>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('tagModal')">取消</button>
-        <button class="btn btn-primary" onclick="saveTag()">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 导演 模态框 ==================== -->
-  <div class="modal" id="directorModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="directorModalTitle">添加导演</h3>
-        <button class="modal-close" onclick="closeModal('directorModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="directorForm">
-          <input type="hidden" id="directorId">
-          <div class="form-group">
-            <label for="directorName">导演名称 *</label>
-            <input type="text" id="directorName" placeholder="请输入导演名称" required>
-          </div>
-          <div class="form-group">
-            <label for="directorAvatarUrl">头像URL</label>
-            <input type="text" id="directorAvatarUrl" placeholder="头像图片URL">
-          </div>
-          <div class="form-group">
-            <label for="directorDescription">简介</label>
-            <textarea id="directorDescription" placeholder="请输入导演简介"></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('directorModal')">取消</button>
-        <button class="btn btn-primary" onclick="saveDirector()">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 演员 模态框 ==================== -->
-  <div class="modal" id="actorModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="actorModalTitle">添加演员</h3>
-        <button class="modal-close" onclick="closeModal('actorModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="actorForm">
-          <input type="hidden" id="actorId">
-          <div class="form-group">
-            <label for="actorName">演员名称 *</label>
-            <input type="text" id="actorName" placeholder="请输入演员名称" required>
-          </div>
-          <div class="form-group">
-            <label for="actorAvatarUrl">头像URL</label>
-            <input type="text" id="actorAvatarUrl" placeholder="头像图片URL">
-          </div>
-          <div class="form-group">
-            <label for="actorDescription">简介</label>
-            <textarea id="actorDescription" placeholder="请输入演员简介"></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('actorModal')">取消</button>
-        <button class="btn btn-primary" onclick="saveActor()">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 用户 模态框 ==================== -->
-  <div class="modal" id="userModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="userModalTitle">添加用户</h3>
-        <button class="modal-close" onclick="closeModal('userModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="userForm">
-          <input type="hidden" id="userId">
-          <div class="form-group">
-            <label for="formUsername">用户名 *</label>
-            <input type="text" id="formUsername" placeholder="请输入用户名" required>
-          </div>
-          <div class="form-group">
-            <label for="formEmail">邮箱</label>
-            <input type="email" id="formEmail" placeholder="请输入邮箱">
-          </div>
-          <div class="form-group" id="passwordGroup">
-            <label for="formPassword">密码 *</label>
-            <input type="password" id="formPassword" placeholder="请输入密码">
-          </div>
-          <div class="form-group">
-            <label for="formRole">角色</label>
-            <select id="formRole">
-              <option value="2">普通用户</option>
-              <option value="1">管理员</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>电影偏好类型</label>
-            <div class="preferences">
-              <label class="preference-item"><input type="checkbox" value="科幻"> 科幻</label>
-              <label class="preference-item"><input type="checkbox" value="动作"> 动作</label>
-              <label class="preference-item"><input type="checkbox" value="剧情"> 剧情</label>
-              <label class="preference-item"><input type="checkbox" value="喜剧"> 喜剧</label>
-              <label class="preference-item"><input type="checkbox" value="爱情"> 爱情</label>
-              <label class="preference-item"><input type="checkbox" value="动画"> 动画</label>
-              <label class="preference-item"><input type="checkbox" value="悬疑"> 悬疑</label>
-              <label class="preference-item"><input type="checkbox" value="惊悚"> 惊悚</label>
-              <label class="preference-item"><input type="checkbox" value="纪录片"> 纪录片</label>
-            </div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('userModal')">取消</button>
-        <button class="btn btn-primary" onclick="saveUser()">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 用户编辑 模态框 ==================== -->
-  <div class="modal" id="userEditModal">
-    <div class="modal-content" style="max-width:500px;">
-      <div class="modal-header">
-        <h3 id="userEditModalTitle">编辑用户</h3>
-        <button class="modal-close" onclick="closeModal('userEditModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <!-- 用户基本信息 -->
-        <div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;">
-          <p style="font-size:16px;font-weight:600;color:#111;" id="userEditDisplayName"></p>
-          <p style="font-size:13px;color:#888;margin-top:5px;" id="userEditDisplayRole"></p>
-        </div>
-
-        <!-- 角色管理 -->
-        <div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;">
-          <h4 style="font-size:14px;color:#111;margin-bottom:10px;">角色管理</h4>
-          <button class="btn btn-sm" id="userEditRoleBtn" style="padding:8px 16px;font-size:13px;"></button>
-        </div>
-
-        <!-- 密码重置 -->
-        <div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;">
-          <h4 style="font-size:14px;color:#111;margin-bottom:10px;">重置密码</h4>
-          <div style="display:flex;gap:10px;align-items:center;">
-            <input type="password" id="userEditPassword" placeholder="输入新密码" style="flex:1;padding:8px 12px;border:2px solid #ddd;border-radius:6px;font-size:14px;outline:none;" onfocus="this.style.borderColor='#111'" onblur="this.style.borderColor='#ddd'">
-            <button class="btn btn-sm btn-primary" onclick="resetUserPassword()" style="white-space:nowrap;">确认重置</button>
-          </div>
-        </div>
-
-        <!-- 删除用户 -->
-        <div>
-          <h4 style="font-size:14px;color:#cc0000;margin-bottom:10px;">危险操作</h4>
-          <button class="btn btn-sm btn-delete" onclick="deleteCurrentUser()" style="padding:8px 16px;font-size:13px;">删除该用户</button>
-          <p style="font-size:12px;color:#999;margin-top:8px;">删除后无法恢复，请谨慎操作。</p>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('userEditModal')">关闭</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 删除确认 模态框 ==================== -->
-  <div class="modal" id="deleteModal">
-    <div class="modal-content" style="max-width:400px;">
-      <div class="modal-header">
-        <h3>确认删除</h3>
-        <button class="modal-close" onclick="closeModal('deleteModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p id="deleteMessage" style="font-size:16px;color:#333;">确定要删除吗？此操作不可恢复。</p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('deleteModal')">取消</button>
-        <button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 消息提示 -->
+  <div class="modal" id="movieModal"><div class="modal-content" style="max-width:700px;"><div class="modal-header"><h3 id="movieModalTitle">添加电影</h3><button class="modal-close" onclick="closeModal('movieModal')">&times;</button></div><div class="modal-body"><form id="movieForm"><input type="hidden" id="movieId"><div class="form-group"><label for="movieTitle">电影标题 *</label><input type="text" id="movieTitle" placeholder="请输入电影标题" required></div><div class="form-group"><label for="movieDescription">电影简介</label><textarea id="movieDescription" placeholder="请输入电影简介"></textarea></div><div class="form-row"><div class="form-col"><div class="form-group"><label for="movieCoverUrl">封面URL</label><input type="text" id="movieCoverUrl" placeholder="封面图片URL"></div></div><div class="form-col"><div class="form-group"><label for="movieVideoUrl">视频URL</label><input type="text" id="movieVideoUrl" placeholder="视频文件URL"></div></div></div><div class="form-row"><div class="form-col"><div class="form-group"><label for="movieReleaseYear">上映年份</label><input type="number" id="movieReleaseYear" placeholder="例如: 2024" min="1900" max="2099"></div></div><div class="form-col"><div class="form-group"><label for="movieDuration">时长 (分钟)</label><input type="number" id="movieDuration" placeholder="例如: 120" min="1"></div></div></div><div class="form-group"><label>关联标签</label><div class="relation-selector" id="movieTagSelector"><div class="loading" style="padding:10px;">加载中...</div></div></div><div class="form-group"><label>关联导演</label><div class="relation-selector" id="movieDirectorSelector"><div class="loading" style="padding:10px;">加载中...</div></div></div><div class="form-group"><label>关联演员</label><div class="relation-selector" id="movieActorSelector"><div class="loading" style="padding:10px;">加载中...</div></div></div></form></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('movieModal')">取消</button><button class="btn btn-primary" onclick="saveMovie()">保存</button></div></div></div>
+  <div class="modal" id="importModal"><div class="modal-content" style="max-width:700px;"><div class="modal-header"><h3>批量导入电影</h3><button class="modal-close" onclick="closeModal('importModal')">&times;</button></div><div class="modal-body"><div class="import-area" onclick="document.getElementById('importFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><p style="color:#6c757d;margin-bottom:5px;">点击选择 JSON 文件</p><p style="font-size:12px;color:#999;">支持 JSON 格式</p></div><input type="file" id="importFile" accept=".json" style="display:none;" onchange="handleImportFile(event)"><div id="importPreview" style="display:none;"><h4 style="margin-bottom:10px;">文件预览</h4><p id="importFileCount" style="font-size:14px;color:#333;margin-bottom:10px;"></p></div><div id="importResult" class="import-result" style="display:none;"><h4>导入结果</h4><p id="importResultMsg"></p><ul id="importErrors"></ul></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('importModal')">关闭</button><button class="btn btn-primary" id="importBtn" onclick="doImport()" disabled>开始导入</button></div></div></div>
+  <div class="modal" id="genreModal"><div class="modal-content"><div class="modal-header"><h3 id="genreModalTitle">添加题材</h3><button class="modal-close" onclick="closeModal('genreModal')">&times;</button></div><div class="modal-body"><form id="genreForm"><input type="hidden" id="genreId"><div class="form-group"><label for="genreName">题材名称 *</label><input type="text" id="genreName" placeholder="请输入题材名称（中文）" required></div><div class="form-group"><label for="genreCode">题材代码 *</label><input type="text" id="genreCode" placeholder="请输入题材代码（英文）" required></div></form></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('genreModal')">取消</button><button class="btn btn-primary" onclick="saveGenre()">保存</button></div></div></div>
+  <div class="modal" id="tagModal"><div class="modal-content"><div class="modal-header"><h3 id="tagModalTitle">添加标签</h3><button class="modal-close" onclick="closeModal('tagModal')">&times;</button></div><div class="modal-body"><form id="tagForm"><input type="hidden" id="tagId"><div class="form-group"><label for="tagName">标签名称 *</label><input type="text" id="tagName" placeholder="请输入标签名称" required></div></form></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('tagModal')">取消</button><button class="btn btn-primary" onclick="saveTag()">保存</button></div></div></div>
+  <div class="modal" id="directorModal"><div class="modal-content"><div class="modal-header"><h3 id="directorModalTitle">添加导演</h3><button class="modal-close" onclick="closeModal('directorModal')">&times;</button></div><div class="modal-body"><form id="directorForm"><input type="hidden" id="directorId"><div class="form-group"><label for="directorName">导演名称 *</label><input type="text" id="directorName" placeholder="请输入导演名称" required></div><div class="form-group"><label for="directorAvatarUrl">头像URL</label><input type="text" id="directorAvatarUrl" placeholder="头像图片URL"></div><div class="form-group"><label for="directorDescription">简介</label><textarea id="directorDescription" placeholder="请输入导演简介"></textarea></div></form></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('directorModal')">取消</button><button class="btn btn-primary" onclick="saveDirector()">保存</button></div></div></div>
+  <div class="modal" id="actorModal"><div class="modal-content"><div class="modal-header"><h3 id="actorModalTitle">添加演员</h3><button class="modal-close" onclick="closeModal('actorModal')">&times;</button></div><div class="modal-body"><form id="actorForm"><input type="hidden" id="actorId"><div class="form-group"><label for="actorName">演员名称 *</label><input type="text" id="actorName" placeholder="请输入演员名称" required></div><div class="form-group"><label for="actorAvatarUrl">头像URL</label><input type="text" id="actorAvatarUrl" placeholder="头像图片URL"></div><div class="form-group"><label for="actorDescription">简介</label><textarea id="actorDescription" placeholder="请输入演员简介"></textarea></div></form></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('actorModal')">取消</button><button class="btn btn-primary" onclick="saveActor()">保存</button></div></div></div>
+  <div class="modal" id="userModal"><div class="modal-content"><div class="modal-header"><h3 id="userModalTitle">添加用户</h3><button class="modal-close" onclick="closeModal('userModal')">&times;</button></div><div class="modal-body"><form id="userForm"><input type="hidden" id="userId"><div class="form-group"><label for="formUsername">用户名 *</label><input type="text" id="formUsername" placeholder="请输入用户名" required></div><div class="form-group"><label for="formEmail">邮箱</label><input type="email" id="formEmail" placeholder="请输入邮箱"></div><div class="form-group" id="passwordGroup"><label for="formPassword">密码 *</label><input type="password" id="formPassword" placeholder="请输入密码"></div><div class="form-group"><label for="formRole">角色</label><select id="formRole"><option value="2">普通用户</option><option value="1">管理员</option></select></div><div class="form-group"><label>电影偏好类型</label><div class="preferences"><label class="preference-item"><input type="checkbox" value="科幻"> 科幻</label><label class="preference-item"><input type="checkbox" value="动作"> 动作</label><label class="preference-item"><input type="checkbox" value="剧情"> 剧情</label><label class="preference-item"><input type="checkbox" value="喜剧"> 喜剧</label><label class="preference-item"><input type="checkbox" value="爱情"> 爱情</label><label class="preference-item"><input type="checkbox" value="动画"> 动画</label><label class="preference-item"><input type="checkbox" value="悬疑"> 悬疑</label><label class="preference-item"><input type="checkbox" value="惊悚"> 惊悚</label><label class="preference-item"><input type="checkbox" value="纪录片"> 纪录片</label></div></div></form></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('userModal')">取消</button><button class="btn btn-primary" onclick="saveUser()">保存</button></div></div></div>
+  <div class="modal" id="userEditModal"><div class="modal-content" style="max-width:500px;"><div class="modal-header"><h3 id="userEditModalTitle">编辑用户</h3><button class="modal-close" onclick="closeModal('userEditModal')">&times;</button></div><div class="modal-body"><div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;"><p style="font-size:16px;font-weight:600;color:#111;" id="userEditDisplayName"></p><p style="font-size:13px;color:#888;margin-top:5px;" id="userEditDisplayRole"></p></div><div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;"><h4 style="font-size:14px;color:#111;margin-bottom:10px;">角色管理</h4><button class="btn btn-sm" id="userEditRoleBtn" style="padding:8px 16px;font-size:13px;"></button></div><div style="margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #eee;"><h4 style="font-size:14px;color:#111;margin-bottom:10px;">重置密码</h4><div style="display:flex;gap:10px;align-items:center;"><input type="password" id="userEditPassword" placeholder="输入新密码" style="flex:1;padding:8px 12px;border:2px solid #ddd;border-radius:6px;font-size:14px;outline:none;"><button class="btn btn-sm btn-primary" onclick="resetUserPassword()" style="white-space:nowrap;">确认重置</button></div></div><div><h4 style="font-size:14px;color:#cc0000;margin-bottom:10px;">危险操作</h4><button class="btn btn-sm btn-delete" onclick="deleteCurrentUser()" style="padding:8px 16px;font-size:13px;">删除该用户</button><p style="font-size:12px;color:#999;margin-top:8px;">删除后无法恢复，请谨慎操作。</p></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('userEditModal')">关闭</button></div></div></div>
+  <div class="modal" id="deleteModal"><div class="modal-content" style="max-width:400px;"><div class="modal-header"><h3>确认删除</h3><button class="modal-close" onclick="closeModal('deleteModal')">&times;</button></div><div class="modal-body"><p id="deleteMessage" style="font-size:16px;color:#333;">确定要删除吗？此操作不可恢复。</p></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('deleteModal')">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div>
+  <div class="modal" id="createABTestModal"><div class="modal-content ab-test-modal"><div class="modal-header"><h3 id="abtestModalTitle">创建新实验</h3><button class="modal-close" onclick="closeABTestModal('createABTestModal')">&times;</button></div><div class="modal-body"><input type="hidden" id="abtestEditId"><div class="form-group"><label>实验名称 *</label><input id="abtestExpName" placeholder="例如: Hybrid vs SVD 对比测试" required></div><div class="form-group"><label>描述</label><textarea id="abtestExpDesc" placeholder="实验目的、预期效果等"></textarea></div><div class="form-group"><label>分流模式</label><select id="abtestSplitMode"><option value="fixed">固定比例（Fixed）</option><option value="bandit">自适应（Bandit）</option></select></div><div class="form-row"><div class="form-col"><div class="form-group"><label>开始时间 *</label><input id="abtestStartTime" type="datetime-local" required></div></div><div class="form-col"><div class="form-group"><label>结束时间</label><input id="abtestEndTime" type="datetime-local"></div></div></div><div class="form-group"><label>实验策略配置</label><div class="strategies-panel" id="abtestStrategiesPanel"><div class="strategy-row" data-idx="0"><input class="str-name" placeholder="策略名称" value="对照组"><select class="str-algo"><option value="svd">SVD</option><option value="usercf">UserCF</option><option value="itemcf">ItemCF</option><option value="hybrid" selected>Hybrid</option><option value="slopeone">SlopeOne</option><option value="turbocf">TurboCF</option></select><input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重"><button class="btn btn-sm btn-delete str-remove" onclick="removeABTestStrategy(this)">×</button></div></div><button class="btn btn-outline btn-sm add-strategy-btn" onclick="addABTestStrategy()">+ 添加策略</button></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeABTestModal('createABTestModal')">取消</button><button class="btn btn-primary" onclick="saveABTestExperiment()">保存</button></div></div></div>
+  <div class="modal" id="detailABTestModal"><div class="modal-content" style="max-width:750px;"><div class="modal-header"><h3 id="abtestDetailTitle">实验详情</h3><button class="modal-close" onclick="closeABTestModal('detailABTestModal')">&times;</button></div><div class="modal-body" id="abtestDetailContent"><div class="loading"><div class="spinner"></div></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeABTestModal('detailABTestModal')">关闭</button></div></div></div>
   <div class="toast" id="toast"></div>
-
   <script>
-    // ==================== 全局配置 ====================
     const ADMIN_API = `http://${window.location.hostname}:3000/api/admin`;
     const USER_API = `http://${window.location.hostname}:3000/api`;
-    let allTags = [];
-    let allDirectors = [];
-    let allActors = [];
-    let allUsers = [];
-    let moviePage = 1;
-    let moviePageSize = 20;
-    let movieTotal = 0;
-    let movieSearchKeyword = '';
-    let importData = null;
-    let userModalMode = 'add';
-    let userEditId = null;
-
-    // ==================== 登录检查 ====================
+    let allTags = [], allDirectors = [], allActors = [], allUsers = [];
+    let moviePage = 1, moviePageSize = 20, movieTotal = 0, movieSearchKeyword = '';
+    let importData = null, userModalMode = 'add', userEditId = null;
     function checkAuth() {
       const adminToken = localStorage.getItem('adminToken');
       const isLoggedIn = localStorage.getItem('isAdminLoggedIn');
       if (!adminToken || isLoggedIn !== 'true') {
-        // 也检查旧的用户管理登录状态
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
-        if (!currentUser || currentUser.role_id !== 1) {
-          window.location.href = 'index.html';
-          return false;
-        }
+        if (!currentUser || currentUser.role_id !== 1) { window.location.href = 'index.html'; return false; }
       }
-      // 显示管理员名称
-      try {
-        const token = JSON.parse(adminToken);
-        if (token.username) {
-          document.getElementById('adminName').textContent = token.username;
-        }
-      } catch(e) {
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
-        if (currentUser && currentUser.username) {
-          document.getElementById('adminName').textContent = currentUser.username;
-        }
-      }
+      try { const token = JSON.parse(adminToken); if (token.username) document.getElementById('adminName').textContent = token.username; }
+      catch(e) { const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null'); if (currentUser && currentUser.username) document.getElementById('adminName').textContent = currentUser.username; }
       return true;
     }
-
-    // ==================== 退出登录 ====================
-    function logout() {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('isAdminLoggedIn');
-      localStorage.removeItem('currentUser');
-      window.location.href = 'index.html';
-    }
-
-    // ==================== 消息提示 ====================
-    function showToast(message, type = 'success') {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = `toast ${type}`;
-      setTimeout(() => { toast.className = 'toast'; }, 3000);
-    }
-
-    // ==================== 页面切换 ====================
+    function logout() { localStorage.removeItem('adminToken'); localStorage.removeItem('isAdminLoggedIn'); localStorage.removeItem('currentUser'); window.location.href = 'index.html'; }
+    function showToast(message, type = 'success') { const toast = document.getElementById('toast'); toast.textContent = message; toast.className = 'toast ' + type; setTimeout(() => { toast.className = 'toast'; }, 3000); }
     function switchPage(pageName) {
-      document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.page === pageName);
-      });
-      document.querySelectorAll('.page-content').forEach(page => {
-        page.classList.toggle('active', page.id === `page-${pageName}`);
-      });
-      switch(pageName) {
-        case 'dashboard': loadDashboard(); break;
-        case 'movies': loadMovies(); break;
-        case 'tags': loadTags(); break;
-        case 'genres': loadGenres(); break;
-        case 'directors': loadDirectors(); break;
-        case 'actors': loadActors(); break;
-        case 'users': loadUsers(); break;
-        case 'comments': loadComments(); break;
-      }
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.page === pageName));
+      document.querySelectorAll('.page-content').forEach(page => page.classList.toggle('active', page.id === 'page-' + pageName));
+      switch(pageName) { case'dashboard':loadDashboard();break; case'movies':loadMovies();break; case'tags':loadTags();break; case'genres':loadGenres();break; case'directors':loadDirectors();break; case'actors':loadActors();break; case'users':loadUsers();break; case'comments':loadComments();break; case'abtest':loadABTests();break; }
     }
-
-    // ==================== 模态框操作 ====================
-    function closeModal(modalId) {
-      document.getElementById(modalId).classList.remove('active');
-    }
-
-    // ==================== 数据概览 ====================
+    function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
     async function loadDashboard() {
       try {
-        const [moviesRes, tagsRes, directorsRes, actorsRes, usersRes] = await Promise.all([
-          fetch(`${ADMIN_API}/movies?page=1&limit=1`).then(r => r.json()),
-          fetch(`${ADMIN_API}/tags?page=1&limit=1`).then(r => r.json()),
-          fetch(`${ADMIN_API}/directors?page=1&limit=1`).then(r => r.json()),
-          fetch(`${ADMIN_API}/actors?page=1&limit=1`).then(r => r.json()),
-          fetch(`${USER_API}/users?page=1&limit=1`).then(r => r.json())
-        ]);
-        document.getElementById('statMovies').textContent = moviesRes.success ? moviesRes.data.total : 0;
-        document.getElementById('statTags').textContent = tagsRes.success ? (tagsRes.data.total || 0) : 0;
-        document.getElementById('statDirectors').textContent = directorsRes.success ? (directorsRes.data.total || 0) : 0;
-        document.getElementById('statActors').textContent = actorsRes.success ? (actorsRes.data.total || 0) : 0;
-        document.getElementById('statUsers').textContent = usersRes.success ? (usersRes.total || 0) : 0;
-      } catch (err) {
-        console.error('加载概览数据失败:', err);
-        showToast('加载概览数据失败', 'error');
-      }
+        const [moviesRes,tagsRes,directorsRes,actorsRes,usersRes] = await Promise.all([
+          fetch(ADMIN_API+'/movies?page=1&limit=1').then(r=>r.json()), fetch(ADMIN_API+'/tags?page=1&limit=1').then(r=>r.json()),
+          fetch(ADMIN_API+'/directors?page=1&limit=1').then(r=>r.json()), fetch(ADMIN_API+'/actors?page=1&limit=1').then(r=>r.json()),
+          fetch(USER_API+'/users?page=1&limit=1').then(r=>r.json())]);
+        document.getElementById('statMovies').textContent = moviesRes.success?moviesRes.data.total:0;
+        document.getElementById('statTags').textContent = tagsRes.success?(tagsRes.data.total||0):0;
+        document.getElementById('statDirectors').textContent = directorsRes.success?(directorsRes.data.total||0):0;
+        document.getElementById('statActors').textContent = actorsRes.success?(actorsRes.data.total||0):0;
+        document.getElementById('statUsers').textContent = usersRes.success?(usersRes.total||0):0;
+      } catch(err) { console.error(err); showToast('加载概览数据失败','error'); }
     }
-
-    // ==================== 电影管理 ====================
     async function loadMovies() {
-      const loading = document.getElementById('moviesLoading');
-      const table = document.getElementById('moviesTable');
-      const empty = document.getElementById('moviesEmpty');
-      const pagination = document.getElementById('moviesPagination');
-
-      loading.style.display = 'block';
-      table.style.display = 'none';
-      empty.style.display = 'none';
-      pagination.style.display = 'none';
-
+      document.getElementById('moviesLoading').style.display='block'; document.getElementById('moviesTable').style.display='none'; document.getElementById('moviesEmpty').style.display='none'; document.getElementById('moviesPagination').style.display='none';
       try {
-        const url = `${ADMIN_API}/movies?page=${moviePage}&limit=${moviePageSize}${movieSearchKeyword ? '&search=' + encodeURIComponent(movieSearchKeyword) : ''}`;
-        const res = await fetch(url);
+        const res = await fetch(ADMIN_API+'/movies?page='+moviePage+'&limit='+moviePageSize+(movieSearchKeyword?'&search='+encodeURIComponent(movieSearchKeyword):''));
         const data = await res.json();
-
-        if (data.success) {
-          movieTotal = data.data.total;
-          renderMovies(data.data.movies);
-          renderMoviePagination();
-        } else {
-          showToast(data.message || '获取电影列表失败', 'error');
-        }
-      } catch (err) {
-        console.error('加载电影失败:', err);
-        showToast('网络错误，加载电影失败', 'error');
-      } finally {
-        loading.style.display = 'none';
-      }
+        if(data.success) { movieTotal=data.data.total; renderMovies(data.data.movies); renderMoviePagination(); }
+        else showToast(data.message,'error');
+      } catch(err) { showToast('网络错误','error'); } finally { document.getElementById('moviesLoading').style.display='none'; }
     }
-
     function renderMovies(movies) {
-      const table = document.getElementById('moviesTable');
-      const empty = document.getElementById('moviesEmpty');
       const tbody = document.getElementById('moviesTableBody');
-
-      if (!movies || movies.length === 0) {
-        table.style.display = 'none';
-        empty.style.display = 'block';
-        return;
-      }
-
-      table.style.display = 'table';
-      empty.style.display = 'none';
-      tbody.innerHTML = '';
-
-      movies.forEach(movie => {
-        const row = document.createElement('tr');
-        const tagsHtml = movie.tags ? movie.tags.split(', ').map(t => `<span class="tag">${t}</span>`).join('') : '';
-        const directorsStr = movie.directors || '-';
-        const actorsStr = movie.actors || '-';
-
-        row.innerHTML = `
-          <td>${movie.id}</td>
-          <td>
-            <div class="movie-info">
-              ${movie.cover_url ? `<img class="movie-cover" src="${movie.cover_url}" alt="${movie.title}" onerror="this.style.display='none'">` : '<div class="movie-cover" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🎬</div>'}
-              <div>
-                <div class="movie-title">${escapeHtml(movie.title)}</div>
-                <div class="movie-meta">${movie.avg_rating ? '⭐ ' + movie.avg_rating : ''}</div>
-              </div>
-            </div>
-          </td>
-          <td>${tagsHtml || '-'}</td>
-          <td>${escapeHtml(directorsStr)}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(actorsStr)}">${escapeHtml(actorsStr)}</td>
-          <td>${movie.release_year || '-'}</td>
-          <td>${movie.duration ? movie.duration + '分钟' : '-'}</td>
-          <td>
-            <div class="table-actions">
-              <button class="btn btn-sm btn-edit" onclick="editMovie(${movie.id})">编辑</button>
-              <button class="btn btn-sm btn-delete" onclick="confirmDelete('movie', ${movie.id}, '${escapeHtml(movie.title)}')">删除</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
+      if(!movies||!movies.length) { document.getElementById('moviesTable').style.display='none'; document.getElementById('moviesEmpty').style.display='block'; return; }
+      document.getElementById('moviesTable').style.display='table'; document.getElementById('moviesEmpty').style.display='none'; tbody.innerHTML='';
+      movies.forEach(m=>{
+        tbody.innerHTML+='<tr><td>'+m.id+'</td><td><div class="movie-info">'+(m.cover_url?'<img class="movie-cover" src="'+m.cover_url+'" onerror="this.style.display=\'none\'">':'<div class="movie-cover" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🎬</div>')+'<div><div class="movie-title">'+escapeHtml(m.title)+'</div></div></div></td><td>'+(m.tags?m.tags.split(', ').map(t=>'<span class="tag">'+t+'</span>').join(''):'-')+'</td><td>'+escapeHtml(m.directors||'-')+'</td><td>'+escapeHtml(m.actors||'-')+'</td><td>'+(m.release_year||'-')+'</td><td>'+(m.duration?m.duration+'分钟':'-')+'</td><td><div class="table-actions"><button class="btn btn-sm btn-edit" onclick="editMovie('+m.id+')">编辑</button><button class="btn btn-sm btn-delete" onclick="confirmDelete(\'movie\','+m.id+',\''+escapeHtml(m.title)+'\')">删除</button></div></td></tr>';
       });
     }
-
     function renderMoviePagination() {
-      const pagination = document.getElementById('moviesPagination');
-      const totalPages = Math.ceil(movieTotal / moviePageSize);
-
-      if (totalPages <= 1) { pagination.style.display = 'none'; return; }
-
-      pagination.style.display = 'flex';
-      pagination.innerHTML = '';
-
-      const prevBtn = document.createElement('button');
-      prevBtn.textContent = '上一页';
-      prevBtn.disabled = moviePage <= 1;
-      prevBtn.onclick = () => { moviePage--; loadMovies(); };
-      pagination.appendChild(prevBtn);
-
-      const span = document.createElement('span');
-      span.textContent = `第 ${moviePage} / ${totalPages} 页 (共 ${movieTotal} 条)`;
-      pagination.appendChild(span);
-
-      const nextBtn = document.createElement('button');
-      nextBtn.textContent = '下一页';
-      nextBtn.disabled = moviePage >= totalPages;
-      nextBtn.onclick = () => { moviePage++; loadMovies(); };
-      pagination.appendChild(nextBtn);
+      const p=document.getElementById('moviesPagination'); const tp=Math.ceil(movieTotal/moviePageSize);
+      if(tp<=1) { p.style.display='none'; return; }
+      p.style.display='flex'; p.innerHTML='<button '+(moviePage<=1?'disabled':'')+' onclick="moviePage--;loadMovies()">上一页</button><span>第 '+moviePage+' / '+tp+' 页 (共 '+movieTotal+' 条)</span><button '+(moviePage>=tp?'disabled':'')+' onclick="moviePage++;loadMovies()">下一页</button>';
     }
-
-    function searchMovies() {
-      movieSearchKeyword = document.getElementById('movieSearch').value.trim();
-      moviePage = 1;
-      loadMovies();
+    function searchMovies() { movieSearchKeyword=document.getElementById('movieSearch').value.trim(); moviePage=1; loadMovies(); }
+    document.getElementById('movieSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMovies();});
+    async function openMovieModal(md) {
+      document.getElementById('movieModalTitle').textContent=md?'编辑电影':'添加电影'; document.getElementById('movieId').value=md?md.id:'';
+      document.getElementById('movieTitle').value=md?md.title:''; document.getElementById('movieDescription').value=md?(md.description||''):'';
+      document.getElementById('movieCoverUrl').value=md?(md.cover_url||''):''; document.getElementById('movieVideoUrl').value=md?(md.video_url||''):'';
+      document.getElementById('movieReleaseYear').value=md?(md.release_year||''):''; document.getElementById('movieDuration').value=md?(md.duration||''):'';
+      await loadRelationSelectors(md); document.getElementById('movieModal').classList.add('active');
     }
-
-    document.getElementById('movieSearch').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') searchMovies();
-    });
-
-    async function openMovieModal(movieData = null) {
-      document.getElementById('movieModalTitle').textContent = movieData ? '编辑电影' : '添加电影';
-      document.getElementById('movieId').value = movieData ? movieData.id : '';
-      document.getElementById('movieTitle').value = movieData ? movieData.title : '';
-      document.getElementById('movieDescription').value = movieData ? (movieData.description || '') : '';
-      document.getElementById('movieCoverUrl').value = movieData ? (movieData.cover_url || '') : '';
-      document.getElementById('movieVideoUrl').value = movieData ? (movieData.video_url || '') : '';
-      document.getElementById('movieReleaseYear').value = movieData ? (movieData.release_year || '') : '';
-      document.getElementById('movieDuration').value = movieData ? (movieData.duration || '') : '';
-
-      await loadRelationSelectors(movieData);
-      document.getElementById('movieModal').classList.add('active');
-    }
-
-    async function loadRelationSelectors(movieData = null) {
+    async function loadRelationSelectors(md) {
       try {
-        const [tagsRes, directorsRes, actorsRes] = await Promise.all([
-          fetch(`${ADMIN_API}/tags`).then(r => r.json()),
-          fetch(`${ADMIN_API}/directors`).then(r => r.json()),
-          fetch(`${ADMIN_API}/actors`).then(r => r.json())
-        ]);
-
-        allTags = tagsRes.success ? (tagsRes.data.tags || tagsRes.data) : [];
-        allDirectors = directorsRes.success ? (directorsRes.data.directors || directorsRes.data) : [];
-        allActors = actorsRes.success ? (actorsRes.data.actors || actorsRes.data) : [];
-
-        const movieTags = movieData && movieData.tags ? movieData.tags.map(t => t.id) : [];
-        const movieDirectors = movieData && movieData.directors ? movieData.directors.map(d => d.id) : [];
-        const movieActors = movieData && movieData.actors ? movieData.actors : [];
-
-        const tagSelector = document.getElementById('movieTagSelector');
-        tagSelector.innerHTML = allTags.length === 0
-          ? '<p style="color:#999;font-size:13px;">暂无标签，请先添加标签</p>'
-          : allTags.map(tag => `
-              <div class="relation-item">
-                <input type="checkbox" id="mt_${tag.id}" value="${tag.id}" ${movieTags.includes(tag.id) ? 'checked' : ''}>
-                <label for="mt_${tag.id}">${escapeHtml(tag.name)}</label>
-              </div>
-            `).join('');
-
-        const directorSelector = document.getElementById('movieDirectorSelector');
-        directorSelector.innerHTML = allDirectors.length === 0
-          ? '<p style="color:#999;font-size:13px;">暂无导演，请先添加导演</p>'
-          : allDirectors.map(director => `
-              <div class="relation-item">
-                <input type="checkbox" id="md_${director.id}" value="${director.id}" ${movieDirectors.includes(director.id) ? 'checked' : ''}>
-                <label for="md_${director.id}">${escapeHtml(director.name)}</label>
-              </div>
-            `).join('');
-
-        const actorSelector = document.getElementById('movieActorSelector');
-        actorSelector.innerHTML = allActors.length === 0
-          ? '<p style="color:#999;font-size:13px;">暂无演员，请先添加演员</p>'
-          : allActors.map(actor => {
-              const movieActor = movieActors.find(a => a.id === actor.id);
-              const role = movieActor ? (movieActor.role || '') : '';
-              return `
-                <div class="relation-item">
-                  <input type="checkbox" id="ma_${actor.id}" value="${actor.id}" ${movieActor ? 'checked' : ''}>
-                  <label for="ma_${actor.id}">${escapeHtml(actor.name)}</label>
-                  <input type="text" class="role-input" id="ma_role_${actor.id}" placeholder="饰演角色" value="${escapeHtml(role)}">
-                </div>
-              `;
-            }).join('');
-
-      } catch (err) {
-        console.error('加载关联数据失败:', err);
-      }
+        const [tr,dr,ar]=await Promise.all([fetch(ADMIN_API+'/tags').then(r=>r.json()),fetch(ADMIN_API+'/directors').then(r=>r.json()),fetch(ADMIN_API+'/actors').then(r=>r.json())]);
+        allTags=tr.success?(tr.data.tags||tr.data):[]; allDirectors=dr.success?(dr.data.directors||dr.data):[]; allActors=ar.success?(ar.data.actors||ar.data):[];
+        const mt=md&&md.tags?md.tags.map(t=>t.id):[]; const mdir=md&&md.directors?md.directors.map(d=>d.id):[]; const ma=md&&md.actors?md.actors:[];
+        document.getElementById('movieTagSelector').innerHTML=allTags.length?allTags.map(t=>'<div class="relation-item"><input type="checkbox" id="mt_'+t.id+'" value="'+t.id+'" '+(mt.includes(t.id)?'checked':'')+'><label for="mt_'+t.id+'">'+escapeHtml(t.name)+'</label></div>').join(''):'暂无标签';
+        document.getElementById('movieDirectorSelector').innerHTML=allDirectors.length?allDirectors.map(d=>'<div class="relation-item"><input type="checkbox" id="md_'+d.id+'" value="'+d.id+'" '+(mdir.includes(d.id)?'checked':'')+'><label for="md_'+d.id+'">'+escapeHtml(d.name)+'</label></div>').join(''):'暂无导演';
+        document.getElementById('movieActorSelector').innerHTML=allActors.length?allActors.map(a=>{const maa=ma.find(x=>x.id===a.id);return '<div class="relation-item"><input type="checkbox" id="ma_'+a.id+'" value="'+a.id+'" '+(maa?'checked':'')+'><label for="ma_'+a.id+'">'+escapeHtml(a.name)+'</label><input type="text" class="role-input" id="ma_role_'+a.id+'" placeholder="饰演角色" value="'+(maa?escapeHtml(maa.role||''):'')+'"></div>';}).join(''):'暂无演员';
+      } catch(e){console.error(e);}
     }
-
-    async function editMovie(id) {
-      try {
-        const res = await fetch(`${ADMIN_API}/movies/${id}`);
-        const data = await res.json();
-        if (data.success) { openMovieModal(data.data); }
-        else { showToast(data.message || '获取电影详情失败', 'error'); }
-      } catch (err) {
-        console.error('获取电影详情失败:', err);
-        showToast('网络错误', 'error');
-      }
-    }
-
+    async function editMovie(id) { try{const r=await fetch(ADMIN_API+'/movies/'+id);const d=await r.json();if(d.success)openMovieModal(d.data);else showToast(d.message,'error');}catch(e){showToast('网络错误','error');} }
     async function saveMovie() {
-      const id = document.getElementById('movieId').value;
-      const title = document.getElementById('movieTitle').value.trim();
-      if (!title) { showToast('电影标题不能为空', 'error'); return; }
-
-      const selectedTags = [];
-      document.querySelectorAll('#movieTagSelector input[type="checkbox"]:checked').forEach(cb => {
-        selectedTags.push(parseInt(cb.value));
+      const id=document.getElementById('movieId').value; const title=document.getElementById('movieTitle').value.trim();
+      if(!title){showToast('电影标题不能为空','error');return;}
+      const body={title,description:document.getElementById('movieDescription').value.trim(),cover_url:document.getElementById('movieCoverUrl').value.trim(),video_url:document.getElementById('movieVideoUrl').value.trim(),release_year:document.getElementById('movieReleaseYear').value||null,duration:document.getElementById('movieDuration').value||null,tags:[],directors:[],actors:[]};
+      document.querySelectorAll('#movieTagSelector input:checked').forEach(cb=>body.tags.push(parseInt(cb.value)));
+      document.querySelectorAll('#movieDirectorSelector input:checked').forEach(cb=>body.directors.push(parseInt(cb.value)));
+      document.querySelectorAll('#movieActorSelector input:checked').forEach(cb=>{const ai=parseInt(cb.value);body.actors.push({id:ai,role:(document.getElementById('ma_role_'+ai)||{}).value||''});});
+      try{const r=await fetch(id?ADMIN_API+'/movies/'+id:ADMIN_API+'/movies',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('movieModal');loadMovies();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}
+    }
+    function openImportModal(){importData=null;document.getElementById('importPreview').style.display='none';document.getElementById('importResult').style.display='none';document.getElementById('importBtn').disabled=true;document.getElementById('importFile').value='';document.getElementById('importModal').classList.add('active');}
+    function handleImportFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=function(ev){try{const d=JSON.parse(ev.target.result);if(!Array.isArray(d)){showToast('格式错误','error');return;}importData=d;document.getElementById('importPreview').style.display='block';document.getElementById('importFileCount').textContent='已解析 '+d.length+' 条';document.getElementById('importBtn').disabled=false;document.getElementById('importResult').style.display='none';}catch(e){showToast('JSON解析失败','error');}};r.readAsText(f);}
+    async function doImport(){if(!importData||!importData.length){showToast('无数据','error');return;}document.getElementById('importBtn').disabled=true;document.getElementById('importBtn').textContent='导入中...';try{const r=await fetch(ADMIN_API+'/movies/batch-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({movies:importData})});const d=await r.json();document.getElementById('importResult').style.display='block';document.getElementById('importResultMsg').textContent=d.message;if(d.data&&d.data.errors)document.getElementById('importErrors').innerHTML=d.data.errors.map(e=>'<li>'+escapeHtml(e)+'</li>').join('');if(d.success){showToast('导入完成','success');loadMovies();}}catch(e){showToast('网络错误','error');}finally{document.getElementById('importBtn').disabled=false;document.getElementById('importBtn').textContent='开始导入';}}
+    async function loadTags(){document.getElementById('tagsLoading').style.display='block';document.getElementById('tagsTable').style.display='none';document.getElementById('tagsEmpty').style.display='none';try{const r=await fetch(ADMIN_API+'/tags');const d=await r.json();if(d.success){allTags=d.data.tags||d.data;renderTags(allTags);}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}finally{document.getElementById('tagsLoading').style.display='none';}}
+    function renderTags(tags){const sv=(document.getElementById('tagSearch').value||'').trim().toLowerCase();const f=sv?tags.filter(t=>t.name.toLowerCase().includes(sv)):tags;const tbody=document.getElementById('tagsTableBody');if(!f.length){document.getElementById('tagsTable').style.display='none';document.getElementById('tagsEmpty').style.display='block';return;}document.getElementById('tagsTable').style.display='table';document.getElementById('tagsEmpty').style.display='none';tbody.innerHTML='';f.forEach(t=>{tbody.innerHTML+='<tr><td>'+t.id+'</td><td><span class="tag">'+escapeHtml(t.name)+'</span></td><td>'+(t.created_at?new Date(t.created_at).toLocaleString('zh-CN'):'-')+'</td><td><div class="table-actions"><button class="btn btn-sm btn-edit" onclick="editTag('+t.id+',\''+escapeHtml(t.name)+'\')">编辑</button><button class="btn btn-sm btn-delete" onclick="confirmDelete(\'tag\','+t.id+',\''+escapeHtml(t.name)+'\')">删除</button></div></td></tr>';});}
+    document.getElementById('tagSearch').addEventListener('input',()=>renderTags(allTags));
+    function openTagModal(td){document.getElementById('tagModalTitle').textContent=td?'编辑标签':'添加标签';document.getElementById('tagId').value=td?td.id:'';document.getElementById('tagName').value=td?td.name:'';document.getElementById('tagModal').classList.add('active');}
+    function editTag(id,name){openTagModal({id,name});}
+    async function saveTag(){const id=document.getElementById('tagId').value;const name=document.getElementById('tagName').value.trim();if(!name){showToast('标签名称不能为空','error');return;}try{const r=await fetch(id?ADMIN_API+'/tags/'+id:ADMIN_API+'/tags',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('tagModal');loadTags();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    async function loadGenres(){document.getElementById('genresLoading').style.display='block';document.getElementById('genresTable').style.display='none';document.getElementById('genresEmpty').style.display='none';try{const r=await fetch(ADMIN_API+'/genres');const d=await r.json();if(d.success)renderGenres(d.data.genres||[]);else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}finally{document.getElementById('genresLoading').style.display='none';}}
+    function renderGenres(genres){const sv=(document.getElementById('genreSearch').value||'').trim().toLowerCase();const f=sv?genres.filter(g=>g.name.toLowerCase().includes(sv)||g.code.toLowerCase().includes(sv)):genres;const tbody=document.getElementById('genresTableBody');if(!f.length){document.getElementById('genresTable').style.display='none';document.getElementById('genresEmpty').style.display='block';return;}document.getElementById('genresTable').style.display='table';document.getElementById('genresEmpty').style.display='none';tbody.innerHTML='';f.forEach(g=>{tbody.innerHTML+='<tr><td>'+g.id+'</td><td>'+escapeHtml(g.name)+'</td><td><code>'+escapeHtml(g.code)+'</code></td><td>'+(g.created_at?new Date(g.created_at).toLocaleString('zh-CN'):'-')+'</td><td><div class="table-actions"><button class="btn btn-sm btn-edit" onclick="editGenre('+g.id+')">编辑</button><button class="btn btn-sm btn-delete" onclick="confirmDelete(\'genre\','+g.id+',\''+escapeHtml(g.name)+'\')">删除</button></div></td></tr>';});}
+    document.getElementById('genreSearch').addEventListener('input',()=>loadGenres());
+    function openGenreModal(gd){document.getElementById('genreModalTitle').textContent=gd?'编辑题材':'添加题材';document.getElementById('genreId').value=gd?gd.id:'';document.getElementById('genreName').value=gd?gd.name:'';document.getElementById('genreCode').value=gd?gd.code:'';document.getElementById('genreModal').classList.add('active');}
+    function editGenre(id){fetch(ADMIN_API+'/genres').then(r=>r.json()).then(d=>{if(d.success){const g=d.data.find(x=>x.id===id);if(g)openGenreModal(g);}});}
+    async function saveGenre(){const id=document.getElementById('genreId').value;const name=document.getElementById('genreName').value.trim();const code=document.getElementById('genreCode').value.trim();if(!name||!code){showToast('名称和代码不能为空','error');return;}try{const r=await fetch(id?ADMIN_API+'/genres/'+id:ADMIN_API+'/genres',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,code})});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('genreModal');loadGenres();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    async function loadDirectors(){document.getElementById('directorsLoading').style.display='block';document.getElementById('directorsTable').style.display='none';document.getElementById('directorsEmpty').style.display='none';try{const r=await fetch(ADMIN_API+'/directors');const d=await r.json();if(d.success){allDirectors=d.data.directors||d.data;renderDirectors(allDirectors);}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}finally{document.getElementById('directorsLoading').style.display='none';}}
+    function renderDirectors(directors){const sv=(document.getElementById('directorSearch').value||'').trim().toLowerCase();const f=sv?directors.filter(d=>d.name.toLowerCase().includes(sv)):directors;const tbody=document.getElementById('directorsTableBody');if(!f.length){document.getElementById('directorsTable').style.display='none';document.getElementById('directorsEmpty').style.display='block';return;}document.getElementById('directorsTable').style.display='table';document.getElementById('directorsEmpty').style.display='none';tbody.innerHTML='';f.forEach(d=>{tbody.innerHTML+='<tr><td>'+d.id+'</td><td>'+escapeHtml(d.name)+'</td><td>'+(d.avatar_url?'<img src="'+d.avatar_url+'" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\'">':'-')+'</td><td>'+escapeHtml(d.description||'-')+'</td><td>'+(d.created_at?new Date(d.created_at).toLocaleString('zh-CN'):'-')+'</td><td><div class="table-actions"><button class="btn btn-sm btn-edit" onclick="editDirector('+d.id+')">编辑</button><button class="btn btn-sm btn-delete" onclick="confirmDelete(\'director\','+d.id+',\''+escapeHtml(d.name)+'\')">删除</button></div></td></tr>';});}
+    document.getElementById('directorSearch').addEventListener('input',()=>renderDirectors(allDirectors));
+    function openDirectorModal(dd){document.getElementById('directorModalTitle').textContent=dd?'编辑导演':'添加导演';document.getElementById('directorId').value=dd?dd.id:'';document.getElementById('directorName').value=dd?dd.name:'';document.getElementById('directorAvatarUrl').value=dd?(dd.avatar_url||''):'';document.getElementById('directorDescription').value=dd?(dd.description||''):'';document.getElementById('directorModal').classList.add('active');}
+    function editDirector(id){const d=allDirectors.find(x=>x.id===id);if(d)openDirectorModal(d);}
+    async function saveDirector(){const id=document.getElementById('directorId').value;const name=document.getElementById('directorName').value.trim();if(!name){showToast('名称不能为空','error');return;}const body={name,avatar_url:document.getElementById('directorAvatarUrl').value.trim(),description:document.getElementById('directorDescription').value.trim()};try{const r=await fetch(id?ADMIN_API+'/directors/'+id:ADMIN_API+'/directors',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('directorModal');loadDirectors();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    async function loadActors(){document.getElementById('actorsLoading').style.display='block';document.getElementById('actorsTable').style.display='none';document.getElementById('actorsEmpty').style.display='none';try{const r=await fetch(ADMIN_API+'/actors');const d=await r.json();if(d.success){allActors=d.data.actors||d.data;renderActors(allActors);}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}finally{document.getElementById('actorsLoading').style.display='none';}}
+    function renderActors(actors){const sv=(document.getElementById('actorSearch').value||'').trim().toLowerCase();const f=sv?actors.filter(a=>a.name.toLowerCase().includes(sv)):actors;const tbody=document.getElementById('actorsTableBody');if(!f.length){document.getElementById('actorsTable').style.display='none';document.getElementById('actorsEmpty').style.display='block';return;}document.getElementById('actorsTable').style.display='table';document.getElementById('actorsEmpty').style.display='none';tbody.innerHTML='';f.forEach(a=>{tbody.innerHTML+='<tr><td>'+a.id+'</td><td>'+escapeHtml(a.name)+'</td><td>'+(a.avatar_url?'<img src="'+a.avatar_url+'" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\'">':'-')+'</td><td>'+escapeHtml(a.description||'-')+'</td><td>'+(a.created_at?new Date(a.created_at).toLocaleString('zh-CN'):'-')+'</td><td><div class="table-actions"><button class="btn btn-sm btn-edit" onclick="editActor('+a.id+')">编辑</button><button class="btn btn-sm btn-delete" onclick="confirmDelete(\'actor\','+a.id+',\''+escapeHtml(a.name)+'\')">删除</button></div></td></tr>';});}
+    document.getElementById('actorSearch').addEventListener('input',()=>renderActors(allActors));
+    function openActorModal(ad){document.getElementById('actorModalTitle').textContent=ad?'编辑演员':'添加演员';document.getElementById('actorId').value=ad?ad.id:'';document.getElementById('actorName').value=ad?ad.name:'';document.getElementById('actorAvatarUrl').value=ad?(ad.avatar_url||''):'';document.getElementById('actorDescription').value=ad?(ad.description||''):'';document.getElementById('actorModal').classList.add('active');}
+    function editActor(id){const a=allActors.find(x=>x.id===id);if(a)openActorModal(a);}
+    async function saveActor(){const id=document.getElementById('actorId').value;const name=document.getElementById('actorName').value.trim();if(!name){showToast('名称不能为空','error');return;}const body={name,avatar_url:document.getElementById('actorAvatarUrl').value.trim(),description:document.getElementById('actorDescription').value.trim()};try{const r=await fetch(id?ADMIN_API+'/actors/'+id:ADMIN_API+'/actors',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('actorModal');loadActors();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    let currentUserPage=1; const USER_PAGE_SIZE=20;
+    async function loadUsers(page=currentUserPage){currentUserPage=page;document.getElementById('usersLoading').style.display='block';document.getElementById('usersTable').style.display='none';document.getElementById('usersEmpty').style.display='none';if(document.getElementById('usersPagination'))document.getElementById('usersPagination').style.display='none';try{const r=await fetch(USER_API+'/users?page='+page+'&limit='+USER_PAGE_SIZE);const d=await r.json();if(d.success){allUsers=d.data;renderUsers(d.data);renderUsersPagination(d.total,d.page,d.totalPages);}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}finally{document.getElementById('usersLoading').style.display='none';}}
+    function renderUsersPagination(total,page,totalPages){const p=document.getElementById('usersPagination');if(!p||!totalPages||totalPages<=1){if(p)p.style.display='none';return;}p.style.display='flex';p.innerHTML='<button '+(page<=1?'disabled':'')+' onclick="loadUsers('+(page-1)+')">上一页</button><span>第 '+page+' / '+totalPages+' 页（共 '+total+' 条）</span><button '+(page>=totalPages?'disabled':'')+' onclick="loadUsers('+(page+1)+')">下一页</button>';}
+    function renderUsers(users){const sv=(document.getElementById('userSearch').value||'').trim().toLowerCase();const f=sv?users.filter(u=>u.username.toLowerCase().includes(sv)):users;const tbody=document.getElementById('usersTableBody');if(!f.length){document.getElementById('usersTable').style.display='none';document.getElementById('usersEmpty').style.display='block';return;}document.getElementById('usersTable').style.display='table';document.getElementById('usersEmpty').style.display='none';tbody.innerHTML='';f.forEach(u=>{const r=u.role_id===1?'<span class="badge badge-admin">管理员</span>':'<span class="badge badge-user">普通用户</span>';tbody.innerHTML+='<tr><td>'+u.id+'</td><td>'+escapeHtml(u.username)+'</td><td>'+(u.email||'-')+'</td><td>'+r+'</td><td>'+(u.created_at?new Date(u.created_at).toLocaleString('zh-CN'):'-')+'</td><td><div class="table-actions"><button class="btn btn-sm btn-edit" onclick="openUserEditModal('+u.id+')">编辑</button></div></td></tr>';});}
+    document.getElementById('userSearch').addEventListener('input',()=>renderUsers(allUsers));
+    let userEditTarget=null;
+    function openUserEditModal(userId){const u=allUsers.find(x=>x.id===userId);if(!u){showToast('未找到用户','error');return;}userEditTarget=u;document.getElementById('userEditDisplayName').textContent=u.username;document.getElementById('userEditDisplayRole').textContent='当前角色：'+(u.role_id===1?'管理员':'普通用户');const rb=document.getElementById('userEditRoleBtn');if(u.role_id===1){rb.textContent='降级为普通用户';rb.className='btn btn-sm btn-warning';rb.onclick=function(){changeUserRole(u.id,2);};}else{rb.textContent='升级为管理员';rb.className='btn btn-sm btn-success';rb.onclick=function(){changeUserRole(u.id,1);};}document.getElementById('userEditPassword').value='';document.getElementById('userEditModal').classList.add('active');}
+    async function changeUserRole(userId,newRoleId){const u=allUsers.find(x=>x.id===userId);if(!confirm('确定要'+(newRoleId===1?'升级':'降级')+'用户 "'+u.username+'" 吗？'))return;try{const r=await fetch(USER_API+'/users/'+userId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({role_id:newRoleId})});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('userEditModal');loadUsers();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    async function resetUserPassword(){const u=userEditTarget;if(!u){showToast('未指定用户','error');return;}const np=document.getElementById('userEditPassword').value.trim();if(!np){showToast('请输入密码','error');return;}if(np.length<6){showToast('密码长度不少于6位','error');return;}try{const r=await fetch(USER_API+'/users/'+u.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:np})});const d=await r.json();if(d.success){showToast('密码重置成功','success');document.getElementById('userEditPassword').value='';}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    function deleteCurrentUser(){const u=userEditTarget;if(!u){showToast('未指定用户','error');return;}closeModal('userEditModal');confirmDelete('user',u.id,u.username);}
+    function openUserModal(mode,ud){userModalMode=mode;userEditId=ud?ud.id:null;document.getElementById('userModalTitle').textContent=mode==='edit'?'编辑用户':'添加用户';document.getElementById('userId').value=ud?ud.id:'';document.getElementById('formUsername').value=ud?ud.username:'';document.getElementById('formEmail').value=ud?(ud.email||''):'';document.getElementById('formPassword').value='';document.getElementById('formRole').value=ud?(ud.role_id===1?'1':'2'):'2';if(mode==='edit'){document.getElementById('passwordGroup').style.display='none';document.getElementById('formUsername').disabled=true;}else{document.getElementById('passwordGroup').style.display='block';document.getElementById('formUsername').disabled=false;}document.getElementById('userModal').classList.add('active');}
+    async function saveUser(){const username=document.getElementById('formUsername').value.trim();const email=document.getElementById('formEmail').value.trim();const password=document.getElementById('formPassword').value;const role_id=parseInt(document.getElementById('formRole').value);if(userModalMode==='add'&&(!username||!password)){showToast('用户名和密码不能为空','error');return;}try{let url,method,body;if(userModalMode==='edit'){url=USER_API+'/users/'+userEditId;method='PUT';body={email,role_id};if(password)body.password=password;}else{url=USER_API+'/users';method='POST';body={username,email,password,role_id};}const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('userModal');loadUsers();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    function confirmDelete(type,id,name){document.getElementById('deleteMessage').textContent='确定要删除"'+name+'"吗？此操作不可恢复。';document.getElementById('deleteModal').classList.add('active');document.getElementById('confirmDeleteBtn').onclick=async()=>{try{const url=type==='user'?USER_API+'/users/'+id:ADMIN_API+'/'+type+'s/'+id;const r=await fetch(url,{method:'DELETE'});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('deleteModal');switch(type){case'movie':loadMovies();break;case'tag':loadTags();break;case'director':loadDirectors();break;case'actor':loadActors();break;case'user':loadUsers();break;}}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}};}
+    function escapeHtml(text){if(!text)return'';const d=document.createElement('div');d.textContent=text;return d.innerHTML;}
+    let commentPage=1,commentPageSize=20,commentTotal=0,commentSearchKeyword='';
+    async function loadComments(){document.getElementById('commentsLoading').style.display='block';document.getElementById('commentsTable').style.display='none';document.getElementById('commentsEmpty').style.display='none';document.getElementById('commentsPagination').style.display='none';try{const r=await fetch(ADMIN_API+'/comments?page='+commentPage+'&pageSize='+commentPageSize+(commentSearchKeyword?'&search='+encodeURIComponent(commentSearchKeyword):''));const d=await r.json();if(d.success){commentTotal=d.data.total;renderComments(d.data.comments);renderCommentPagination();}else{showToast(d.message,'error');document.getElementById('commentsEmpty').style.display='block';}}catch(e){showToast('网络错误','error');document.getElementById('commentsEmpty').style.display='block';}finally{document.getElementById('commentsLoading').style.display='none';}}
+    function renderComments(comments){const tbody=document.getElementById('commentsTableBody');if(!comments||!comments.length){document.getElementById('commentsTable').style.display='none';document.getElementById('commentsEmpty').style.display='block';return;}document.getElementById('commentsTable').style.display='table';document.getElementById('commentsEmpty').style.display='none';tbody.innerHTML='';comments.forEach(c=>{const isReply=c.parent_id!==null;const pbt=c.is_pinned?'btn-warning':'btn btn-sm btn-success';const tc=c.content&&c.content.length>50?escapeHtml(c.content.substring(0,50))+'...':escapeHtml(c.content||'');tbody.innerHTML+='<tr><td>'+c.id+'</td><td>'+escapeHtml(c.username)+'</td><td>'+escapeHtml(c.movie_title||'-')+'</td><td title="'+escapeHtml(c.content||'')+'">'+tc+'</td><td><span class="tag">'+(isReply?'回复':'评论')+'</span></td><td>'+(c.is_pinned?'<span style="color:#d4a017;font-weight:bold;">★ 已置顶</span>':'否')+'</td><td>'+(c.created_at?new Date(c.created_at).toLocaleString('zh-CN'):'-')+'</td><td><div class="table-actions">'+(!isReply?'<button class="btn btn-sm '+pbt+'" onclick="togglePin('+c.id+','+(!c.is_pinned)+')">'+(c.is_pinned?'取消置顶':'置顶')+'</button>':'')+'<button class="btn btn-sm btn-delete" onclick="confirmDeleteComment('+c.id+')">删除</button></div></td></tr>';});}
+    function renderCommentPagination(){const p=document.getElementById('commentsPagination');const tp=Math.ceil(commentTotal/commentPageSize);if(tp<=1){p.style.display='none';return;}p.style.display='flex';p.innerHTML='<button '+(commentPage<=1?'disabled':'')+' onclick="commentPage--;loadComments()">上一页</button><span>第 '+commentPage+' / '+tp+' 页 (共 '+commentTotal+' 条)</span><button '+(commentPage>=tp?'disabled':'')+' onclick="commentPage++;loadComments()">下一页</button>';}
+    function searchComments(){commentSearchKeyword=document.getElementById('commentSearch').value.trim();commentPage=1;loadComments();}
+    document.getElementById('commentSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchComments();});
+    async function togglePin(commentId,pinState){try{const r=await fetch(ADMIN_API+'/comments/'+commentId+'/pin',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({isPinned:pinState})});const d=await r.json();if(d.success){showToast(d.message,'success');loadComments();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}}
+    function confirmDeleteComment(commentId){document.getElementById('deleteMessage').textContent='确定要删除这条评论吗？';document.getElementById('deleteModal').classList.add('active');document.getElementById('confirmDeleteBtn').onclick=async()=>{try{const r=await fetch(ADMIN_API+'/comments/'+commentId,{method:'DELETE'});const d=await r.json();if(d.success){showToast(d.message,'success');closeModal('deleteModal');loadComments();}else showToast(d.message,'error');}catch(e){showToast('网络错误','error');}};}
+    let abtestStrategyCounter=1;
+    function openCreateABTestModal(){document.getElementById('abtestModalTitle').textContent='创建新实验';document.getElementById('abtestEditId').value='';document.getElementById('abtestExpName').value='';document.getElementById('abtestExpDesc').value='';document.getElementById('abtestSplitMode').value='fixed';document.getElementById('abtestStartTime').value='';document.getElementById('abtestEndTime').value='';document.getElementById('abtestStrategiesPanel').innerHTML='<div class="strategy-row" data-idx="0"><input class="str-name" placeholder="策略名称" value="对照组"><select class="str-algo"><option value="svd">SVD</option><option value="usercf">UserCF</option><option value="itemcf">ItemCF</option><option value="hybrid" selected>Hybrid</option><option value="slopeone">SlopeOne</option><option value="turbocf">TurboCF</option></select><input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重"><button class="btn btn-sm btn-delete str-remove" onclick="removeABTestStrategy(this)">×</button></div>';abtestStrategyCounter=1;document.getElementById('createABTestModal').classList.add('active');}
+    function closeABTestModal(id){document.getElementById(id).classList.remove('active');}
+    function addABTestStrategy(){const p=document.getElementById('abtestStrategiesPanel');const r=document.createElement('div');r.className='strategy-row';r.dataset.idx=abtestStrategyCounter;r.innerHTML='<input class="str-name" placeholder="策略名称" value="实验组 '+abtestStrategyCounter+'"><select class="str-algo"><option value="svd">SVD</option><option value="usercf">UserCF</option><option value="itemcf">ItemCF</option><option value="hybrid" selected>Hybrid</option><option value="slopeone">SlopeOne</option><option value="turbocf">TurboCF</option></select><input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重"><button class="btn btn-sm btn-delete str-remove" onclick="removeABTestStrategy(this)">×</button>';p.appendChild(r);abtestStrategyCounter++;}
+    function removeABTestStrategy(btn){const p=document.getElementById('abtestStrategiesPanel');if(p.children.length<=1){showToast('至少需要一个策略','error');return;}btn.closest('.strategy-row').remove();}
+    async function saveABTestExperiment() {
+      const editId=document.getElementById('abtestEditId').value;
+      const name=document.getElementById('abtestExpName').value.trim();
+      const description=document.getElementById('abtestExpDesc').value.trim();
+      const splitMode=document.getElementById('abtestSplitMode').value;
+      const startTime=document.getElementById('abtestStartTime').value;
+      const endTime=document.getElementById('abtestEndTime').value||null;
+      if(!name){showToast('请输入实验名称','error');return;}
+      if(!startTime){showToast('请选择开始时间','error');return;}
+      const rows=document.querySelectorAll('#abtestStrategiesPanel .strategy-row');
+      const strategies=[];
+      rows.forEach((row,i)=>{
+        const sName=row.querySelector('.str-name').value.trim()||'策略 '+(i+1);
+        const algo=row.querySelector('.str-algo').value;
+        const weight=parseFloat(row.querySelector('.str-weight').value)||0.1;
+        strategies.push({name:sName,algorithm:algo,trafficPercentage:Math.round(weight*100),weightSource:splitMode==='bandit'?'bandit':'fixed',isControl:i===0,minTraffic:5});
       });
-      const selectedDirectors = [];
-      document.querySelectorAll('#movieDirectorSelector input[type="checkbox"]:checked').forEach(cb => {
-        selectedDirectors.push(parseInt(cb.value));
-      });
-      const selectedActors = [];
-      document.querySelectorAll('#movieActorSelector input[type="checkbox"]:checked').forEach(cb => {
-        const actorId = parseInt(cb.value);
-        const roleInput = document.getElementById(`ma_role_${actorId}`);
-        selectedActors.push({ id: actorId, role: roleInput ? roleInput.value.trim() : '' });
-      });
-
-      const body = {
-        title,
-        description: document.getElementById('movieDescription').value.trim(),
-        cover_url: document.getElementById('movieCoverUrl').value.trim(),
-        video_url: document.getElementById('movieVideoUrl').value.trim(),
-        release_year: document.getElementById('movieReleaseYear').value || null,
-        duration: document.getElementById('movieDuration').value || null,
-        tags: selectedTags,
-        directors: selectedDirectors,
-        actors: selectedActors
-      };
-
+      if(strategies.length<1){showToast('至少需要一个策略','error');return;}
+      const totalWeight=strategies.reduce((sum,s)=>sum+s.trafficPercentage,0);
+      strategies.forEach(s=>s.trafficPercentage=Math.round(s.trafficPercentage/totalWeight*100));
+      const body={name,description,splitMode,startTime,endTime,strategies};
       try {
-        const url = id ? `${ADMIN_API}/movies/${id}` : `${ADMIN_API}/movies`;
-        const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const data = await res.json();
-        if (data.success) {
-          showToast(data.message || (id ? '电影更新成功' : '电影创建成功'), 'success');
-          closeModal('movieModal');
-          loadMovies();
-        } else {
-          showToast(data.message || '操作失败', 'error');
-        }
-      } catch (err) {
-        console.error('保存电影失败:', err);
-        showToast('网络错误，保存失败', 'error');
-      }
+        let res;
+        if(editId){res=await fetch(ADMIN_API+'/experiments/'+editId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+        else{res=await fetch(ADMIN_API+'/experiments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+        if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.message||'HTTP '+res.status);}
+        showToast(editId?'实验已更新':'实验创建成功','success');
+        closeABTestModal('createABTestModal');loadABTests();
+      }catch(err){showToast('保存失败: '+err.message,'error');}
     }
-
-    // ==================== 批量导入 ====================
-    function openImportModal() {
-      importData = null;
-      document.getElementById('importPreview').style.display = 'none';
-      document.getElementById('importResult').style.display = 'none';
-      document.getElementById('importBtn').disabled = true;
-      document.getElementById('importFile').value = '';
-      document.getElementById('importModal').classList.add('active');
-    }
-
-    function handleImportFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = JSON.parse(e.target.result);
-          if (!Array.isArray(data)) { showToast('JSON格式错误：需要一个数组', 'error'); return; }
-          importData = data;
-          document.getElementById('importPreview').style.display = 'block';
-          document.getElementById('importFileCount').textContent = `已解析 ${data.length} 条电影数据`;
-          document.getElementById('importBtn').disabled = false;
-          document.getElementById('importResult').style.display = 'none';
-        } catch (err) {
-          showToast('JSON解析失败，请检查文件格式', 'error');
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    async function doImport() {
-      if (!importData || importData.length === 0) { showToast('没有可导入的数据', 'error'); return; }
-      document.getElementById('importBtn').disabled = true;
-      document.getElementById('importBtn').textContent = '导入中...';
-
-      try {
-        const res = await fetch(`${ADMIN_API}/movies/batch-import`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ movies: importData })
-        });
-        const data = await res.json();
-        const resultDiv = document.getElementById('importResult');
-        resultDiv.style.display = 'block';
-        document.getElementById('importResultMsg').textContent = data.message || '导入完成';
-        if (data.data && data.data.errors && data.data.errors.length > 0) {
-          document.getElementById('importErrors').innerHTML = data.data.errors.map(err => `<li>${escapeHtml(err)}</li>`).join('');
-        }
-        if (data.success) { showToast('批量导入完成', 'success'); loadMovies(); }
-      } catch (err) {
-        console.error('批量导入失败:', err);
-        showToast('网络错误，导入失败', 'error');
-      } finally {
-        document.getElementById('importBtn').disabled = false;
-        document.getElementById('importBtn').textContent = '开始导入';
-      }
-    }
-
-    // ==================== 标签管理 ====================
-    async function loadTags() {
-      const loading = document.getElementById('tagsLoading');
-      const table = document.getElementById('tagsTable');
-      const empty = document.getElementById('tagsEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
-
-      try {
-        const res = await fetch(`${ADMIN_API}/tags`);
-        const data = await res.json();
-        if (data.success) { allTags = data.data.tags || data.data; renderTags(allTags); }
-        else { showToast(data.message || '获取标签列表失败', 'error'); }
-      } catch (err) {
-        console.error('加载标签失败:', err);
-        showToast('网络错误，加载标签失败', 'error');
-      } finally { loading.style.display = 'none'; }
-    }
-
-    function renderTags(tags) {
-      const table = document.getElementById('tagsTable');
-      const empty = document.getElementById('tagsEmpty');
-      const tbody = document.getElementById('tagsTableBody');
-      const searchVal = document.getElementById('tagSearch').value.trim().toLowerCase();
-      const filtered = searchVal ? tags.filter(t => t.name.toLowerCase().includes(searchVal)) : tags;
-
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
-
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
-      filtered.forEach(tag => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${tag.id}</td>
-          <td><span class="tag" style="font-size:14px;padding:5px 12px;">${escapeHtml(tag.name)}</span></td>
-          <td>${tag.created_at ? new Date(tag.created_at).toLocaleString('zh-CN') : '-'}</td>
-          <td>
-            <div class="table-actions">
-              <button class="btn btn-sm btn-edit" onclick="editTag(${tag.id}, '${escapeHtml(tag.name)}')">编辑</button>
-              <button class="btn btn-sm btn-delete" onclick="confirmDelete('tag', ${tag.id}, '${escapeHtml(tag.name)}')">删除</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    document.getElementById('tagSearch').addEventListener('input', () => renderTags(allTags));
-
-    function openTagModal(tagData = null) {
-      document.getElementById('tagModalTitle').textContent = tagData ? '编辑标签' : '添加标签';
-      document.getElementById('tagId').value = tagData ? tagData.id : '';
-      document.getElementById('tagName').value = tagData ? tagData.name : '';
-      document.getElementById('tagModal').classList.add('active');
-    }
-
-    function editTag(id, name) { openTagModal({ id, name }); }
-
-    async function saveTag() {
-      const id = document.getElementById('tagId').value;
-      const name = document.getElementById('tagName').value.trim();
-      if (!name) { showToast('标签名称不能为空', 'error'); return; }
-
-      try {
-        const url = id ? `${ADMIN_API}/tags/${id}` : `${ADMIN_API}/tags`;
-        const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-        const data = await res.json();
-        if (data.success) { showToast(data.message || (id ? '标签更新成功' : '标签创建成功'), 'success'); closeModal('tagModal'); loadTags(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-      } catch (err) { console.error('保存标签失败:', err); showToast('网络错误，保存失败', 'error'); }
-    }
-
-    // ==================== 题材管理 ====================
-    async function loadGenres() {
-      const loading = document.getElementById('genresLoading');
-      const table = document.getElementById('genresTable');
-      const empty = document.getElementById('genresEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
-
-      try {
-        const res = await fetch(`${ADMIN_API}/genres`);
-        const data = await res.json();
-        if (data.success) { renderGenres(data.data.genres || []); }
-        else { showToast(data.message || '获取题材列表失败', 'error'); }
-      } catch (err) {
-        console.error('加载题材失败:', err);
-        showToast('网络错误，加载题材失败', 'error');
-      } finally { loading.style.display = 'none'; }
-    }
-
-    function renderGenres(genres) {
-      const table = document.getElementById('genresTable');
-      const empty = document.getElementById('genresEmpty');
-      const tbody = document.getElementById('genresTableBody');
-      const searchVal = document.getElementById('genreSearch').value.trim().toLowerCase();
-      const filtered = searchVal ? genres.filter(g => g.name.toLowerCase().includes(searchVal) || g.code.toLowerCase().includes(searchVal)) : genres;
-
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
-
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
-      filtered.forEach(genre => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${genre.id}</td>
-          <td><span style="font-weight:500;">${escapeHtml(genre.name)}</span></td>
-          <td><code style="background:#f0f0f0;padding:3px 8px;border-radius:4px;font-size:13px;">${escapeHtml(genre.code)}</code></td>
-          <td>${genre.created_at ? new Date(genre.created_at).toLocaleString('zh-CN') : '-'}</td>
-          <td>
-            <div class="table-actions">
-              <button class="btn btn-sm btn-edit" onclick="editGenre(${genre.id})">编辑</button>
-              <button class="btn btn-sm btn-delete" onclick="confirmDelete('genre', ${genre.id}, '${escapeHtml(genre.name)}')">删除</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    document.getElementById('genreSearch').addEventListener('input', () => {
-      // Need to re-fetch genres to get full list for filtering
-      loadGenres();
-    });
-
-    function openGenreModal(genreData = null) {
-      document.getElementById('genreModalTitle').textContent = genreData ? '编辑题材' : '添加题材';
-      document.getElementById('genreId').value = genreData ? genreData.id : '';
-      document.getElementById('genreName').value = genreData ? genreData.name : '';
-      document.getElementById('genreCode').value = genreData ? genreData.code : '';
-      document.getElementById('genreModal').classList.add('active');
-    }
-
-    function editGenre(id) {
-      // Fetch all genres and find the one to edit
-      fetch(`${ADMIN_API}/genres`).then(r => r.json()).then(data => {
-        if (data.success) {
-          const genre = data.data.find(g => g.id === id);
-          if (genre) openGenreModal(genre);
-        }
-      });
-    }
-
-    async function saveGenre() {
-      const id = document.getElementById('genreId').value;
-      const name = document.getElementById('genreName').value.trim();
-      const code = document.getElementById('genreCode').value.trim();
-      if (!name) { showToast('题材名称不能为空', 'error'); return; }
-      if (!code) { showToast('题材代码不能为空', 'error'); return; }
-
-      try {
-        const url = id ? `${ADMIN_API}/genres/${id}` : `${ADMIN_API}/genres`;
-        const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, code }) });
-        const data = await res.json();
-        if (data.success) { showToast(data.message || (id ? '题材更新成功' : '题材创建成功'), 'success'); closeModal('genreModal'); loadGenres(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-      } catch (err) { console.error('保存题材失败:', err); showToast('网络错误，保存失败', 'error'); }
-    }
-
-    // ==================== 导演管理 ====================
-    async function loadDirectors() {
-      const loading = document.getElementById('directorsLoading');
-      const table = document.getElementById('directorsTable');
-      const empty = document.getElementById('directorsEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
-
-      try {
-        const res = await fetch(`${ADMIN_API}/directors`);
-        const data = await res.json();
-        if (data.success) { allDirectors = data.data.directors || data.data; renderDirectors(allDirectors); }
-        else { showToast(data.message || '获取导演列表失败', 'error'); }
-      } catch (err) {
-        console.error('加载导演失败:', err);
-        showToast('网络错误，加载导演失败', 'error');
-      } finally { loading.style.display = 'none'; }
-    }
-
-    function renderDirectors(directors) {
-      const table = document.getElementById('directorsTable');
-      const empty = document.getElementById('directorsEmpty');
-      const tbody = document.getElementById('directorsTableBody');
-      const searchVal = document.getElementById('directorSearch').value.trim().toLowerCase();
-      const filtered = searchVal ? directors.filter(d => d.name.toLowerCase().includes(searchVal)) : directors;
-
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
-
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
-      filtered.forEach(director => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${director.id}</td>
-          <td>${escapeHtml(director.name)}</td>
-          <td>${director.avatar_url ? `<img src="${director.avatar_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">` : '-'}</td>
-          <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(director.description || '')}">${escapeHtml(director.description || '-')}</td>
-          <td>${director.created_at ? new Date(director.created_at).toLocaleString('zh-CN') : '-'}</td>
-          <td>
-            <div class="table-actions">
-              <button class="btn btn-sm btn-edit" onclick="editDirector(${director.id})">编辑</button>
-              <button class="btn btn-sm btn-delete" onclick="confirmDelete('director', ${director.id}, '${escapeHtml(director.name)}')">删除</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    document.getElementById('directorSearch').addEventListener('input', () => renderDirectors(allDirectors));
-
-    async function openDirectorModal(directorData = null) {
-      document.getElementById('directorModalTitle').textContent = directorData ? '编辑导演' : '添加导演';
-      document.getElementById('directorId').value = directorData ? directorData.id : '';
-      document.getElementById('directorName').value = directorData ? directorData.name : '';
-      document.getElementById('directorAvatarUrl').value = directorData ? (directorData.avatar_url || '') : '';
-      document.getElementById('directorDescription').value = directorData ? (directorData.description || '') : '';
-      document.getElementById('directorModal').classList.add('active');
-    }
-
-    async function editDirector(id) {
-      const director = allDirectors.find(d => d.id === id);
-      if (director) openDirectorModal(director);
-    }
-
-    async function saveDirector() {
-      const id = document.getElementById('directorId').value;
-      const name = document.getElementById('directorName').value.trim();
-      if (!name) { showToast('导演名称不能为空', 'error'); return; }
-
-      const body = {
-        name,
-        avatar_url: document.getElementById('directorAvatarUrl').value.trim(),
-        description: document.getElementById('directorDescription').value.trim()
-      };
-
-      try {
-        const url = id ? `${ADMIN_API}/directors/${id}` : `${ADMIN_API}/directors`;
-        const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const data = await res.json();
-        if (data.success) { showToast(data.message || (id ? '导演更新成功' : '导演创建成功'), 'success'); closeModal('directorModal'); loadDirectors(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-      } catch (err) { console.error('保存导演失败:', err); showToast('网络错误，保存失败', 'error'); }
-    }
-
-    // ==================== 演员管理 ====================
-    async function loadActors() {
-      const loading = document.getElementById('actorsLoading');
-      const table = document.getElementById('actorsTable');
-      const empty = document.getElementById('actorsEmpty');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
-
-      try {
-        const res = await fetch(`${ADMIN_API}/actors`);
-        const data = await res.json();
-        if (data.success) { allActors = data.data.actors || data.data; renderActors(allActors); }
-        else { showToast(data.message || '获取演员列表失败', 'error'); }
-      } catch (err) {
-        console.error('加载演员失败:', err);
-        showToast('网络错误，加载演员失败', 'error');
-      } finally { loading.style.display = 'none'; }
-    }
-
-    function renderActors(actors) {
-      const table = document.getElementById('actorsTable');
-      const empty = document.getElementById('actorsEmpty');
-      const tbody = document.getElementById('actorsTableBody');
-      const searchVal = document.getElementById('actorSearch').value.trim().toLowerCase();
-      const filtered = searchVal ? actors.filter(a => a.name.toLowerCase().includes(searchVal)) : actors;
-
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
-
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
-      filtered.forEach(actor => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${actor.id}</td>
-          <td>${escapeHtml(actor.name)}</td>
-          <td>${actor.avatar_url ? `<img src="${actor.avatar_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">` : '-'}</td>
-          <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(actor.description || '')}">${escapeHtml(actor.description || '-')}</td>
-          <td>${actor.created_at ? new Date(actor.created_at).toLocaleString('zh-CN') : '-'}</td>
-          <td>
-            <div class="table-actions">
-              <button class="btn btn-sm btn-edit" onclick="editActor(${actor.id})">编辑</button>
-              <button class="btn btn-sm btn-delete" onclick="confirmDelete('actor', ${actor.id}, '${escapeHtml(actor.name)}')">删除</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    document.getElementById('actorSearch').addEventListener('input', () => renderActors(allActors));
-
-    async function openActorModal(actorData = null) {
-      document.getElementById('actorModalTitle').textContent = actorData ? '编辑演员' : '添加演员';
-      document.getElementById('actorId').value = actorData ? actorData.id : '';
-      document.getElementById('actorName').value = actorData ? actorData.name : '';
-      document.getElementById('actorAvatarUrl').value = actorData ? (actorData.avatar_url || '') : '';
-      document.getElementById('actorDescription').value = actorData ? (actorData.description || '') : '';
-      document.getElementById('actorModal').classList.add('active');
-    }
-
-    async function editActor(id) {
-      const actor = allActors.find(a => a.id === id);
-      if (actor) openActorModal(actor);
-    }
-
-    async function saveActor() {
-      const id = document.getElementById('actorId').value;
-      const name = document.getElementById('actorName').value.trim();
-      if (!name) { showToast('演员名称不能为空', 'error'); return; }
-
-      const body = {
-        name,
-        avatar_url: document.getElementById('actorAvatarUrl').value.trim(),
-        description: document.getElementById('actorDescription').value.trim()
-      };
-
-      try {
-        const url = id ? `${ADMIN_API}/actors/${id}` : `${ADMIN_API}/actors`;
-        const method = id ? 'PUT' : 'POST';
-        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const data = await res.json();
-        if (data.success) { showToast(data.message || (id ? '演员更新成功' : '演员创建成功'), 'success'); closeModal('actorModal'); loadActors(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-      } catch (err) { console.error('保存演员失败:', err); showToast('网络错误，保存失败', 'error'); }
-    }
-
-    // ==================== 用户管理（分页） ====================
-    let currentUserPage = 1;
-    const USER_PAGE_SIZE = 20;
-
-    async function loadUsers(page = currentUserPage) {
-      currentUserPage = page;
-      const loading = document.getElementById('usersLoading');
-      const table = document.getElementById('usersTable');
-      const empty = document.getElementById('usersEmpty');
-      const pagination = document.getElementById('usersPagination');
-      loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none'; if (pagination) pagination.style.display = 'none';
-
-      try {
-        const res = await fetch(`${USER_API}/users?page=${page}&limit=${USER_PAGE_SIZE}`);
-        const data = await res.json();
-        if (data.success) {
-          allUsers = data.data;
-          renderUsers(data.data);
-          renderUsersPagination(data.total, data.page, data.totalPages);
-        }
-        else { showToast(data.message || '获取用户列表失败', 'error'); }
-      } catch (err) {
-        console.error('加载用户失败:', err);
-        showToast('网络错误，加载用户失败', 'error');
-      } finally { loading.style.display = 'none'; }
-    }
-
-    function renderUsersPagination(total, page, totalPages) {
-      const pagination = document.getElementById('usersPagination');
-      if (!pagination) return;
-      if (!totalPages || totalPages <= 1) { pagination.style.display = 'none'; return; }
-      pagination.style.display = 'flex';
-      let html = '';
-      html += `<button class="pagination-btn" onclick="loadUsers(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>`;
-      html += `<span class="pagination-info">第 ${page} / ${totalPages} 页（共 ${total} 条）</span>`;
-      html += `<button class="pagination-btn" onclick="loadUsers(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button>`;
-      pagination.innerHTML = html;
-    }
-
-    function renderUsers(users) {
-      const table = document.getElementById('usersTable');
-      const empty = document.getElementById('usersEmpty');
-      const tbody = document.getElementById('usersTableBody');
-      const searchVal = document.getElementById('userSearch').value.trim().toLowerCase();
-      const filtered = searchVal ? users.filter(u => u.username.toLowerCase().includes(searchVal)) : users;
-
-      if (filtered.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; return; }
-
-      table.style.display = 'table'; empty.style.display = 'none'; tbody.innerHTML = '';
-      filtered.forEach(user => {
-        const row = document.createElement('tr');
-        const roleBadge = user.role_id === 1
-          ? '<span class="badge badge-admin">管理员</span>'
-          : '<span class="badge badge-user">普通用户</span>';
-
-        row.innerHTML = `
-          <td>${user.id}</td>
-          <td>${escapeHtml(user.username)}</td>
-          <td>${user.email || '-'}</td>
-          <td>${roleBadge}</td>
-          <td>${user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-'}</td>
-          <td>
-            <div class="table-actions">
-              <button class="btn btn-sm btn-edit" onclick="openUserEditModal(${user.id})">编辑</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    document.getElementById('userSearch').addEventListener('input', () => renderUsers(allUsers));
-
-    // ==================== 用户编辑弹窗 ====================
-    let userEditTarget = null;
-
-    function openUserEditModal(userId) {
-      const user = allUsers.find(u => u.id === userId);
-      if (!user) { showToast('未找到该用户', 'error'); return; }
-
-      userEditTarget = user;
-
-      // 显示用户基本信息
-      document.getElementById('userEditDisplayName').textContent = user.username;
-      const roleText = user.role_id === 1 ? '管理员' : '普通用户';
-      document.getElementById('userEditDisplayRole').textContent = `当前角色：${roleText}`;
-
-      // 设置角色切换按钮
-      const roleBtn = document.getElementById('userEditRoleBtn');
-      if (user.role_id === 1) {
-        roleBtn.textContent = '降级为普通用户';
-        roleBtn.className = 'btn btn-sm btn-warning';
-        roleBtn.onclick = function() { changeUserRole(user.id, 2); };
-      } else {
-        roleBtn.textContent = '升级为管理员';
-        roleBtn.className = 'btn btn-sm btn-success';
-        roleBtn.onclick = function() { changeUserRole(user.id, 1); };
-      }
-
-      // 清空密码输入框
-      document.getElementById('userEditPassword').value = '';
-
-      document.getElementById('userEditModal').classList.add('active');
-    }
-
-    async function changeUserRole(userId, newRoleId) {
-      const user = allUsers.find(u => u.id === userId);
-      const action = newRoleId === 1 ? '升级' : '降级';
-      if (!confirm(`确定要将用户 "${user.username}" ${action}为${newRoleId === 1 ? '管理员' : '普通用户'}吗？`)) return;
-
-      try {
-        const res = await fetch(`${USER_API}/users/${userId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role_id: newRoleId })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast(data.message, 'success');
-          closeModal('userEditModal');
-          loadUsers();
-        } else {
-          showToast(data.message, 'error');
-        }
-      } catch (err) {
-        console.error('更改角色失败:', err);
-        showToast('网络错误，更改角色失败', 'error');
-      }
-    }
-
-    async function resetUserPassword() {
-      const user = userEditTarget;
-      if (!user) { showToast('未指定用户', 'error'); return; }
-
-      const newPassword = document.getElementById('userEditPassword').value.trim();
-      if (!newPassword) { showToast('请输入新密码', 'error'); return; }
-      if (newPassword.length < 6) { showToast('密码长度不能少于6位', 'error'); return; }
-
-      try {
-        const res = await fetch(`${USER_API}/users/${user.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: newPassword })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast('密码重置成功', 'success');
-          document.getElementById('userEditPassword').value = '';
-        } else {
-          showToast(data.message || '密码重置失败', 'error');
-        }
-      } catch (err) {
-        console.error('重置密码失败:', err);
-        showToast('网络错误，重置密码失败', 'error');
-      }
-    }
-
-    function deleteCurrentUser() {
-      const user = userEditTarget;
-      if (!user) { showToast('未指定用户', 'error'); return; }
-
-      closeModal('userEditModal');
-      // 复用已有的 confirmDelete 函数
-      confirmDelete('user', user.id, user.username);
-    }
-
-    function openUserModal(mode = 'add', userData = null) {
-      userModalMode = mode;
-      userEditId = userData ? userData.id : null;
-      document.getElementById('userModalTitle').textContent = mode === 'edit' ? '编辑用户' : '添加用户';
-      document.getElementById('userId').value = userData ? userData.id : '';
-      document.getElementById('formUsername').value = userData ? userData.username : '';
-      document.getElementById('formEmail').value = userData ? (userData.email || '') : '';
-      document.getElementById('formPassword').value = '';
-      document.getElementById('formRole').value = userData ? (userData.role_id === 1 ? '1' : '2') : '2';
-
-      if (mode === 'edit') {
-        document.getElementById('passwordGroup').style.display = 'none';
-        document.getElementById('formUsername').disabled = true;
-      } else {
-        document.getElementById('passwordGroup').style.display = 'block';
-        document.getElementById('formUsername').disabled = false;
-      }
-
-      document.getElementById('userModal').classList.add('active');
-    }
-
-    async function saveUser() {
-      const username = document.getElementById('formUsername').value.trim();
-      const email = document.getElementById('formEmail').value.trim();
-      const password = document.getElementById('formPassword').value;
-      const role_id = parseInt(document.getElementById('formRole').value);
-
-      if (userModalMode === 'add' && (!username || !password)) {
-        showToast('用户名和密码不能为空', 'error');
-        return;
-      }
-
-      try {
-        let url, method, body;
-        if (userModalMode === 'edit') {
-          url = `${USER_API}/users/${userEditId}`;
-          method = 'PUT';
-          body = { email, role_id };
-          if (password) body.password = password;
-        } else {
-          url = `${USER_API}/users`;
-          method = 'POST';
-          body = { username, email, password, role_id };
-        }
-
-        const res = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast(data.message, 'success');
-          closeModal('userModal');
-          loadUsers();
-        } else {
-          showToast(data.message, 'error');
-        }
-      } catch (err) {
-        console.error('保存用户失败:', err);
-        showToast('网络错误，保存失败', 'error');
-      }
-    }
-
-    // ==================== 删除确认 ====================
-    function confirmDelete(type, id, name) {
-      document.getElementById('deleteMessage').textContent = `确定要删除"${name}"吗？此操作不可恢复。`;
-      document.getElementById('deleteModal').classList.add('active');
-
-      const confirmBtn = document.getElementById('confirmDeleteBtn');
-      confirmBtn.onclick = async () => {
-        try {
-          let url;
-          if (type === 'user') {
-            url = `${USER_API}/users/${id}`;
-          } else {
-            url = `${ADMIN_API}/${type}s/${id}`;
-          }
-          const res = await fetch(url, { method: 'DELETE' });
-          const data = await res.json();
-          if (data.success) {
-            showToast(data.message || '删除成功', 'success');
-            closeModal('deleteModal');
-            switch(type) {
-              case 'movie': loadMovies(); break;
-              case 'tag': loadTags(); break;
-              case 'director': loadDirectors(); break;
-              case 'actor': loadActors(); break;
-              case 'user': loadUsers(); break;
-            }
-          } else {
-            showToast(data.message || '删除失败', 'error');
-          }
-        } catch (err) {
-          console.error('删除失败:', err);
-          showToast('网络错误，删除失败', 'error');
-        }
-      };
-    }
-
-    // ==================== 工具函数 ====================
-    function escapeHtml(text) {
-      if (!text) return '';
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // ==================== 评论管理 ====================
-    let commentPage = 1;
-    let commentPageSize = 20;
-    let commentTotal = 0;
-    let commentSearchKeyword = '';
-
-    async function loadComments() {
-      const loading = document.getElementById('commentsLoading');
-      const table = document.getElementById('commentsTable');
-      const empty = document.getElementById('commentsEmpty');
-      const pagination = document.getElementById('commentsPagination');
-
-      loading.style.display = 'block';
-      table.style.display = 'none';
-      empty.style.display = 'none';
-      pagination.style.display = 'none';
-
-      try {
-        const url = `${ADMIN_API}/comments?page=${commentPage}&pageSize=${commentPageSize}${commentSearchKeyword ? '&search=' + encodeURIComponent(commentSearchKeyword) : ''}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (data.success) {
-          commentTotal = data.data.total;
-          renderComments(data.data.comments);
-          renderCommentPagination();
-        } else {
-          showToast(data.message || '获取评论列表失败', 'error');
-          loading.style.display = 'none';
-          empty.style.display = 'block';
-        }
-      } catch (err) {
-        console.error('加载评论失败:', err);
-        showToast('网络错误，加载评论失败', 'error');
-        loading.style.display = 'none';
-        empty.style.display = 'block';
-      } finally {
-        loading.style.display = 'none';
-      }
-    }
-
-    function renderComments(comments) {
-      const table = document.getElementById('commentsTable');
-      const empty = document.getElementById('commentsEmpty');
-      const tbody = document.getElementById('commentsTableBody');
-
-      if (!comments || comments.length === 0) {
-        table.style.display = 'none';
-        empty.style.display = 'block';
-        return;
-      }
-
-      table.style.display = 'table';
-      empty.style.display = 'none';
-      tbody.innerHTML = '';
-
-      comments.forEach(c => {
-        const row = document.createElement('tr');
-        const isReply = c.parent_id !== null;
-        const typeText = isReply ? '回复' : '评论';
-        const pinBtnText = c.is_pinned ? '取消置顶' : '置顶';
-        const pinBtnClass = c.is_pinned ? 'btn-warning' : 'btn btn-sm btn-success';
-
-        // 截断评论内容
-        const truncatedContent = c.content && c.content.length > 50
-          ? escapeHtml(c.content.substring(0, 50)) + '...'
-          : escapeHtml(c.content || '');
-
-        row.innerHTML = `
-          <td>${c.id}</td>
-          <td>${escapeHtml(c.username)}</td>
-          <td title="${escapeHtml(c.movie_title || '')}">${escapeHtml(c.movie_title || '-')}</td>
-          <td title="${escapeHtml(c.content || '')}">${truncatedContent || '-'}</td>
-          <td><span class="tag">${typeText}</span></td>
-          <td>${c.is_pinned ? '<span style="color:#d4a017;font-weight:bold;">★ 已置顶</span>' : '否'}</td>
-          <td>${c.created_at ? new Date(c.created_at).toLocaleString('zh-CN') : '-'}</td>
-          <td>
-            <div class="table-actions">
-              ${!isReply ? `<button class="btn btn-sm ${pinBtnClass}" onclick="togglePin(${c.id}, ${c.is_pinned ? 'false' : 'true'})">${pinBtnText}</button>` : ''}
-              <button class="btn btn-sm btn-delete" onclick="confirmDeleteComment(${c.id})">删除</button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    function renderCommentPagination() {
-      const pagination = document.getElementById('commentsPagination');
-      const totalPages = Math.ceil(commentTotal / commentPageSize);
-
-      if (totalPages <= 1) { pagination.style.display = 'none'; return; }
-
-      pagination.style.display = 'flex';
-      pagination.innerHTML = '';
-
-      const prevBtn = document.createElement('button');
-      prevBtn.textContent = '上一页';
-      prevBtn.disabled = commentPage <= 1;
-      prevBtn.onclick = () => { commentPage--; loadComments(); };
-      pagination.appendChild(prevBtn);
-
-      const span = document.createElement('span');
-      span.textContent = `第 ${commentPage} / ${totalPages} 页 (共 ${commentTotal} 条)`;
-      pagination.appendChild(span);
-
-      const nextBtn = document.createElement('button');
-      nextBtn.textContent = '下一页';
-      nextBtn.disabled = commentPage >= totalPages;
-      nextBtn.onclick = () => { commentPage++; loadComments(); };
-      pagination.appendChild(nextBtn);
-    }
-
-    function searchComments() {
-      commentSearchKeyword = document.getElementById('commentSearch').value.trim();
-      commentPage = 1;
-      loadComments();
-    }
-
-    document.getElementById('commentSearch').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') searchComments();
-    });
-
-    // 切换评论置顶状态
-    async function togglePin(commentId, pinState) {
-      try {
-        const res = await fetch(`${ADMIN_API}/comments/${commentId}/pin`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isPinned: pinState })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast(data.message, 'success');
-          loadComments();
-        } else {
-          showToast(data.message || '操作失败', 'error');
-        }
-      } catch (err) {
-        console.error('置顶操作失败:', err);
-        showToast('网络错误，操作失败', 'error');
-      }
-    }
-
-    // 确认删除评论
-    function confirmDeleteComment(commentId) {
-      document.getElementById('deleteMessage').textContent = '确定要删除这条评论吗？此操作不可恢复。';
-      document.getElementById('deleteModal').classList.add('active');
-
-      const confirmBtn = document.getElementById('confirmDeleteBtn');
-      confirmBtn.onclick = async () => {
-        try {
-          const res = await fetch(`${ADMIN_API}/comments/${commentId}`, { method: 'DELETE' });
-          const data = await res.json();
-          if (data.success) {
-            showToast(data.message || '删除成功', 'success');
-            closeModal('deleteModal');
-            loadComments();
-          } else {
-            showToast(data.message || '删除失败', 'error');
-          }
-        } catch (err) {
-          console.error('删除评论失败:', err);
-          showToast('网络错误，删除失败', 'error');
-        }
-      };
-    }
-
-    // ==================== 页面初始化 ====================
-    document.addEventListener('DOMContentLoaded', () => {
-      if (!checkAuth()) return;
-      loadDashboard();
-    });
+    async function loadABTests(){const c=document.getElementById('abtestExperimentList');c.innerHTML='<div class="loading"><div class="spinner"></div><p style="margin-top:12px;">加载实验中...</p></div>';try{const r=await fetch(ADMIN_API+'/experiments');if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();renderABTests(j.data||[]);}catch(err){c.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>无法连接到服务器</p><p class="hint">'+err.message+'</p></div>';showToast('加载失败: '+err.message,'error');}}
+    function renderABTests(experiments){const c=document.getElementById('abtestExperimentList');if(!experiments||!experiments.length){c.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>暂无 A/B 测试实验</p><p class="hint">点击「创建实验」按钮开始第一个在线对比实验</p></div>';return;}
+      c.innerHTML=experiments.map(exp=>{const sc='status-'+(exp.status||'draft');const sl=({draft:'草稿',running:'进行中',stopped:'已停止',archived:'已归档'})[exp.status]||exp.status;const strategies=exp.strategies||[];return '<div class="experiment-card"><div class="experiment-header"><div><div style="display:flex;align-items:center;gap:10px;"><span class="experiment-title">'+exp.name+'</span><span class="status-badge '+sc+'">'+sl+'</span>'+(exp.winner_strategy_id?'<span class="winner-badge">✓ 已决出胜者</span>':'')+'</div><div class="experiment-meta"><span>🆔 '+exp.id+'</span><span>📋 '+(exp.split_mode==='bandit'?'自适应(Bandit)':'固定比例(Fixed)')+'</span><span>🕐 '+(exp.start_time?formatDateTime(exp.start_time):'-')+'</span>'+(exp.end_time?'<span>⏰ '+formatDateTime(exp.end_time)+'</span>':'')+'<span>📊 '+strategies.length+' 个策略</span></div>'+(exp.description?'<p style="font-size:13px;color:#666;margin-top:6px;">'+exp.description+'</p>':'')+'</div><div style="display:flex;gap:6px;flex-shrink:0;"><button class="btn btn-outline btn-sm" onclick="showABTestDetail('+exp.id+')">详情</button>'+(exp.status==='running'?'<button class="btn btn-danger btn-sm" onclick="stopABTest('+exp.id+')">终止</button>':'')+(exp.status==='stopped'?'<button class="btn btn-warning btn-sm" onclick="archiveABTest('+exp.id+')">归档</button>':'')+'</div></div>'+renderABTestTrafficBar(strategies)+'<table class="strategies-table"><thead><tr><th style="width:140px;">策略</th><th>算法</th><th>流量%</th><th>曝光</th><th>CTR</th><th>95% 置信区间</th><th>p 值</th><th>获胜概率</th><th>收敛</th><th>用户数</th></tr></thead><tbody>'+strategies.map((s,si)=>renderABTestStrategyRow(s,si,exp.status)).join('')+'</tbody></table></div>';}).join('');}
+    function renderABTestTrafficBar(strategies){if(!strategies||!strategies.length)return'';const colors=['color-1','color-2','color-3','color-4','color-5','color-6','color-7','color-8','color-9','color-10'];return '<div style="margin:12px 0;"><div style="font-size:12px;color:#888;margin-bottom:4px;">流量分配</div><div class="traffic-bar-container">'+strategies.map((s,i)=>{const pct=s.traffic_percentage||s.initial_weight*100||0;return '<div class="traffic-bar-segment '+colors[i%colors.length]+'" style="width:'+pct+'%;min-width:'+(pct>0?20:0)+'px;">'+(pct>5?Math.round(pct)+'%':'')+'</div>';}).join('')+'</div><div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">'+strategies.map((s,i)=>'<span style="font-size:11px;color:#888;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+['#007bff','#28a745','#ffc107','#dc3545','#17a2b8','#6f42c1','#fd7e14','#20c997','#e83e8c','#6610f2'][i%10]+'"> </span>'+s.name+': '+(s.traffic_percentage?Math.round(s.traffic_percentage):Math.round(s.initial_weight*100))+'%</span>').join('')+'</div></div>';}
+    function renderABTestStrategyRow(s,idx,status){const m=s.latestMetrics||{};const ctr=m.ctr!==undefined?m.ctr:'-';const ciL=m.ctr_ci_lower,ciU=m.ctr_ci_upper;const pV=m.p_value;const pC=pV!==undefined&&pV<0.05?'p-significant':(pV!==undefined?'p-not-significant':'');const pD=pV!==undefined?pV.toFixed(4):'-';const wP=m.win_probability!==undefined?(m.win_probability*100).toFixed(1)+'%':'-';const cv=m.is_converged!==undefined?(m.is_converged?'✅ 已收敛':'⏳ 收集中'):'-';const exp=s.metrics?(s.metrics.total_exposures||s.metrics.exposures||0):0;const usr=s.metrics?(s.metrics.unique_users||'-'):'-';const tp=s.traffic_percentage||(s.initial_weight*100)||'-';return '<tr><td><span class="strategy-name">'+s.name+'</span>'+(s.is_winner?'<span class="winner-badge" style="margin-left:6px;">🏆 胜出</span>':'')+(status==='running'&&s.weight_source==='adaptive'?'<span style="font-size:11px;color:#17a2b8;margin-left:4px;">自适应</span>':'')+'</td><td><code>'+(s.algorithm||'-')+'</code></td><td>'+tp+'%</td><td>'+(exp.toLocaleString())+'</td><td class="metric-value">'+(typeof ctr==='number'?ctr.toFixed(2)+'%':ctr)+'</td><td><span class="metric-ci">'+(ciL!==undefined?'['+ciL.toFixed(2)+'%':'[')+(ciU!==undefined?', '+ciU.toFixed(2)+'%]':'-]')+'</span></td><td class="p-value '+pC+'">'+pD+'</td><td>'+wP+'</td><td class="'+(m.is_converged?'converged-yes':'converged-no')+'">'+cv+'</td><td>'+usr+'</td></tr>';}
+    function formatDateTime(str){const d=new Date(str);return d.toLocaleDateString('zh-CN')+' '+d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});}
+    function refreshABTest(){showToast('刷新数据中...','info');loadABTests();}
+    async function showABTestDetail(id){const modal=document.getElementById('detailABTestModal');document.getElementById('abtestDetailTitle').textContent='加载中...';document.getElementById('abtestDetailContent').innerHTML='<div class="loading"><div class="spinner"></div></div>';modal.classList.add('active');try{const r=await fetch(ADMIN_API+'/experiments/'+id);if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();const e=j.data||j;document.getElementById('abtestDetailTitle').textContent='📊 '+e.name+' — 详细数据';const s=e.strategies||[];document.getElementById('abtestDetailContent').innerHTML='<div class="detail-grid"><div class="detail-item"><div class="label">状态</div><div class="value">'+(({draft:'草稿',running:'进行中',stopped:'已停止',archived:'已归档'})[e.status]||e.status)+'</div></div><div class="detail-item"><div class="label">分流模式</div><div class="value">'+(e.split_mode==='bandit'?'自适应(Bandit)':'固定比例(Fixed)')+'</div></div><div class="detail-item"><div class="label">开始时间</div><div class="value" style="font-size:14px;">'+(e.start_time?formatDateTime(e.start_time):'-')+'</div></div><div class="detail-item"><div class="label">结束时间</div><div class="value" style="font-size:14px;">'+(e.end_time?formatDateTime(e.end_time):'进行中')+'</div></div><div class="detail-item"><div class="label">策略总数</div><div class="value">'+s.length+'</div></div><div class="detail-item"><div class="label">总曝光</div><div class="value">'+s.reduce((sum,st)=>sum+(st.metrics?.total_exposures||0),0).toLocaleString()+'</div></div><div class="detail-item"><div class="label">总用户数</div><div class="value">'+s.reduce((sum,st)=>sum+(st.metrics?.unique_users||0),0).toLocaleString()+'</div></div><div class="detail-item"><div class="label">获胜策略</div><div class="value">'+(s.find(x=>x.is_winner)?.name||'暂无')+'</div></div></div><div class="section-title">各策略指标详情</div><table class="strategies-table"><thead><tr><th>策略名</th><th>算法</th><th>曝光</th><th>点击</th><th>CTR</th><th>置信区间</th><th>p值</th><th>获胜概率</th><th>收敛</th><th>用户数</th><th>α</th><th>β</th></tr></thead><tbody>'+s.map(st=>{const m=st.latestMetrics||{};const ct=m.ctr!==undefined?m.ctr:'-';return '<tr><td><strong>'+st.name+'</strong>'+(st.is_winner?' 🏆':'')+'</td><td><code>'+(st.algorithm||'-')+'</code></td><td>'+(st.metrics?.total_exposures||0).toLocaleString()+'</td><td>'+(st.metrics?.total_positive||st.metrics?.clicks||0).toLocaleString()+'</td><td class="metric-value">'+(typeof ct==='number'?ct.toFixed(2)+'%':ct)+'</td><td class="metric-ci">'+(m.ctr_ci_lower!==undefined?'['+m.ctr_ci_lower.toFixed(2)+'%':'[')+(m.ctr_ci_upper!==undefined?', '+m.ctr_ci_upper.toFixed(2)+'%]':'-]')+'</td><td class="'+(m.p_value!==undefined&&m.p_value<0.05?'p-significant':'')+'">'+(m.p_value!==undefined?m.p_value.toFixed(4):'-')+'</td><td>'+(m.win_probability!==undefined?(m.win_probability*100).toFixed(1)+'%':'-')+'</td><td class="'+(m.is_converged?'converged-yes':'converged-no')+'">'+(m.is_converged!==undefined?(m.is_converged?'✅':'⏳'):'-')+'</td><td>'+(st.metrics?.unique_users||'-')+'</td><td>'+(st.alpha??'-')+'</td><td>'+(st.beta??'-')+'</td></tr>';}).join('')+'</tbody></table></div>';}catch(err){showToast('加载失败: '+err.message,'error');}}
+    function stopABTest(id){if(!confirm('确定终止实验？'))return;fetch(ADMIN_API+'/experiments/'+id+'/stop',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.success){showToast('实验已终止','success');loadABTests();}else showToast(d.message,'error');}).catch(e=>showToast('操作失败','error'));}
+    function archiveABTest(id){if(!confirm('确定归档实验？'))return;fetch(ADMIN_API+'/experiments/'+id+'/archive',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.success){showToast('实验已归档','success');loadABTests();}else showToast(d.message,'error');}).catch(e=>showToast('操作失败','error'));}
+    checkAuth(); switchPage('dashboard');
   </script>
 </body>
 </html>
