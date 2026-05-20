@@ -300,39 +300,43 @@
       <p>Movie Recommend Admin</p>
     </div>
     <nav class="sidebar-nav">
-      <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
+      <a class="nav-item active" href="user-management.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span>数据概览</span>
-      </div>
-      <div class="nav-item" data-page="movies" onclick="switchPage('movies')">
+      </a>
+      <a class="nav-item" href="user-management.html?page=movies">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg>
         <span>电影管理</span>
-      </div>
-      <div class="nav-item" data-page="tags" onclick="switchPage('tags')">
+      </a>
+      <a class="nav-item" href="user-management.html?page=tags">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
         <span>标签管理</span>
-      </div>
-      <div class="nav-item" data-page="genres" onclick="switchPage('genres')">
+      </a>
+      <a class="nav-item" href="user-management.html?page=genres">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
         <span>题材管理</span>
-      </div>
-      <div class="nav-item" data-page="directors" onclick="switchPage('directors')">
+      </a>
+      <a class="nav-item" href="user-management.html?page=directors">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         <span>导演管理</span>
-      </div>
-      <div class="nav-item" data-page="actors" onclick="switchPage('actors')">
+      </a>
+      <a class="nav-item" href="user-management.html?page=actors">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span>演员管理</span>
-      </div>
-      <div class="nav-item" data-page="comments" onclick="switchPage('comments')">
+      </a>
+      <a class="nav-item" href="user-management.html?page=comments">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         <span>评论管理</span>
-      </div>
-      <a class="nav-item" href="user-management.html" style="text-decoration:none;">
+      </a>
+      <a class="nav-item" href="user-management.html?page=users">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
         <span>用户管理</span>
       </a>
-      <a class="nav-item" href="admin-profile.html" style="text-decoration:none;">
+      <a class="nav-item" href="user-management.html?page=abtest">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+        <span>A/B 测试</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=profile">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v6M9 14h6"/></svg>
         <span>个人设置</span>
       </a>

@@ -729,16 +729,79 @@ async function computeSingleAlgorithm(algorithm, userId, topN) {
 // ============================================================
 // Main Entry Point
 // ============================================================
+/**
+ * 根据实验策略解析实际使用的算法
+ * @param {string} defaultAlgo 用户请求的算法
+ * @param {Array|null} experiments 中间件注入的实验命中信息
+ * @returns {string} 实际使用的算法名
+ */
+function resolveAlgorithmFromExperiment(defaultAlgo, experiments) {
+  if (!experiments || !Array.isArray(experiments) || experiments.length === 0) {
+    return defaultAlgo;
+  }
+
+  const firstExp = experiments[0];
+  const strategyAlgorithm = firstExp.algorithm;
+
+  if (!strategyAlgorithm || typeof strategyAlgorithm !== 'string') {
+    return defaultAlgo;
+  }
+
+  const algoMap = {
+    svd: 'svd',
+    svd_v2: 'svd',
+    user_cf: 'user_cf',
+    user_cf_traditional: 'user_cf_traditional',
+    user_cf_improved: 'user_cf_improved',
+    user_cf_v2: 'user_cf_improved',
+    item_cf: 'item_cf',
+    item_cf_traditional: 'item_cf_traditional',
+    item_cf_improved: 'item_cf_improved',
+    slope_one_traditional: 'slope_one_traditional',
+    slope_one_improved: 'slope_one_improved',
+    turbo_cf: 'turbo_cf',
+    hybrid: 'hybrid',
+    hybrid_v2: 'hybrid',
+    hybrid_v3: 'hybrid'
+  };
+
+  const resolved = algoMap[strategyAlgorithm];
+  if (resolved && RECOMMEND_FUNCTIONS[resolved]) {
+    console.log(`[Engine] A/B实验路由: 实验"${firstExp.experimentName}" 策略"${firstExp.strategyName}" → 算法 ${resolved}`);
+    return resolved;
+  }
+
+  console.log(`[Engine] A/B实验策略"${strategyAlgorithm}"未匹配到推荐函数，使用默认算法 ${defaultAlgo}`);
+  return defaultAlgo;
+}
+
 async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipCache = false) {
+  return getRecommendationsV2(userId, algorithm, topN, { skipCache });
+}
+
+/**
+ * 推荐入口 V2 — 支持实验策略路由
+ * @param {number} userId
+ * @param {string} algorithm 默认算法
+ * @param {number} topN
+ * @param {Object} options
+ * @param {boolean} options.skipCache
+ * @param {Array} options.experiment 中间件注入的实验命中信息
+ */
+async function getRecommendationsV2(userId, algorithm = 'hybrid', topN = 10, options = {}) {
+  const { skipCache = false, experiment = null } = options;
+
   if (topN < 1 || topN > 100) topN = 10;
+
+  const resolvedAlgo = resolveAlgorithmFromExperiment(algorithm, experiment);
 
   // Step 1: Try cache
   if (!skipCache) {
-    const cached = await getCachedRecommendation(userId, algorithm);
+    const cached = await getCachedRecommendation(userId, resolvedAlgo);
     if (cached) {
       return {
         userId,
-        algorithm: cached.algorithm,
+        algorithm: resolvedAlgo,
         topN: Math.min(topN, cached.items.length),
         elapsed: 0.001,
         total: cached.items.length,
@@ -746,7 +809,8 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
           movieId: item.movie_id,
           predictedRating: item.score
         })),
-        fromCache: true
+        fromCache: true,
+        experiment
       };
     }
   }
@@ -755,8 +819,7 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
   const startTime = Date.now();
   let results;
 
-  if (algorithm === 'hybrid') {
-    // 混合推荐: 收集所有已加载模型，不足的使用 MODEL_FILE_MAP 加载
+  if (resolvedAlgo === 'hybrid') {
     const modelPromises = {};
     for (const algo of Object.keys(MODEL_FILE_MAP)) {
       if (_models[algo]) {
@@ -775,10 +838,10 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
       }
     }
     results = recommendHybridAll(models, userId, topN);
-  } else if (RECOMMEND_FUNCTIONS[algorithm]) {
-    results = await computeSingleAlgorithm(algorithm, userId, topN);
+  } else if (RECOMMEND_FUNCTIONS[resolvedAlgo]) {
+    results = await computeSingleAlgorithm(resolvedAlgo, userId, topN);
   } else {
-    throw new Error(`Unknown algorithm: ${algorithm}`);
+    throw new Error(`Unknown algorithm: ${resolvedAlgo}`);
   }
 
   const elapsed = (Date.now() - startTime) / 1000;
@@ -788,22 +851,22 @@ async function getRecommendations(userId, algorithm = 'hybrid', topN = 10, skipC
     predictedRating: Math.round(r.score * 10000) / 10000
   }));
 
-  // Step 3: Write back to cache (async)
   if (results.length >= topN / 2) {
-    saveResultToCache(userId, results, algorithm).catch(e =>
+    saveResultToCache(userId, results, resolvedAlgo).catch(e =>
       console.error('[Cache] Async save failed:', e.message)
     );
   }
 
   return {
     userId,
-    algorithm,
+    algorithm: resolvedAlgo,
     topN,
     elapsed: Math.round(elapsed * 1000) / 1000,
     total: recommendations.length,
     recommendations,
-    fromCache: false
+    fromCache: false,
+    experiment
   };
 }
 
-module.exports = { getRecommendations, loadModel, warmupModels };
+module.exports = { getRecommendations, getRecommendationsV2, loadModel, warmupModels };

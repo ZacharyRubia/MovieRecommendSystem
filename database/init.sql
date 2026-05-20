@@ -206,56 +206,52 @@ CREATE TABLE IF NOT EXISTS `comments` (
     INDEX `idx_parent_id` (`parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论表';
 
--- ============================================
--- 16. 清理旧表（若存在）
--- ============================================
-DROP TABLE IF EXISTS `users_recommendations`;
-DROP TABLE IF EXISTS `movies_similarities`;
 
 -- ============================================
--- 17. 物品相似度缓存表 (item_similarity_caches)
+-- 17. 物品相似度缓存表 (item_similarity_caches)  -- 更名以反映通用性
 -- 支持：ItemCF, TurboCF, 基于内容的相似度等
 -- ============================================
 CREATE TABLE IF NOT EXISTS `item_similarity_caches` (
     `movie_id` BIGINT UNSIGNED NOT NULL COMMENT '电影ID',
-    `algorithm` VARCHAR(20) NOT NULL COMMENT '算法类型（item_cf / turbo_cf / content_based 等）',
+    `algorithm` VARCHAR(40) NOT NULL COMMENT '算法类型（item_cf / turbo_cf / content_based 等）',
     `similar_movies` JSON NOT NULL COMMENT '相似电影列表(JSON，含movie_id和score)',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '离线计算更新时间',
     PRIMARY KEY (`movie_id`, `algorithm`),
     FOREIGN KEY (`movie_id`) REFERENCES `movies`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物品相似度缓存表（多算法）';
 
+
 -- ============================================
 -- 18. 用户推荐缓存表 (user_recommendation_caches)
--- 支持：SVD, UserCF, ItemCF, TurboCF, 混合推荐等
+-- 支持：SVD, UserCF, 混合推荐等
 -- ============================================
 CREATE TABLE IF NOT EXISTS `user_recommendation_caches` (
     `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
-    `algorithm` VARCHAR(20) NOT NULL COMMENT '算法类型（svd / user_cf / item_cf / turbo_cf / hybrid 等）',
+    `algorithm` VARCHAR(40) NOT NULL COMMENT '算法类型（svd / user_cf / hybrid 等）',
     `recommend_movies` JSON NOT NULL COMMENT '推荐电影列表(JSON，含movie_id和score)',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '离线计算更新时间',
     PRIMARY KEY (`user_id`, `algorithm`),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户推荐缓存表（多算法）';
 
+
 -- ============================================
 -- 19. A/B 测试 — 实验配置表 (ab_experiments)
 -- ============================================
 CREATE TABLE IF NOT EXISTS `ab_experiments` (
     `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT '实验ID',
-    `name` VARCHAR(100) NOT NULL COMMENT '实验名称',
+    `name` VARCHAR(255) NOT NULL COMMENT '实验名称',
     `description` TEXT NULL COMMENT '实验描述',
     `status` ENUM('draft', 'running', 'stopped', 'archived') NOT NULL DEFAULT 'draft' COMMENT '实验状态',
-    `split_mode` ENUM('fixed', 'bandit') NOT NULL DEFAULT 'fixed' COMMENT '分流模式: fixed=固定比例, bandit=自适应(Bandit)',
-    `winner_strategy_id` BIGINT UNSIGNED NULL COMMENT '优胜策略ID(实验结束后设置)',
+    `split_mode` ENUM('fixed', 'bandit') NOT NULL DEFAULT 'fixed' COMMENT 'fixed=固定比例, bandit=Thompson Sampling自适应',
+    `winner_strategy_id` BIGINT UNSIGNED NULL COMMENT '优胜策略ID(收敛后自动设置)',
     `start_time` DATETIME NULL COMMENT '实验开始时间',
     `end_time` DATETIME NULL COMMENT '实验结束时间',
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX `idx_status` (`status`),
-    INDEX `idx_start_time` (`start_time`),
-    INDEX `idx_end_time` (`end_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A/B测试实验配置表';
+    INDEX `idx_start_time` (`start_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='A/B测试实验配置表';
 
 -- ============================================
 -- 20. A/B 测试 — 策略配置表 (ab_strategies)
@@ -263,81 +259,128 @@ CREATE TABLE IF NOT EXISTS `ab_experiments` (
 CREATE TABLE IF NOT EXISTS `ab_strategies` (
     `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT '策略ID',
     `experiment_id` BIGINT UNSIGNED NOT NULL COMMENT '所属实验ID',
-    `name` VARCHAR(100) NOT NULL COMMENT '策略名称',
-    `algorithm` VARCHAR(20) NOT NULL COMMENT '推荐算法标识(svd/user_cf/item_cf/turbo_cf/hybrid等)',
+    `name` VARCHAR(255) NOT NULL COMMENT '策略名称',
+    `algorithm` VARCHAR(40) NOT NULL DEFAULT 'hybrid' COMMENT '推荐算法标识(svd/user_cf/item_cf/turbo_cf/hybrid等)',
     `traffic_percentage` DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '目标流量百分比(0.00~100.00)',
-    `weight_source` ENUM('manual', 'bandit') NOT NULL DEFAULT 'manual' COMMENT '当前权重来源',
-    `bandit_alpha` DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT 'Thompson Sampling Alpha参数',
-    `bandit_beta` DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT 'Thompson Sampling Beta参数',
-    `is_control` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为对照组(0=实验组,1=对照组)',
+    `weight_source` ENUM('manual', 'bandit', 'promoted') NOT NULL DEFAULT 'manual' COMMENT '权重来源: manual=人工, bandit=Bandit自动, promoted=推全',
+    `bandit_alpha` DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT 'Thompson Sampling Alpha(成功+1)',
+    `bandit_beta` DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT 'Thompson Sampling Beta(失败+1)',
+    `is_control` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为对照组(1=对照组, 0=实验组)',
     `min_traffic` DECIMAL(5,2) NOT NULL DEFAULT 5.00 COMMENT '最小流量下限(%)',
-    `coldstart_end_time` DATETIME NULL COMMENT '冷启动结束时间(此时间前不参与Bandit调整)',
+    `coldstart_end_time` DATETIME NULL COMMENT '冷启动结束时间(之前不参与Bandit调整)',
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     FOREIGN KEY (`experiment_id`) REFERENCES `ab_experiments`(`id`) ON DELETE CASCADE,
     INDEX `idx_experiment_id` (`experiment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A/B测试策略配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='A/B测试策略配置表';
 
 -- ============================================
 -- 21. A/B 测试 — 结果汇总表 (ab_results)
+-- Python 离线分析脚本每30分钟写入一次
 -- ============================================
 CREATE TABLE IF NOT EXISTS `ab_results` (
     `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
     `experiment_id` BIGINT UNSIGNED NOT NULL COMMENT '实验ID',
     `strategy_id` BIGINT UNSIGNED NOT NULL COMMENT '策略ID',
     `analysis_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '分析时间戳',
-    `period_start` DATETIME NOT NULL COMMENT '分析周期开始',
-    `period_end` DATETIME NOT NULL COMMENT '分析周期结束',
+    `period_start` DATETIME NOT NULL COMMENT '分析窗口起始(最近24h)',
+    `period_end` DATETIME NOT NULL COMMENT '分析窗口结束',
     `total_exposures` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '总曝光数',
-    `total_clicks` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '总点击数',
+    `total_clicks` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '总正向事件数(view+like)',
     `total_ratings` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '总评分次数',
     `total_collects` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '总收藏数',
-    `total_watch_seconds` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '总观看时长(秒)',
+    `total_watch_seconds` DOUBLE NOT NULL DEFAULT 0 COMMENT '总观看时长(秒)',
     `unique_users` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '独立用户数',
-    `ctr` DECIMAL(10,6) NULL COMMENT '点击率(CTR)',
-    `avg_watch_seconds` DECIMAL(10,4) NULL COMMENT '人均观看时长(秒)',
-    `rating_rate` DECIMAL(10,6) NULL COMMENT '评分率',
-    `collect_rate` DECIMAL(10,6) NULL COMMENT '收藏率',
-    `p_value` DECIMAL(10,6) NULL COMMENT '与对照组对比的p值',
-    `is_winner` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为优胜策略(统计显著)',
-    `is_converged` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已收敛',
-    `sample_size_sufficient` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '样本量是否充足',
-    `bandit_alpha` DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT '更新后Alpha(用于Redis同步)',
-    `bandit_beta` DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT '更新后Beta(用于Redis同步)',
+    `ctr` DOUBLE NULL COMMENT '正向事件率(CTR)',
+    `ctr_ci_lower` DOUBLE NULL COMMENT 'CTR 95%置信区间下界',
+    `ctr_ci_upper` DOUBLE NULL COMMENT 'CTR 95%置信区间上界',
+    `avg_watch_seconds` DOUBLE NULL COMMENT '人均观看时长(秒)',
+    `rating_rate` DOUBLE NULL COMMENT '评分率',
+    `collect_rate` DOUBLE NULL COMMENT '收藏率',
+    `positive_events` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '正向事件总数',
+    `p_value` DOUBLE NULL COMMENT '与对照组对比的p值(Z检验)',
+    `is_winner` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '当前周期是否显著优于对照组',
+    `is_converged` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '实验是否已收敛',
+    `sample_size_sufficient` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '各组样本量是否充足',
+    `bandit_alpha` DOUBLE NULL COMMENT '更新后的Bandit Alpha',
+    `bandit_beta` DOUBLE NULL COMMENT '更新后的Bandit Beta',
     FOREIGN KEY (`experiment_id`) REFERENCES `ab_experiments`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`strategy_id`) REFERENCES `ab_strategies`(`id`) ON DELETE CASCADE,
-    INDEX `idx_experiment_strategy` (`experiment_id`, `strategy_id`),
-    INDEX `idx_analysis_time` (`analysis_time` DESC)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A/B测试结果汇总表';
+    INDEX `idx_exp_time` (`experiment_id`, `analysis_time` DESC),
+    INDEX `idx_exp_strategy_time` (`experiment_id`, `strategy_id`, `analysis_time` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='A/B测试结果汇总表';
 
 -- ============================================
 -- 22. 用户桶覆盖表 (user_bucket_override)
--- 用于Bandit模式：动态覆盖用户的默认分桶归属
+-- Bandit模式：首次访问时Thompson Sampling分配策略，写此表确保后续一致性
 -- ============================================
 CREATE TABLE IF NOT EXISTS `user_bucket_override` (
     `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
     `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
     `experiment_id` BIGINT UNSIGNED NOT NULL COMMENT '实验ID',
-    `strategy_id` BIGINT UNSIGNED NOT NULL COMMENT '通过Bandit分配给用户的策略ID',
-    `bucket_id` INT UNSIGNED NOT NULL COMMENT '覆盖后的桶号(0-99)',
+    `strategy_id` BIGINT UNSIGNED NOT NULL COMMENT 'Bandit分配的策略ID',
+    `bucket_id` INT UNSIGNED NOT NULL COMMENT 'MD5分桶号(0-99)',
     `assigned_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '分配时间',
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`experiment_id`) REFERENCES `ab_experiments`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`strategy_id`) REFERENCES `ab_strategies`(`id`) ON DELETE CASCADE,
     UNIQUE INDEX `uk_user_experiment` (`user_id`, `experiment_id`),
     INDEX `idx_experiment_id` (`experiment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户桶覆盖表（自适应分流）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户桶覆盖表(Bandit自适应分流)';
 
 -- ============================================
 -- 23. 扩展 users_movies_behaviors：添加实验标识字段
--- 注意：此 ALTER TABLE 仅首次执行时需运行一次
--- 如果表已存在且字段已存在，会报错但不影响功能
+-- 使用存储过程安全添加（字段/索引已存在时不会报错）
 -- ============================================
-ALTER TABLE `users_movies_behaviors`
-    ADD COLUMN IF NOT EXISTS `experiment_id` BIGINT UNSIGNED NULL COMMENT '命中的实验ID(NULL表示未参与实验)' AFTER `page_referer`,
-    ADD COLUMN IF NOT EXISTS `strategy_id` BIGINT UNSIGNED NULL COMMENT '命中的策略ID(NULL表示未参与实验)' AFTER `experiment_id`,
-    ADD INDEX IF NOT EXISTS `idx_experiment_id` (`experiment_id`) USING BTREE,
-    ADD INDEX IF NOT EXISTS `idx_strategy_id` (`strategy_id`) USING BTREE;
+DELIMITER $$
+
+CREATE PROCEDURE IF NOT EXISTS add_ab_columns_if_not_exists()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users_movies_behaviors'
+          AND COLUMN_NAME = 'experiment_id'
+    ) THEN
+        ALTER TABLE `users_movies_behaviors`
+            ADD COLUMN `experiment_id` BIGINT UNSIGNED NULL COMMENT '命中的实验ID(NULL=未参与实验)' AFTER `page_referer`;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users_movies_behaviors'
+          AND COLUMN_NAME = 'strategy_id'
+    ) THEN
+        ALTER TABLE `users_movies_behaviors`
+            ADD COLUMN `strategy_id` BIGINT UNSIGNED NULL COMMENT '命中的策略ID(NULL=未参与实验)' AFTER `experiment_id`;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users_movies_behaviors'
+          AND INDEX_NAME = 'idx_experiment_id'
+    ) THEN
+        ALTER TABLE `users_movies_behaviors`
+            ADD INDEX `idx_experiment_id` (`experiment_id`) USING BTREE;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users_movies_behaviors'
+          AND INDEX_NAME = 'idx_strategy_id'
+    ) THEN
+        ALTER TABLE `users_movies_behaviors`
+            ADD INDEX `idx_strategy_id` (`strategy_id`) USING BTREE;
+    END IF;
+END$$
+
+DELIMITER ;
+
+CALL add_ab_columns_if_not_exists();
+DROP PROCEDURE IF EXISTS add_ab_columns_if_not_exists;
 
 -- ============================================
 -- 创建完成提示

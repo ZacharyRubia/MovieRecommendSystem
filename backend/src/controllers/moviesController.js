@@ -1,5 +1,6 @@
 const Movie = require('../models/Movie');
 const Comment = require('../models/Comment');
+const { query } = require('../config/db');
 const crypto = require('crypto');
 
 // 生成唯一请求ID
@@ -120,7 +121,8 @@ const rateMovie = async (req, res) => {
     }
 
     const requestId = generateRequestId();
-    await Movie.addRating(userId, movieId, rating, requestId);
+    const { experimentId, strategyId } = await resolveExperiment(userId);
+    await Movie.addRating(userId, movieId, rating, requestId, experimentId, strategyId);
 
     // 获取更新后的电影信息
     const updatedMovie = await Movie.findById(movieId);
@@ -334,24 +336,121 @@ const recordView = async (req, res) => {
       return res.status(400).json({ success: false, message: '用户ID不能为空' });
     }
 
-    // 检查电影是否存在
     const movie = await Movie.findById(movieId);
     if (!movie) {
       return res.status(404).json({ success: false, message: '电影不存在' });
     }
 
     const requestId = generateRequestId();
-    
-    // 这里可以添加记录观看行为的逻辑
-    // 暂时只返回成功，后续可以完善观看进度记录
-    
-    res.json({
-      success: true,
-      message: '观看记录已更新'
-    });
+    const { experimentId, strategyId } = await resolveExperiment(userId);
+
+    const expCols = experimentId ? ', experiment_id, strategy_id' : '';
+    const expVals = experimentId ? ', ?, ?' : '';
+    const params = experimentId
+      ? [userId, movieId, progressSeconds || 0, durationSeconds || 0, requestId, experimentId, strategyId]
+      : [userId, movieId, progressSeconds || 0, durationSeconds || 0, requestId];
+
+    await query(
+      `INSERT INTO users_movies_behaviors (user_id, movie_id, behavior_type, progress_seconds, duration_seconds, request_id${expCols})
+       VALUES (?, ?, 'view', ?, ?, ?${expVals})`,
+      params
+    );
+
+    res.json({ success: true, message: '观看记录已更新' });
   } catch (error) {
     console.error('记录观看失败:', error);
     res.status(500).json({ success: false, message: '记录观看失败' });
+  }
+};
+
+const resolveExperiment = async (userId) => {
+  try {
+    const abTestService = require('../services/abTestService');
+    const experiments = await abTestService.resolveStrategy(userId);
+    if (experiments && experiments.length > 0) {
+      return { experimentId: experiments[0].experimentId, strategyId: experiments[0].strategyId };
+    }
+  } catch (e) { /* AB 服务不可用 */ }
+  return { experimentId: null, strategyId: null };
+};
+
+const recordBehavior = async (userId, movieId, behaviorType, rating = null) => {
+  const { experimentId, strategyId } = await resolveExperiment(userId);
+  const requestId = generateRequestId();
+  const expCols = experimentId ? ', experiment_id, strategy_id' : '';
+  const expVals = experimentId ? ', ?, ?' : '';
+  const params = experimentId
+    ? [userId, movieId, requestId, experimentId, strategyId]
+    : [userId, movieId, requestId];
+  if (rating !== null) {
+    return query(
+      `INSERT INTO users_movies_behaviors (user_id, movie_id, behavior_type, rating, request_id${expCols})
+       VALUES (?, ?, '${behaviorType}', ?, ?${expVals})`,
+      experimentId
+        ? [userId, movieId, rating, requestId, experimentId, strategyId]
+        : [userId, movieId, rating, requestId]
+    );
+  }
+  return query(
+    `INSERT INTO users_movies_behaviors (user_id, movie_id, behavior_type, request_id${expCols})
+     VALUES (?, ?, '${behaviorType}', ?${expVals})`,
+    params
+  );
+};
+
+const toggleLike = async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: '用户ID不能为空' });
+    const movie = await Movie.findById(movieId);
+    if (!movie) return res.status(404).json({ success: false, message: '电影不存在' });
+
+    const existing = await query(
+      `SELECT id, behavior_type FROM users_movies_behaviors
+       WHERE user_id = ? AND movie_id = ? AND behavior_type IN ('like','unlike')
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId, movieId]
+    );
+
+    if (existing.length > 0 && existing[0].behavior_type === 'like') {
+      await recordBehavior(userId, movieId, 'unlike');
+      res.json({ success: true, message: '已取消点赞', liked: false });
+    } else {
+      await recordBehavior(userId, movieId, 'like');
+      res.json({ success: true, message: '点赞成功', liked: true });
+    }
+  } catch (error) {
+    console.error('点赞失败:', error);
+    res.status(500).json({ success: false, message: '操作失败' });
+  }
+};
+
+const toggleCollect = async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: '用户ID不能为空' });
+    const movie = await Movie.findById(movieId);
+    if (!movie) return res.status(404).json({ success: false, message: '电影不存在' });
+
+    const existing = await query(
+      `SELECT id, behavior_type FROM users_movies_behaviors
+       WHERE user_id = ? AND movie_id = ? AND behavior_type IN ('collect','uncollect')
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId, movieId]
+    );
+
+    if (existing.length > 0 && existing[0].behavior_type === 'collect') {
+      await recordBehavior(userId, movieId, 'uncollect');
+      res.json({ success: true, message: '已取消收藏', collected: false });
+    } else {
+      await recordBehavior(userId, movieId, 'collect');
+      res.json({ success: true, message: '收藏成功', collected: true });
+    }
+  } catch (error) {
+    console.error('收藏失败:', error);
+    res.status(500).json({ success: false, message: '操作失败' });
   }
 };
 
@@ -365,5 +464,7 @@ module.exports = {
   getCommentReplies,
   addComment,
   deleteComment,
-  recordView
+  recordView,
+  toggleLike,
+  toggleCollect
 };

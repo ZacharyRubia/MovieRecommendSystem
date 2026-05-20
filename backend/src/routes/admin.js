@@ -54,5 +54,18 @@ router.put('/experiments/:id', adminController.updateExperiment);
 router.post('/experiments/:id/stop', adminController.stopExperiment);
 router.post('/experiments/:id/archive', adminController.archiveExperiment);
 router.get('/experiments/:id/metrics', adminController.getExperimentMetrics);
+router.post('/experiments/:id/seed', adminController.seedExperiment);
+router.post('/experiments/:id/analyze', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const exps = await require('../config/db').query('SELECT * FROM ab_experiments WHERE id = ?', [id]);
+    if (exps.length === 0) return res.status(404).json({ success: false, message: '实验不存在' });
+    const abAnalyzer = require('../services/abAnalyzer');
+    await abAnalyzer.runAnalysisOnce();
+    res.json({ success: true, message: '分析完成' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: '分析失败: ' + err.message });
+  }
+});
 
 module.exports = router;

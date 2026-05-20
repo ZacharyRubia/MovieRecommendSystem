@@ -11,11 +11,11 @@ config.py - A/B 测试分析模块配置文件
 # MySQL 数据库配置
 # =============================================
 MYSQL_CONFIG = {
-    'host': '127.0.0.1',
+    'host': '192.168.1.38',
     'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': 'movie_recommend',
+    'user': 'newuser',
+    'password': 'yourpassword',
+    'database': 'MovieRecommendSystem',
     'charset': 'utf8mb4',
     'connect_timeout': 10,
     'read_timeout': 60,
@@ -25,7 +25,7 @@ MYSQL_CONFIG = {
 # Redis 配置
 # =============================================
 REDIS_CONFIG = {
-    'host': '127.0.0.1',
+    'host': '192.168.1.39',
     'port': 6379,
     'db': 0,
     'decode_responses': True,
@@ -64,7 +64,7 @@ BATCH_WINDOW_MINUTES = 10            # 分批采样窗口
 # =============================================
 # 正向事件定义 (设计文档 §5.2)
 # =============================================
-POSITIVE_EVENT_TYPES = ('click', 'rate', 'favorite', 'play')
+POSITIVE_EVENT_TYPES = ('view', 'like', 'rate', 'collect', 'share')
 # rate 行为中，评分 ≥ 4 分才算正向事件
 POSITIVE_RATING_THRESHOLD = 4
 

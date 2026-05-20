@@ -179,7 +179,9 @@ async function getBanditParamsFromRedis(experimentId) {
   }
 
   try {
-    const redis = require('../config/redis');
+    const { getRedisClient } = require('./cacheService');
+    const redis = getRedisClient();
+    if (!redis) return null;
     const raw = await redis.get(`${REDIS_KEY_BANDIT_PREFIX}${experimentId}`);
     if (raw) {
       const parsed = JSON.parse(raw);

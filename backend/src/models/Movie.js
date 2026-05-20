@@ -91,12 +91,17 @@ class MovieModel {
   }
 
   // 用户评分
-  static async addRating(userId, movieId, rating, requestId) {
+  static async addRating(userId, movieId, rating, requestId, experimentId = null, strategyId = null) {
+    const expCols = experimentId ? ', experiment_id, strategy_id' : '';
+    const expVals = experimentId ? ', ?, ?' : '';
+    const params = experimentId
+      ? [userId, movieId, rating, requestId, rating, experimentId, strategyId]
+      : [userId, movieId, rating, requestId, rating];
     const result = await query(
-      `INSERT INTO users_movies_behaviors (user_id, movie_id, behavior_type, rating, request_id)
-       VALUES (?, ?, 'rate', ?, ?)
+      `INSERT INTO users_movies_behaviors (user_id, movie_id, behavior_type, rating, request_id${expCols})
+       VALUES (?, ?, 'rate', ?, ?${expVals})
        ON DUPLICATE KEY UPDATE rating = ?, updated_at = CURRENT_TIMESTAMP`,
-      [userId, movieId, rating, requestId, rating]
+      params
     );
     await this.updateAvgRating(movieId);
     return result.insertId;

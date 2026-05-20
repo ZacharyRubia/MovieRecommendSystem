@@ -937,29 +937,28 @@ exports.createExperiment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'splitMode 必须为 fixed 或 bandit' });
     }
 
-    const conn = await db.getConnection();
+    const conn = await db.pool.getConnection();
     try {
       await conn.beginTransaction();
 
-      // 插入实验主表
-      const expResult = await conn.query(
+      const [expResult] = await conn.query(
         `INSERT INTO ab_experiments (name, description, split_mode, start_time, end_time, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+         VALUES (?, ?, ?, ?, ?, 'running', NOW(), NOW())`,
         [name, description || '', splitMode, startTime || null, endTime || null]
       );
       const experimentId = expResult.insertId;
 
-      // 插入策略
       for (const s of strategies) {
         await conn.query(
-          `INSERT INTO ab_strategies (experiment_id, name, algorithm, traffic_percentage, weight_source, bandit_alpha, bandit_beta, is_control, min_traffic, coldstart_end_time)
-           VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?, DATE_ADD(NOW(), INTERVAL 2 HOUR))`,
+          `INSERT INTO ab_strategies (experiment_id, name, algorithm, algorithm_key, traffic_percentage, weight_source, bandit_alpha, bandit_beta, is_control, min_traffic, coldstart_end_time)
+           VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, DATE_ADD(NOW(), INTERVAL 2 HOUR))`,
           [
             experimentId,
             s.name || '未命名策略',
             s.algorithm || 'hybrid',
+            s.algorithm || 'hybrid',
             s.trafficPercentage || 0,
-            s.weightSource || 'fixed',
+            splitMode === 'bandit' ? 'bandit' : 'manual',
             s.isControl ? 1 : 0,
             s.minTraffic || 5
           ]
@@ -1063,6 +1062,118 @@ exports.getExperiments = async (req, res) => {
  * GET /api/admin/experiments/:id
  * 获取单个实验详情及当前各策略实时指标
  */
+
+function wilsonCI(successes, trials, z = 1.96) {
+  if (trials === 0) return { lower: 0, upper: 0, center: 0 };
+  const p = successes / trials;
+  const denominator = 1 + z * z / trials;
+  const center = (p + z * z / (2 * trials)) / denominator;
+  const margin = z * Math.sqrt(p * (1 - p) / trials + z * z / (4 * trials * trials)) / denominator;
+  return { lower: Math.max(0, center - margin), upper: Math.min(1, center + margin), center };
+}
+
+/**
+ * 使用 Wilson 置信区间和 z-test 计算与对照组的 p-value
+ */
+function wilsonPValue(s1, n1, s2, n2) {
+  if (n1 === 0 || n2 === 0) return 1;
+  const p1 = s1 / n1;
+  const p2 = s2 / n2;
+  const pPool = (s1 + s2) / (n1 + n2);
+  if (pPool === 0 || pPool === 1) return 1;
+  const se = Math.sqrt(pPool * (1 - pPool) * (1 / n1 + 1 / n2));
+  const z = (p1 - p2) / se;
+  // two-sided p-value via normal approximation
+  const absZ = Math.abs(z);
+  // simple normal CDF approximation
+  const pVal = 2 * (1 - normalCDFApprox(absZ));
+  return Math.min(1, Math.max(0, pVal));
+}
+
+function normalCDFApprox(x) {
+  // Abramowitz & Stegun approximation
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989423 * Math.exp(-x * x / 2);
+  const prob = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return x > 0 ? 1 - prob : prob;
+}
+
+function gammaSample(shape) {
+  const a = Math.max(shape, 0.01);
+  if (a < 1) {
+    let iter = 0;
+    const b = (Math.E + a) / Math.E;
+    while (iter < 100) {
+      iter++;
+      const u = Math.random();
+      if (u <= 1 / b) {
+        const x = Math.pow(u * b, 1 / a);
+        if (Math.random() <= Math.exp(-x)) return x;
+      } else {
+        const x = -Math.log((b - u * b) / a);
+        if (Math.random() <= Math.pow(x, a - 1)) return x;
+      }
+    }
+    return a; // fallback after max retries
+  }
+  const d = a - 1 / 3;
+  const c = 1 / Math.sqrt(9 * d);
+  let iter = 0;
+  while (iter < 100) {
+    iter++;
+    let x, v;
+    do {
+      x = normalRand();
+      v = 1 + c * x;
+    } while (v <= 0);
+    v = v * v * v;
+    const u = Math.random();
+    if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+  }
+  return d; // fallback
+}
+
+function normalRand() {
+  let u1, u2;
+  do { u1 = Math.random(); } while (u1 === 0);
+  u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function sampleBetaSafe(a, b) {
+  const alpha = Math.max(Number.isFinite(a) ? a : 1, 0.001);
+  const beta = Math.max(Number.isFinite(b) ? b : 1, 0.001);
+  const g1 = gammaSample(alpha);
+  const g2 = gammaSample(beta);
+  const sum = g1 + g2;
+  return sum > 1e-12 ? g1 / sum : 0.5;
+}
+
+async function bayesianApproxWinProb(a1, b1, others) {
+  if (!others || others.length === 0) return null;
+  const samples = 2000;
+  const batch = 200;
+  let wins = 0;
+  for (let i = 0; i < samples; i += batch) {
+    const end = Math.min(i + batch, samples);
+    let batchWins = 0;
+    for (let j = i; j < end; j++) {
+      const s1 = sampleBetaSafe(a1, b1);
+      let best = true;
+      for (const o of others) {
+        if (sampleBetaSafe(o.alpha || 1, o.beta || 1) > s1) { best = false; break; }
+      }
+      if (best) batchWins++;
+    }
+    wins += batchWins;
+    if (i + batch < samples) {
+      await new Promise(r => setImmediate(r));
+    }
+  }
+  return wins / samples;
+}
+
 exports.getExperimentById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1078,13 +1189,121 @@ exports.getExperimentById = async (req, res) => {
       [id]
     );
 
-    // 尝试从 ab_results 获取最新指标
+    // 第一遍：加载每个策略的 ab_results
     for (const strat of exp.strategies) {
       const results = await db.query(
-        'SELECT * FROM ab_results WHERE experiment_id = ? AND strategy_id = ? ORDER BY analyzed_at DESC LIMIT 1',
+        'SELECT * FROM ab_results WHERE experiment_id = ? AND strategy_id = ? ORDER BY analysis_time DESC LIMIT 1',
         [id, strat.id]
       );
-      strat.latestMetrics = results.length > 0 ? results[0] : null;
+      if (results.length > 0) {
+        strat.latestMetrics = results[0];
+      }
+    }
+
+    // 第二遍：计算 win_probability（需所有策略数据就绪）
+    const resultsWithData = exp.strategies.filter(s => s.latestMetrics);
+    for (const strat of exp.strategies) {
+      if (!strat.latestMetrics) {
+        // 实时回退：直接从 behaviors 统计，同时计算 CI 和与对照组的 p-value
+        try {
+          const behavCounts = await db.query(
+            `SELECT
+              COUNT(*) AS total_behaviors,
+              COUNT(DISTINCT user_id) AS unique_users,
+              SUM(CASE WHEN behavior_type IN ('view', 'like', 'collect') OR (behavior_type = 'rate' AND rating >= 4) THEN 1 ELSE 0 END) AS total_positive,
+              AVG(CASE WHEN behavior_type = 'rate' THEN rating ELSE NULL END) AS avg_rating
+            FROM users_movies_behaviors
+            WHERE experiment_id = ? AND strategy_id = ?`,
+            [id, strat.id]
+          );
+          const bc = behavCounts[0];
+          if (bc && bc.total_behaviors > 0) {
+            const total = parseInt(bc.total_behaviors) || 0;
+            const positive = parseInt(bc.total_positive) || 0;
+            const ci = wilsonCI(positive, total);
+            strat._fallbackData = { total, positive, ci, avgRating: parseFloat(bc.avg_rating) || 0, uniqueUsers: parseInt(bc.unique_users) || 0 };
+          }
+        } catch (e) { /* behaviors 表可能缺少列 */ }
+        if (!strat.latestMetrics) continue;
+      }
+
+      // 计算后验获胜概率
+      const m = strat.latestMetrics;
+      if (m.win_probability == null && m.bandit_alpha != null && m.bandit_beta != null) {
+        const others = resultsWithData
+          .filter(s => s.id !== strat.id && s.latestMetrics && s.latestMetrics.bandit_alpha != null)
+          .map(s => ({ alpha: s.latestMetrics.bandit_alpha, beta: s.latestMetrics.bandit_beta }));
+        if (others.length > 0) {
+          m.win_probability = await bayesianApproxWinProb(m.bandit_alpha, m.bandit_beta, others);
+        }
+      }
+    }
+
+    // 第三遍：对仅有 behavior 回退数据的策略，构建 latestMetrics 并计算统计量
+    const control = exp.strategies.find(s => s.is_control === 1) || exp.strategies[0];
+    const controlFb = control._fallbackData;
+
+    for (const strat of exp.strategies) {
+      if (strat.latestMetrics) continue;
+      const fb = strat._fallbackData;
+      if (!fb) continue;
+
+      const ctr = fb.total > 0 ? (fb.positive / fb.total * 100) : 0;
+      let pValue = null;
+      let winProb = null;
+
+      if (controlFb && strat.id !== control.id) {
+        pValue = wilsonPValue(fb.positive, fb.total, controlFb.positive, controlFb.total);
+        // 近似贝叶斯获胜概率
+        const a1 = fb.positive + 1, b1 = Math.max(fb.total - fb.positive, 0) + 1;
+        const a2 = controlFb.positive + 1, b2 = Math.max(controlFb.total - controlFb.positive, 0) + 1;
+        winProb = await bayesianApproxWinProb(a1, b1, [{ alpha: a2, beta: b2 }]);
+      }
+
+      strat.latestMetrics = {
+        total_exposures: fb.total,
+        total_behaviors: fb.total,
+        total_positive: fb.positive,
+        unique_users: fb.uniqueUsers,
+        avg_rating: fb.avgRating,
+        ctr: ctr,
+        ctr_ci_lower: fb.ci.lower * 100,
+        ctr_ci_upper: fb.ci.upper * 100,
+        p_value: pValue,
+        win_probability: winProb,
+        is_converged: (pValue !== null && pValue < 0.05) ? 1 : 0,
+        bandit_alpha: fb.positive + 1,
+        bandit_beta: Math.max(fb.total - fb.positive, 0) + 1
+      };
+    }
+
+    // 第四遍：为对照组补算 p 值与获胜概率（与最佳实验组对比）
+    if (control && control.latestMetrics) {
+      const cm = control.latestMetrics;
+      if (cm.p_value == null) {
+        const bestTreatment = exp.strategies
+          .filter(s => s.id !== control.id && s.latestMetrics && s.latestMetrics.ctr != null)
+          .sort((a, b) => b.latestMetrics.ctr - a.latestMetrics.ctr)[0];
+        if (bestTreatment) {
+          const bm = bestTreatment.latestMetrics;
+          const cPos = cm.total_positive || 0;
+          const cTotal = cm.total_behaviors || cm.total_exposures || 0;
+          const bPos = bm.total_positive || 0;
+          const bTotal = bm.total_behaviors || bm.total_exposures || 0;
+          if (cTotal > 0 && bTotal > 0) {
+            cm.p_value = wilsonPValue(cPos, cTotal, bPos, bTotal);
+            cm.is_converged = (cm.p_value !== null && cm.p_value < 0.05) ? 1 : 0;
+          }
+          const a1 = cPos + 1, b1 = Math.max(cTotal - cPos, 0) + 1;
+          const a2 = bPos + 1, b2 = Math.max(bTotal - bPos, 0) + 1;
+          cm.win_probability = await bayesianApproxWinProb(a1, b1, [{ alpha: a2, beta: b2 }]);
+        }
+      }
+    }
+
+    // 清理临时数据
+    for (const strat of exp.strategies) {
+      delete strat._fallbackData;
     }
 
     res.json({ success: true, data: exp });
@@ -1108,7 +1327,7 @@ exports.stopExperiment = async (req, res) => {
       return res.status(404).json({ success: false, message: '实验不存在' });
     }
 
-    const conn = await db.getConnection();
+    const conn = await db.pool.getConnection();
     try {
       await conn.beginTransaction();
 
@@ -1129,16 +1348,16 @@ exports.stopExperiment = async (req, res) => {
 
         // 记录推全日志
         await conn.query(
-          'INSERT INTO ab_results (experiment_id, strategy_id, summary, analyzed_at) VALUES (?, ?, ?, NOW())',
-          [id, pushStrategyId, JSON.stringify({ action: 'promoted', message: '手动推全' })]
+          'INSERT INTO ab_results (experiment_id, strategy_id, analysis_time, period_start, period_end, is_converged) VALUES (?, ?, NOW(), NOW(), NOW(), 1)',
+          [id, pushStrategyId]
         );
       }
 
       if (fallbackToDefault) {
-        // 回退：将所有策略权重重置为初始值
+        // 回退：将所有策略权重重置为手动
         await conn.query(
           'UPDATE ab_strategies SET traffic_percentage = 0, weight_source = ? WHERE experiment_id = ?',
-          ['reset', id]
+          ['manual', id]
         );
       }
 
@@ -1203,20 +1422,20 @@ exports.getExperimentMetrics = async (req, res) => {
       const metrics = await db.query(
         `SELECT
            COUNT(*) AS total_exposures,
-           SUM(CASE WHEN behavior_type IN ('click', 'rate', 'collect') THEN 1 ELSE 0 END) AS total_positive,
+           SUM(CASE WHEN behavior_type IN ('view', 'like', 'collect') OR (behavior_type = 'rate' AND rating >= 4) THEN 1 ELSE 0 END) AS total_positive,
            COUNT(DISTINCT user_id) AS unique_users,
-           AVG(CASE WHEN behavior_type = 'rate' THEN rating_value ELSE NULL END) AS avg_rating,
-           ROUND(SUM(CASE WHEN behavior_type IN ('click', 'rate', 'collect') THEN 1 ELSE 0 END) / COUNT(*) * 100, 4) AS ctr
+           AVG(CASE WHEN behavior_type = 'rate' THEN rating ELSE NULL END) AS avg_rating,
+           ROUND(SUM(CASE WHEN behavior_type IN ('view', 'like', 'collect') OR (behavior_type = 'rate' AND rating >= 4) THEN 1 ELSE 0 END) / COUNT(*) * 100, 4) AS ctr
          FROM users_movies_behaviors
          WHERE experiment_id = ? AND strategy_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)`,
         [id, strat.id, lookbackDays]
       );
 
-      // 获取最近 7 天的时序趋势
+      // 获取最近 N 天的时序趋势
       const trend = await db.query(
         `SELECT DATE(created_at) AS date,
                 COUNT(*) AS exposures,
-                SUM(CASE WHEN behavior_type IN ('click', 'rate', 'collect') THEN 1 ELSE 0 END) AS positives
+                SUM(CASE WHEN behavior_type IN ('view', 'like', 'collect') OR (behavior_type = 'rate' AND rating >= 4) THEN 1 ELSE 0 END) AS positives
          FROM users_movies_behaviors
          WHERE experiment_id = ? AND strategy_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
          GROUP BY DATE(created_at) ORDER BY date`,
@@ -1243,5 +1462,113 @@ exports.getExperimentMetrics = async (req, res) => {
   } catch (err) {
     console.error('获取实验指标失败:', err);
     res.status(500).json({ success: false, message: '获取实验指标失败: ' + err.message });
+  }
+};
+
+/**
+ * POST /api/admin/experiments/:id/seed
+ * 为指定实验生成模拟测试数据（仅限非生产环境使用）
+ * body: { userCount?: 30, behaviorCount?: 200 }
+ */
+exports.seedExperiment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userCount = 30, behaviorCount = 200 } = req.body;
+
+    const exps = await db.query('SELECT * FROM ab_experiments WHERE id = ?', [id]);
+    if (exps.length === 0) {
+      return res.status(404).json({ success: false, message: '实验不存在' });
+    }
+    const exp = exps[0];
+
+    const strategies = await db.query(
+      'SELECT * FROM ab_strategies WHERE experiment_id = ? ORDER BY id', [id]
+    );
+    if (strategies.length === 0) {
+      return res.status(400).json({ success: false, message: '实验无策略' });
+    }
+
+    const users = await db.query(
+      'SELECT id FROM users ORDER BY id LIMIT ?', [Math.max(userCount, 10)]
+    );
+    const movies = await db.query(
+      'SELECT id FROM movies ORDER BY RAND() LIMIT ?', [Math.max(Math.ceil(behaviorCount / strategies.length), 20)]
+    );
+
+    if (users.length === 0) {
+      return res.status(400).json({ success: false, message: '数据库无用户，请先添加用户' });
+    }
+    if (movies.length === 0) {
+      return res.status(400).json({ success: false, message: '数据库无电影，请先添加电影' });
+    }
+
+    // 用哈希分桶模拟固定比例分流，计算每个策略的流量区间
+    const crypto = require('crypto');
+    function computeBucket(uid) {
+      const hash = crypto.createHash('md5').update(String(uid)).digest('hex');
+      return parseInt(hash.substring(0, 8), 16) % 100;
+    }
+
+    let rangeStart = 0;
+    const stratRanges = strategies.map(s => {
+      const end = rangeStart + Math.round(parseFloat(s.traffic_percentage)) - 1;
+      const r = { id: s.id, name: s.name, start: rangeStart, end: end >= 100 ? 99 : end };
+      rangeStart = end + 1;
+      return r;
+    });
+
+    let insertedViews = 0, insertedRates = 0;
+    const values = [];
+    const batchSize = 100;
+
+    for (let i = 0; i < behaviorCount; i++) {
+      const user = users[Math.floor(Math.random() * users.length)];
+      const movie = movies[Math.floor(Math.random() * movies.length)];
+      const bucket = computeBucket(user.id);
+      const sr = stratRanges.find(r => bucket >= r.start && bucket <= r.end) || stratRanges[0];
+
+      // 随机行为类型：70% view, 30% rate
+      const isRate = Math.random() < 0.3;
+
+      if (isRate) {
+        const rating = Math.floor(Math.random() * 3) + 3;
+        const requestId = require('crypto').randomUUID();
+        values.push(
+          `(${user.id}, ${movie.id}, 'rate', ${rating}, '${requestId}', ${id}, ${sr.id}, 0)`
+        );
+        insertedRates++;
+      } else {
+        const requestId = require('crypto').randomUUID();
+        const progress = Math.floor(Math.random() * 7200);
+        values.push(
+          `(${user.id}, ${movie.id}, 'view', NULL, '${requestId}', ${id}, ${sr.id}, ${progress})`
+        );
+        insertedViews++;
+      }
+
+      if (values.length >= batchSize) {
+        const cols = 'user_id, movie_id, behavior_type, rating, request_id, experiment_id, strategy_id';
+        const extraCols = ', progress_seconds';
+        const sql = `INSERT INTO users_movies_behaviors (${cols}${extraCols}) VALUES ${values.join(',')}`;
+        await db.query(sql);
+        values.length = 0;
+      }
+    }
+
+    if (values.length > 0) {
+      const cols = 'user_id, movie_id, behavior_type, rating, request_id, experiment_id, strategy_id';
+      const extraCols = ', progress_seconds';
+      const sql = `INSERT INTO users_movies_behaviors (${cols}${extraCols}) VALUES ${values.join(',')}`;
+      await db.query(sql);
+    }
+
+    res.json({
+      success: true,
+      message: `已生成 ${insertedViews} 条观看 + ${insertedRates} 条评分记录`,
+      data: { views: insertedViews, rates: insertedRates }
+    });
+  } catch (err) {
+    console.error('种子数据生成失败:', err);
+    res.status(500).json({ success: false, message: '种子数据生成失败: ' + err.message });
   }
 };

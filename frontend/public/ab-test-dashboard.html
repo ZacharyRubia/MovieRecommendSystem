@@ -86,17 +86,17 @@
       padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;
       font-size: 14px; font-weight: 500; transition: all 0.2s;
     }
-    .btn-primary { background: #007bff; color: white; }
-    .btn-primary:hover { background: #0056b3; }
-    .btn-success { background: #28a745; color: white; }
-    .btn-success:hover { background: #1e7e34; }
-    .btn-danger { background: #dc3545; color: white; }
-    .btn-danger:hover { background: #b02a37; }
-    .btn-warning { background: #ffc107; color: #222; }
-    .btn-warning:hover { background: #e0a800; }
+    .btn-primary { background: #111; color: #fff; }
+    .btn-primary:hover { background: #333; }
+    .btn-success { background: #333; color: #fff; }
+    .btn-success:hover { background: #555; }
+    .btn-danger { background: #cc0000; color: #fff; }
+    .btn-danger:hover { background: #aa0000; }
+    .btn-warning { background: #555; color: #fff; }
+    .btn-warning:hover { background: #777; }
     .btn-sm { padding: 6px 12px; font-size: 12px; }
-    .btn-outline { background: transparent; border: 1px solid #007bff; color: #007bff; }
-    .btn-outline:hover { background: #007bff; color: white; }
+    .btn-outline { background: transparent; border: 2px solid #111; color: #111; }
+    .btn-outline:hover { background: #111; color: #fff; }
 
     /* 实验卡片 */
     .experiment-card {
@@ -170,7 +170,7 @@
       font-size: 14px; transition: border-color 0.2s;
     }
     .modal input:focus, .modal select:focus, .modal textarea:focus {
-      outline: none; border-color: #007bff;
+      outline: none; border-color: #111;
     }
     .modal textarea { resize: vertical; min-height: 60px; }
     .modal .btn-row { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
@@ -218,7 +218,7 @@
     }
     .spinner {
       display: inline-block; width: 32px; height: 32px;
-      border: 3px solid #ddd; border-top-color: #007bff;
+      border: 3px solid #ddd; border-top-color: #111;
       border-radius: 50%; animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -231,7 +231,7 @@
     }
     .toast-success { background: #28a745; }
     .toast-error { background: #dc3545; }
-    .toast-info { background: #007bff; }
+    .toast-info { background: #111; }
     @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
     /* 颜色方案 */
@@ -252,17 +252,49 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <h1>🎬 电影管理系统</h1>
-      <p>推荐系统 A/B 测试</p>
+      <p>Movie Recommend Admin</p>
     </div>
     <nav class="sidebar-nav">
       <a class="nav-item" href="user-management.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        <span>仪表盘</span>
+        <span>数据概览</span>
       </a>
-      <div class="nav-item active" data-page="abtest">
+      <a class="nav-item" href="user-management.html?page=movies">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg>
+        <span>电影管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=tags">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        <span>标签管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=genres">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span>题材管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=directors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        <span>导演管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=actors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>演员管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=users">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        <span>用户管理</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=comments">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>评论管理</span>
+      </a>
+      <a class="nav-item active" href="user-management.html?page=abtest">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
-        <span>A/B 测试实验</span>
-      </div>
+        <span>A/B 测试</span>
+      </a>
+      <a class="nav-item" href="user-management.html?page=profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v6M9 14h6"/></svg>
+        <span>个人设置</span>
+      </a>
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
@@ -310,23 +342,26 @@
         <option value="fixed">固定比例（Fixed）</option>
         <option value="bandit">自适应（Bandit）</option>
       </select>
-      <label>开始时间 *</label>
-      <input id="startTime" type="datetime-local" required>
-      <label>结束时间</label>
+      <label>开始时间</label>
+      <input id="startTime" type="datetime-local">
+      <label>结束时间（可选）</label>
       <input id="endTime" type="datetime-local">
       <label>实验策略配置</label>
       <div class="strategies-panel" id="strategiesPanel">
         <div class="strategy-row" data-idx="0">
           <input class="str-name" placeholder="策略名称" value="对照组">
           <select class="str-algo">
+            <option value="hybrid">Hybrid(混合)</option>
             <option value="svd">SVD</option>
-            <option value="usercf">UserCF</option>
-            <option value="itemcf">ItemCF</option>
-            <option value="hybrid" selected>Hybrid</option>
-            <option value="slopeone">SlopeOne</option>
-            <option value="turbocf">TurboCF</option>
+            <option value="user_cf_traditional">UserCF</option>
+            <option value="user_cf_improved">UserCF+</option>
+            <option value="item_cf_traditional">ItemCF</option>
+            <option value="item_cf_improved">ItemCF+</option>
+            <option value="slope_one_traditional">SlopeOne</option>
+            <option value="slope_one_improved">SlopeOne+</option>
+            <option value="turbo_cf">TurboCF</option>
           </select>
-          <input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重">
+          <input class="str-weight" type="number" min="1" max="99" step="1" value="50" placeholder="流量%">
           <button class="btn btn-danger btn-sm str-remove" onclick="removeStrategy(this)">×</button>
         </div>
       </div>
@@ -395,14 +430,17 @@
         <div class="strategy-row" data-idx="0">
           <input class="str-name" placeholder="策略名称" value="对照组">
           <select class="str-algo">
+            <option value="hybrid">Hybrid(混合)</option>
             <option value="svd">SVD</option>
-            <option value="usercf">UserCF</option>
-            <option value="itemcf">ItemCF</option>
-            <option value="hybrid" selected>Hybrid</option>
-            <option value="slopeone">SlopeOne</option>
-            <option value="turbocf">TurboCF</option>
+            <option value="user_cf_traditional">UserCF</option>
+            <option value="user_cf_improved">UserCF+</option>
+            <option value="item_cf_traditional">ItemCF</option>
+            <option value="item_cf_improved">ItemCF+</option>
+            <option value="slope_one_traditional">SlopeOne</option>
+            <option value="slope_one_improved">SlopeOne+</option>
+            <option value="turbo_cf">TurboCF</option>
           </select>
-          <input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重">
+          <input class="str-weight" type="number" min="1" max="99" step="1" value="50" placeholder="流量%">
           <button class="btn btn-danger btn-sm str-remove" onclick="removeStrategy(this)">×</button>
         </div>
       `;
@@ -430,14 +468,17 @@
       row.innerHTML = `
         <input class="str-name" placeholder="策略名称" value="实验组 ${strategyCounter}">
         <select class="str-algo">
+          <option value="hybrid">Hybrid(混合)</option>
           <option value="svd">SVD</option>
-          <option value="usercf">UserCF</option>
-          <option value="itemcf">ItemCF</option>
-          <option value="hybrid" selected>Hybrid</option>
-          <option value="slopeone">SlopeOne</option>
-          <option value="turbocf">TurboCF</option>
+          <option value="user_cf_traditional">UserCF</option>
+          <option value="user_cf_improved">UserCF+</option>
+          <option value="item_cf_traditional">ItemCF</option>
+          <option value="item_cf_improved">ItemCF+</option>
+          <option value="slope_one_traditional">SlopeOne</option>
+          <option value="slope_one_improved">SlopeOne+</option>
+          <option value="turbo_cf">TurboCF</option>
         </select>
-        <input class="str-weight" type="number" min="0.01" max="0.99" step="0.01" value="0.50" placeholder="权重">
+        <input class="str-weight" type="number" min="1" max="99" step="1" value="50" placeholder="流量%">
         <button class="btn btn-danger btn-sm str-remove" onclick="removeStrategy(this)">×</button>
       `;
       panel.appendChild(row);
@@ -456,8 +497,7 @@
     // ===== 加载实验列表 =====
     async function loadExperiments() {
       const container = document.getElementById('experimentList');
-      const loading = document.getElementById('loadingIndicator');
-      loading.style.display = 'block';
+      if (!container) return;
       container.innerHTML = '<div class="loading" id="loadingIndicator"><div class="spinner"></div><p style="margin-top:12px;">加载实验中...</p></div>';
 
       try {
@@ -557,14 +597,14 @@
           <div style="font-size:12px;color:#888;margin-bottom:4px;">流量分配</div>
           <div class="traffic-bar-container">
             ${strategies.map((s, i) => {
-              const pct = s.traffic_percentage || s.initial_weight * 100 || 0;
+              const pct = parseFloat(s.traffic_percentage) || 0;
               return `<div class="traffic-bar-segment ${colors[i % colors.length]}" style="width:${pct}%;min-width:${pct > 0 ? 20 : 0}px;">${pct > 5 ? Math.round(pct)+'%' : ''}</div>`;
             }).join('')}
           </div>
           <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">
             ${strategies.map((s, i) => {
-              const pct = s.traffic_percentage || s.initial_weight * 100 || 0;
-              return `<span style="font-size:11px;color:#888;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;${colors[i % colors.length].replace('background','background-color')};margin-right:4px;"></span>${s.name}: ${Math.round(pct)}%</span>`;
+              const pct = parseFloat(s.traffic_percentage) || 0;
+              return `<span style="font-size:11px;color:#888;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${['#007bff','#28a745','#ffc107','#dc3545','#17a2b8','#6f42c1','#fd7e14','#20c997','#e83e8c','#6610f2'][i]};margin-right:4px;"></span>${s.name}: ${Math.round(pct)}%</span>`;
             }).join('')}
           </div>
         </div>
@@ -573,24 +613,24 @@
 
     function renderStrategyRow(s, idx, status) {
       const m = s.latestMetrics || {};
-      const ctr = s.metrics ? s.metrics.ctr : (s.ctr || '-');
-      const ciLower = m.ctr_ci_lower || '-';
-      const ciUpper = m.ctr_ci_upper || '-';
+      const ctr = m.ctr != null ? (m.ctr * 100) : '-';
+      const ciLower = m.ctr_ci_lower != null ? (m.ctr_ci_lower * 100) : null;
+      const ciUpper = m.ctr_ci_upper != null ? (m.ctr_ci_upper * 100) : null;
       const pVal = m.p_value;
-      const pClass = pVal !== undefined && pVal < 0.05 ? 'p-significant' : (pVal !== undefined ? 'p-not-significant' : '');
-      const pDisplay = pVal !== undefined ? pVal.toFixed(4) : '-';
-      const winProb = m.win_probability !== undefined ? (m.win_probability * 100).toFixed(1) + '%' : '-';
-      const convergent = m.is_converged !== undefined ? (m.is_converged ? '✅ 已收敛' : '⏳ 收集中') : '-';
-      const users = s.metrics ? (s.metrics.unique_users || '-') : '-';
-      const exposures = s.metrics ? (s.metrics.total_exposures || s.metrics.exposures || 0) : 0;
-      const trafficPct = s.traffic_percentage || (s.initial_weight * 100) || '-';
+      const pClass = pVal != null && pVal < 0.05 ? 'p-significant' : (pVal != null ? 'p-not-significant' : '');
+      const pDisplay = pVal != null ? pVal.toFixed(4) : '-';
+      const winProb = '-';
+      const convergent = m.is_converged ? '✅ 已收敛' : '-';
+      const users = m.unique_users || 0;
+      const exposures = m.total_exposures || 0;
+      const trafficPct = parseFloat(s.traffic_percentage) || 0;
 
       return `
         <tr>
           <td>
             <span class="strategy-name">${s.name}</span>
-            ${s.is_winner ? '<span class="winner-badge" style="margin-left:6px;">🏆 胜出</span>' : ''}
-            ${status === 'running' && s.weight_source === 'adaptive' ? '<span style="font-size:11px;color:#17a2b8;margin-left:4px;">自适应</span>' : ''}
+            ${m.is_winner ? '<span class="winner-badge" style="margin-left:6px;">🏆 胜出</span>' : ''}
+            ${status === 'running' && s.weight_source === 'bandit' ? '<span style="font-size:11px;color:#17a2b8;margin-left:4px;">自适应</span>' : ''}
           </td>
           <td><code>${s.algorithm || '-'}</code></td>
           <td>${trafficPct}%</td>
@@ -598,8 +638,8 @@
           <td class="metric-value">${typeof ctr === 'number' ? ctr.toFixed(2) + '%' : ctr}</td>
           <td>
             <span class="metric-ci">
-              ${ciLower !== '-' ? '[' + ciLower.toFixed(2) + '%' : '['}
-              ${ciUpper !== '-' ? ', ' + ciUpper.toFixed(2) + '%]' : '-]'}
+              ${ciLower != null ? '[' + ciLower.toFixed(2) + '%' : '['}
+              ${ciUpper != null ? ', ' + ciUpper.toFixed(2) + '%]' : '-]'}
             </span>
           </td>
           <td class="p-value ${pClass}">${pDisplay}</td>
@@ -628,7 +668,7 @@
         const name = row.querySelector('.str-name').value.trim() || `策略 ${i+1}`;
         const algo = row.querySelector('.str-algo').value;
         const weight = parseFloat(row.querySelector('.str-weight').value) || 0.1;
-        strategies.push({ name, algorithm_key: algo, initial_weight: weight });
+        strategies.push({ name, algorithm: algo, trafficPercentage: weight });
       });
 
       if (strategies.length < 1) {
@@ -636,16 +676,16 @@
         return;
       }
 
-      // 权重归一化
-      const totalWeight = strategies.reduce((sum, s) => sum + s.initial_weight, 0);
-      strategies.forEach(s => s.initial_weight = s.initial_weight / totalWeight);
+      // 权重归一化到 0-100 百分比
+      const totalWeight = strategies.reduce((sum, s) => sum + s.trafficPercentage, 0);
+      strategies.forEach(s => s.trafficPercentage = Math.round(s.trafficPercentage / totalWeight * 10000) / 100);
 
       const body = {
         name,
         description,
-        split_mode: splitMode,
-        start_time: startTime,
-        end_time: endTime,
+        splitMode,
+        startTime,
+        endTime: endTime || null,
         strategies
       };
 
@@ -739,15 +779,15 @@
             </div>
             <div class="detail-item">
               <div class="label">总曝光</div>
-              <div class="value">${strategies.reduce((sum,s) => sum + (s.metrics?.total_exposures || 0), 0).toLocaleString()}</div>
+              <div class="value">${strategies.reduce((sum,s) => sum + ((s.latestMetrics && s.latestMetrics.total_exposures) || 0), 0).toLocaleString()}</div>
             </div>
             <div class="detail-item">
               <div class="label">总用户数</div>
-              <div class="value">${strategies.reduce((sum,s) => sum + (s.metrics?.unique_users || 0), 0).toLocaleString()}</div>
+              <div class="value">${strategies.reduce((sum,s) => sum + ((s.latestMetrics && s.latestMetrics.unique_users) || 0), 0).toLocaleString()}</div>
             </div>
             <div class="detail-item">
               <div class="label">获胜策略</div>
-              <div class="value">${strategies.find(s => s.is_winner)?.name || '暂无'}</div>
+              <div class="value">${strategies.find(s => s.latestMetrics && s.latestMetrics.is_winner)?.name || '暂无'}</div>
             </div>
           </div>
 
@@ -772,34 +812,36 @@
             <tbody>
               ${strategies.map(s => {
                 const m = s.latestMetrics || {};
-                const ctr = s.metrics?.ctr || (s.ctr || '-');
+                const ctr = m.ctr != null ? (m.ctr * 100) : '-';
                 return `<tr>
-                  <td><strong>${s.name}</strong> ${s.is_winner ? '🏆' : ''}</td>
+                  <td><strong>${s.name}</strong> ${m.is_winner ? '🏆' : ''}</td>
                   <td><code>${s.algorithm || '-'}</code></td>
-                  <td>${(s.metrics?.total_exposures || 0).toLocaleString()}</td>
-                  <td>${(s.metrics?.total_positive || s.metrics?.clicks || 0).toLocaleString()}</td>
+                  <td>${(m.total_exposures || 0).toLocaleString()}</td>
+                  <td>${(m.total_positive || m.total_clicks || 0).toLocaleString()}</td>
                   <td class="metric-value">${typeof ctr === 'number' ? ctr.toFixed(2)+'%' : ctr}</td>
-                  <td class="metric-ci">${m.ctr_ci_lower !== undefined ? '['+m.ctr_ci_lower.toFixed(2)+'%' : '['}${m.ctr_ci_upper !== undefined ? ', '+m.ctr_ci_upper.toFixed(2)+'%]' : '-]'}</td>
-                  <td class="${m.p_value !== undefined && m.p_value < 0.05 ? 'p-significant' : ''}">${m.p_value !== undefined ? m.p_value.toFixed(4) : '-'}</td>
-                  <td>${m.win_probability !== undefined ? (m.win_probability*100).toFixed(1)+'%' : '-'}</td>
-                  <td class="${m.is_converged ? 'converged-yes' : 'converged-no'}">${m.is_converged !== undefined ? (m.is_converged ? '✅' : '⏳') : '-'}</td>
-                  <td>${s.metrics?.unique_users || '-'}</td>
-                  <td>${s.alpha ?? '-'}</td>
-                  <td>${s.beta ?? '-'}</td>
+                  <td class="metric-ci">${m.ctr_ci_lower != null ? '['+(m.ctr_ci_lower*100).toFixed(2)+'%' : '['}${m.ctr_ci_upper != null ? ', '+(m.ctr_ci_upper*100).toFixed(2)+'%]' : '-]'}</td>
+                  <td class="${m.p_value != null && m.p_value < 0.05 ? 'p-significant' : ''}">${m.p_value != null ? m.p_value.toFixed(4) : '-'}</td>
+                  <td>-</td>
+                  <td class="${m.is_converged ? 'converged-yes' : 'converged-no'}">${m.is_converged != null ? (m.is_converged ? '✅' : '⏳') : '-'}</td>
+                  <td>${m.unique_users || '-'}</td>
+                  <td>${s.bandit_alpha != null ? s.bandit_alpha : '-'}</td>
+                  <td>${s.bandit_beta != null ? s.bandit_beta : '-'}</td>
                 </tr>`;
               }).join('')}
             </tbody>
           </table>
 
-          ${strategies.some(s => s.alpha) ? `
+          ${strategies.some(s => s.bandit_alpha && s.bandit_alpha > 1) ? `
           <div class="section-title">Thompson Sampling 后验分布</div>
           <div style="display:flex;gap:16px;flex-wrap:wrap;">
-            ${strategies.filter(s => s.alpha).map(s => {
-              const expected = s.alpha / (s.alpha + s.beta);
+            ${strategies.filter(s => s.bandit_alpha && s.bandit_alpha > 1).map(s => {
+              const alpha = parseFloat(s.bandit_alpha);
+              const beta = parseFloat(s.bandit_beta);
+              const expected = alpha / (alpha + beta);
               return `<div style="flex:1;min-width:150px;padding:12px;background:#f8f9fa;border-radius:8px;">
                 <div style="font-size:12px;color:#888;">${s.name}</div>
                 <div style="font-size:16px;font-weight:600;">期望 θ = ${(expected*100).toFixed(1)}%</div>
-                <div style="font-size:12px;color:#666;">α=${s.alpha} β=${s.beta}</div>
+                <div style="font-size:12px;color:#666;">α=${alpha} β=${beta}</div>
               </div>`;
             }).join('')}
           </div>` : ''}

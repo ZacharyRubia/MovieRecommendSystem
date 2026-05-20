@@ -471,10 +471,14 @@ async function aiModelRecommend(req, res) {
 
     console.log(`[AI 推荐] 用户 ${uid}, 算法 ${effectiveAlgo}, Top-N ${n}`);
 
+  // 获取中间件注入的实验信息
+  const experiment = req.experiment || null;
+
   // 使用预训练模型引擎进行快速推荐
   // 引擎通过 JSON 模型文件预测（首次加载 ~67MB 模型可能较慢），使用超时保护
+  // V2 引擎支持 A/B 实验策略路由
   const result = await withTimeout(
-    recommendEngine.getRecommendations(uid, effectiveAlgo, n),
+    recommendEngine.getRecommendationsV2(uid, effectiveAlgo, n, { experiment }),
     REQUEST_TIMEOUT
   );
 
@@ -499,9 +503,6 @@ async function aiModelRecommend(req, res) {
     degraded = true;
     effectiveAlgoDisplay = 'popular';
   }
-
-  // 从中间件获取实验信息
-  const experiment = req.experiment || null;
 
   // 返回格式兼容前端（含 source: 'ai-model' 标识）
   res.json({

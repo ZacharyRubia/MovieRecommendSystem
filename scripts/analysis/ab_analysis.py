@@ -126,7 +126,7 @@ def load_behavior_data(
 
     placeholders = ','.join(['%s'] * len(strategy_ids))
     sql = f"""
-        SELECT strategy_id, user_id, behavior_type, rating_value, watch_seconds
+        SELECT strategy_id, user_id, behavior_type, rating, duration_seconds, progress_seconds
         FROM users_movies_behaviors
         WHERE experiment_id = %s
           AND strategy_id IN ({placeholders})
@@ -215,22 +215,27 @@ def compute_metrics(
             unique_users.add(user_id)
 
         bt = row.get('behavior_type', '')
-        rv = row.get('rating_value') or 0
+        rv = row.get('rating') or 0
 
-        if bt == 'click':
+        if bt == 'view':
+            total_clicks += 1
+            positive_events += 1
+        elif bt == 'like':
             total_clicks += 1
             positive_events += 1
         elif bt == 'rate':
             total_ratings += 1
             if float(rv) >= positive_rating_threshold:
                 positive_events += 1
-        elif bt == 'favorite':
+        elif bt == 'collect':
             total_collects += 1
             positive_events += 1
-        elif bt == 'play':
-            ws = float(row.get('watch_seconds') or 0)
+        elif bt == 'share':
+            positive_events += 1
+        else:
+            ws = float(row.get('duration_seconds') or 0)
             total_watch_seconds += ws
-            if ws > 30:  # 播放超过 30 秒算正向
+            if ws > 30:
                 positive_events += 1
 
     ctr = positive_events / total_exposures
@@ -472,7 +477,7 @@ def store_results(
         with conn.cursor() as cursor:
             cursor.execute("""
                 INSERT INTO ab_results (
-                    experiment_id, strategy_id, analyzed_at,
+                    experiment_id, strategy_id, analysis_time,
                     period_start, period_end,
                     total_exposures, total_clicks, total_ratings,
                     total_collects, total_watch_seconds, unique_users,
@@ -577,7 +582,7 @@ def check_convergence(
         cursor.execute("""
             SELECT is_winner FROM ab_results
             WHERE experiment_id = %s AND strategy_id = %s
-            ORDER BY analyzed_at DESC
+            ORDER BY analysis_time DESC
             LIMIT %s
         """, (exp_id, best_sid, cfg.CONVERGE_CONSECUTIVE_CYCLES))
         recent_results = cursor.fetchall()

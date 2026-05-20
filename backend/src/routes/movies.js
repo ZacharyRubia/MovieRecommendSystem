@@ -39,4 +39,8 @@ router.delete('/comments/:commentId', clearCache(CACHE_KEYS.MOVIES), clearCache(
 // 记录用户观看行为（不缓存）
 router.post('/:movieId/view', moviesController.recordView);
 
+// 点赞/收藏
+router.post('/:movieId/like', moviesController.toggleLike);
+router.post('/:movieId/collect', moviesController.toggleCollect);
+
 module.exports = router;

@@ -87,6 +87,8 @@
     let ffmpegAvailable = false;
     let currentFilename = '';
     let currentTitle = '';
+    let lastViewReport = 0;
+    let viewReportInterval = null;
 
     function goBack() { window.location.href = `/movie-detail.html?id=${movieId}`; }
 
@@ -295,19 +297,54 @@
       isPlaying = true;
       document.getElementById('playBtn').textContent = '⏸';
       document.getElementById('playOverlay').style.display = 'none';
+      startViewReporting();
     }
 
     function onPause() {
       isPlaying = false;
       document.getElementById('playBtn').textContent = '▶';
       document.getElementById('playOverlay').style.display = 'block';
+      stopViewReporting();
     }
 
     function onEnded() {
       isPlaying = false;
       document.getElementById('playBtn').textContent = '▶';
       document.getElementById('playOverlay').style.display = 'block';
+      stopViewReporting();
     }
+
+    function reportView() {
+      if (!currentUser || !video) return;
+      const now = Math.floor(video.currentTime);
+      if (now - lastViewReport < 25) return;
+      lastViewReport = now;
+      fetch(`${API_BASE}/movies/${movieId}/view`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          progressSeconds: now,
+          durationSeconds: Math.floor(video.duration) || 0
+        })
+      }).catch(() => {});
+    }
+
+    function startViewReporting() {
+      if (viewReportInterval) return;
+      reportView();
+      viewReportInterval = setInterval(reportView, 30000);
+    }
+
+    function stopViewReporting() {
+      if (viewReportInterval) {
+        clearInterval(viewReportInterval);
+        viewReportInterval = null;
+      }
+      if (video) reportView();
+    }
+
+    window.addEventListener('beforeunload', () => stopViewReporting());
 
     function updateProgress() {
       if (!video) return;

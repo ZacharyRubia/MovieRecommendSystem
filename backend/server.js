@@ -100,6 +100,7 @@ app.use('/api/admin', adminRouter);
 // A/B 测试中间件与实验服务
 const abTestMiddleware = require('./src/middleware/abTestMiddleware');
 const abTestService = require('./src/services/abTestService');
+const abAnalyzer = require('./src/services/abAnalyzer');
 
 // 推荐路由（应用 A/B 测试中间件）
 const recommendRouter = require('./src/routes/recommend');
@@ -252,4 +253,7 @@ app.listen(PORT, () => {
   console.log(`  POST http://localhost:${PORT}/api/cache/flush`);
   console.log(`  POST http://localhost:${PORT}/api/cache/flush-write-behind`);
   console.log(`  GET  http://localhost:${PORT}/api/cache/write-behind-status`);
+
+  abTestService.startCacheRefresh();
+  abAnalyzer.startAnalysisLoop();
 });
