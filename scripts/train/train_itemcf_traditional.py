@@ -283,11 +283,16 @@ def train_itemcf_traditional(train_df, n_neighbors=30, verbose=False):
     verbose_step("传统 Item-CF - 完成",
         f"邻居数 K={n_neighbors}, RMSE={rmse:.4f}, 耗时={elapsed:.2f}s",
         verbose)
-    
+
+    user_movies_dict = {}
+    for uid, group in train_df.groupby('user_id'):
+        user_movies_dict[int(uid)] = [int(m) for m in group['movie_id'].unique()]
+
     return {
         'algorithm': 'item_cf_traditional',
         'n_neighbors': n_neighbors,
         'item_similarities': item_sim_dict,
+        'user_movies': user_movies_dict,
         'user2idx': user2idx,
         'movie2idx': movie2idx,
         'idx2user': idx2user,

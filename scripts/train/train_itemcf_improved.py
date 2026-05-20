@@ -333,12 +333,17 @@ def train_itemcf_improved(train_df, n_neighbors=30, min_common=3, verbose=False)
         f"邻居数 K={n_neighbors}, min_common={min_common}, "
         f"RMSE={rmse:.4f}, 耗时={elapsed:.2f}s",
         verbose)
-    
+
+    user_movies_dict = {}
+    for uid, group in train_df.groupby('user_id'):
+        user_movies_dict[int(uid)] = [int(m) for m in group['movie_id'].unique()]
+
     return {
         'algorithm': 'item_cf_improved',
         'n_neighbors': n_neighbors,
         'min_common': min_common,
         'item_similarities': item_sim_dict,
+        'user_movies': user_movies_dict,
         'user_means': {int(uid): float(user_means[i]) for i, uid in enumerate(all_users)},
         'user2idx': user2idx,
         'movie2idx': movie2idx,

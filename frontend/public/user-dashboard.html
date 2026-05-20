@@ -350,8 +350,7 @@
       
       <!-- 算法切换标签 -->
       <div id="aiTabContainer" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <button class="ai-tab-btn active" data-algorithm="hybrid" onclick="switchAiAlgorithm('hybrid')">混合推荐</button>
-        <button class="ai-tab-btn" data-algorithm="svd" onclick="switchAiAlgorithm('svd')">SVD</button>
+        <button class="ai-tab-btn active" data-algorithm="svd" onclick="switchAiAlgorithm('svd')">SVD</button>
         <button class="ai-tab-btn" data-algorithm="user_cf_traditional" onclick="switchAiAlgorithm('user_cf_traditional')">User-CF传统</button>
         <button class="ai-tab-btn" data-algorithm="user_cf_improved" onclick="switchAiAlgorithm('user_cf_improved')">User-CF改进</button>
         <button class="ai-tab-btn" data-algorithm="item_cf_traditional" onclick="switchAiAlgorithm('item_cf_traditional')">Item-CF传统</button>
@@ -603,7 +602,7 @@
     // AI 模型推荐（独立区域，切换算法）
     // =============================================
 
-    let currentAiAlgorithm = 'hybrid';
+    let currentAiAlgorithm = 'svd';
     let aiModelMeta = null;
 
     /**
@@ -651,7 +650,6 @@
 
     // 算法中文名映射
     const algorithmNames = {
-      'hybrid': '混合推荐',
       'svd': 'SVD',
       'user_cf_traditional': 'User-CF传统',
       'user_cf_improved': 'User-CF改进',

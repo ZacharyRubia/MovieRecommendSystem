@@ -169,7 +169,7 @@ def compute_item_deviations(train_df, movie2idx, n_movies, verbose=False):
     return dev_matrix, freq_matrix
 
 
-def train_slopeone_traditional(train_df, verbose=False):
+def train_slopeone_traditional(train_df, verbose=False, skip_rmse=False):
     """
     传统 Slope One 训练
     - 偏差：dev_ij = (1/|U_ij|) Σ (r_ui - r_uj)
@@ -227,47 +227,53 @@ def train_slopeone_traditional(train_df, verbose=False):
     train_movie_ids = train_df['movie_id'].values.astype(np.int32)
     train_ratings = r_val
 
-    print(f"\n  [RMSE 计算] {_N_CPUS} 进程并行...")
-    verbose_step("RMSE计算", f"开始并行计算训练集 RMSE, {_N_CPUS} 进程", verbose)
+    if skip_rmse:
+        print(f"  [跳过 RMSE 计算]（--skip-rmse 模式，仅构建模型）")
+        verbose_step("RMSE计算", "跳过 RMSE 计算", verbose)
+        rmse = None
+        elapsed = time.time() - start_time
+    else:
+        print(f"\n  [RMSE 计算] {_N_CPUS} 进程并行...")
+        verbose_step("RMSE计算", f"开始并行计算训练集 RMSE, {_N_CPUS} 进程", verbose)
 
-    def _predict_batch(batch_indices):
-        """批量预测"""
-        with threadpool_limits(limits=1, user_api='blas'):
-            n_batch = len(batch_indices)
-            preds = np.zeros(n_batch, dtype=np.float32)
-            for k, i in enumerate(batch_indices):
-                uid = train_user_ids[i]
-                mid = train_movie_ids[i]
-                ui = user2idx.get(uid)
-                mi = movie2idx.get(mid)
+        def _predict_batch(batch_indices):
+            """批量预测"""
+            with threadpool_limits(limits=1, user_api='blas'):
+                n_batch = len(batch_indices)
+                preds = np.zeros(n_batch, dtype=np.float32)
+                for k, i in enumerate(batch_indices):
+                    uid = train_user_ids[i]
+                    mid = train_movie_ids[i]
+                    ui = user2idx.get(uid)
+                    mi = movie2idx.get(mid)
 
-                if ui is None or mi is None:
-                    preds[k] = 3.0
-                    continue
+                    if ui is None or mi is None:
+                        preds[k] = 3.0
+                        continue
 
-                user_row = sparse_R[ui].toarray().ravel()
-                preds[k] = _predict(ui, mi, user_row)
+                    user_row = sparse_R[ui].toarray().ravel()
+                    preds[k] = _predict(ui, mi, user_row)
 
-            return preds
+                return preds
 
-    total = len(train_df)
-    chunk_size_rmse = max(500, total // (_N_CPUS * 4))
-    batches = [list(range(i, min(i + chunk_size_rmse, total))) for i in range(0, total, chunk_size_rmse)]
-    print(f"  {total} 条样本, {len(batches)} 批次")
-    verbose_step("RMSE计算", f"共 {total} 条样本, {len(batches)} 批次", verbose)
+        total = len(train_df)
+        chunk_size_rmse = max(500, total // (_N_CPUS * 4))
+        batches = [list(range(i, min(i + chunk_size_rmse, total))) for i in range(0, total, chunk_size_rmse)]
+        print(f"  {total} 条样本, {len(batches)} 批次")
+        verbose_step("RMSE计算", f"共 {total} 条样本, {len(batches)} 批次", verbose)
 
-    from joblib import Parallel, delayed
-    results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
-        delayed(_predict_batch)(batch) for batch in batches
-    )
+        from joblib import Parallel, delayed
+        results = Parallel(n_jobs=_N_CPUS, prefer='processes', verbose=0)(
+            delayed(_predict_batch)(batch) for batch in batches
+        )
 
-    pred_values = np.concatenate(results).astype(np.float32)
-    rmse = float(np.sqrt(np.mean((pred_values - train_ratings) ** 2)))
-    elapsed = time.time() - start_time
-    print(f"  训练 RMSE: {rmse:.4f}")
-    print(f"  传统 Slope One 训练耗时: {elapsed:.2f} 秒")
-    verbose_step("RMSE计算", f"RMSE={rmse:.4f}", verbose)
-    verbose_step("SlopeOne训练", f"训练完成, 总耗时: {elapsed:.2f} 秒", verbose)
+        pred_values = np.concatenate(results).astype(np.float32)
+        rmse = float(np.sqrt(np.mean((pred_values - train_ratings) ** 2)))
+        elapsed = time.time() - start_time
+        print(f"  训练 RMSE: {rmse:.4f}")
+        print(f"  传统 Slope One 训练耗时: {elapsed:.2f} 秒")
+        verbose_step("RMSE计算", f"RMSE={rmse:.4f}", verbose)
+        verbose_step("SlopeOne训练", f"训练完成, 总耗时: {elapsed:.2f} 秒", verbose)
 
     dev_dict = {}
     n_mi = len(all_movies)
@@ -282,9 +288,15 @@ def train_slopeone_traditional(train_df, verbose=False):
                 dev_dict[mid_i][mid_j] = float(dev_matrix[i, j])
 
     verbose_step("模型构建", f"偏差字典序列化完成, 含 {len(dev_dict)} 个电影条目", verbose)
+
+    user_movies_dict = {}
+    for uid, group in train_df.groupby('user_id'):
+        user_movies_dict[int(uid)] = [int(m) for m in group['movie_id'].unique()]
+
     return {
         'algorithm': 'slope_one_traditional',
         'item_deviations': dev_dict,
+        'user_movies': user_movies_dict,
         'user2idx': user2idx,
         'movie2idx': movie2idx,
         'idx2user': idx2user,
@@ -322,6 +334,8 @@ def save_model(model, name='slope_one_traditional_model', verbose=False):
 def main():
     parser = argparse.ArgumentParser(description='传统 Slope One 模型训练（多线程）')
     parser.add_argument('--n-jobs', type=int, default=None, help='并行进程数')
+    parser.add_argument('--skip-rmse', action='store_true',
+                       help='跳过 RMSE 计算（加速训练，仅构建模型）')
     parser.add_argument('--verbose', action='store_true', help='输出详细步骤日志到 logs/verbose/')
     args = parser.parse_args()
 
@@ -341,7 +355,7 @@ def main():
     verbose_step("数据加载完成", f"加载 {len(ratings_df)} 条评分记录", args.verbose)
 
     verbose_step("开始训练", "执行传统 Slope One 偏差计算与预测", args.verbose)
-    model = train_slopeone_traditional(ratings_df, verbose=args.verbose)
+    model = train_slopeone_traditional(ratings_df, verbose=args.verbose, skip_rmse=args.skip_rmse)
     verbose_step("训练完成", "全局偏差矩阵构建完成", args.verbose)
 
     verbose_step("保存模型", "持久化模型文件...", args.verbose)

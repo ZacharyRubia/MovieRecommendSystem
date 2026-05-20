@@ -1,151 +1,122 @@
-<#
-.SYNOPSIS
-    Run all 8 training scripts in parallel or sequential mode.
-
-.DESCRIPTION
-    Parallel mode (default): Open 8 independent cmd windows to run all scripts simultaneously.
-    Sequential mode:        Run all scripts one by one in the current window.
-
-.PARAMETER Sequential
-    Switch to sequential mode (run scripts one by one).
-
-.PARAMETER Help
-    Show help message.
-
-.EXAMPLE
-    .\run_all_trains.ps1              # Parallel mode (8 windows)
-    .\run_all_trains.ps1 -Sequential  # Sequential mode
-    .\run_all_trains.ps1 -Help        # Show help
-#>
+# run_all_trains.ps1
+# Training script launcher (PowerShell version)
 
 param(
     [switch]$Sequential,
     [switch]$Help
 )
 
-# ── Help ──
+# Help
 if ($Help) {
     Write-Host ""
-    Write-Host "Usage: $($MyInvocation.MyCommand.Name) [options]" -ForegroundColor Cyan
+    Write-Host "Usage: $($MyInvocation.MyCommand.Name) [options]"
     Write-Host ""
-    Write-Host "Options:" -ForegroundColor Green
-    Write-Host "  (no arg)       Open 8 independent cmd windows, run all scripts in parallel"
-    Write-Host "  -Sequential    Run scripts one by one in the current window"
-    Write-Host "  -Help          Show this help message"
+    Write-Host "Options:"
+    Write-Host "  (no arg)       Launch 8 parallel windows (default)"
+    Write-Host "  -Sequential    Run scripts one by one"
+    Write-Host "  -Help          Show this help"
     Write-Host ""
     exit 0
 }
 
-# ── Working directory ──
+# Initialize
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $ScriptDir
 
-# ── Detect conda environment ──
-$CondaEnv = $env:CONDA_DEFAULT_ENV
-
-# ── 8 training scripts ──
+# Script list (fastest first, slope one last)
 $Scripts = @(
     "train_svd.py",
-    "train_slopeone_traditional.py",
-    "train_slopeone_improved.py",
     "train_turbocf.py",
     "train_usercf_traditional.py",
     "train_usercf_improved.py",
     "train_itemcf_traditional.py",
-    "train_itemcf_improved.py"
+    "train_itemcf_improved.py",
+    "train_slopeone_traditional.py",
+    "train_slopeone_improved.py"
 )
 
-# ── Title ──
+$TotalCount = $Scripts.Count
+
+# Header
 Write-Host ""
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "  MovieRecommendSystem - Training Launcher" -ForegroundColor Cyan
-Write-Host "  Directory: $ScriptDir" -ForegroundColor Cyan
-if ($CondaEnv) {
-    Write-Host "  Conda Env: $CondaEnv" -ForegroundColor Cyan
-}
-Write-Host "=============================================" -ForegroundColor Cyan
+Write-Host "=== MovieRecommendSystem Training Launcher ==="
+Write-Host "Path: $ScriptDir"
+Write-Host "Mode: $(if ($Sequential) { 'Sequential' } else { 'Parallel' })"
 Write-Host ""
 
-# ──────────────────────────────────────
-#  PARALLEL MODE
-# ──────────────────────────────────────
+# Parallel Mode
 if (-not $Sequential) {
-    Write-Host "[START] Parallel mode - opening 8 independent windows..." -ForegroundColor Yellow
+    Write-Host "[Mode] Parallel - Launching 8 independent windows"
     Write-Host ""
 
     foreach ($s in $Scripts) {
-        $WindowTitle = "Training - $s"
-        Write-Host "    Launching: $s" -ForegroundColor Green
-
-        if ($CondaEnv) {
-            $cmdArgs = "/c title $WindowTitle & python.exe $s --verbose & pause"
-        } else {
-            $cmdArgs = "/c title $WindowTitle & cd /d $ScriptDir & python.exe $s --verbose & pause"
-        }
-        Start-Process cmd -ArgumentList $cmdArgs
+        Write-Host "    Launching: $s"
+        $title = "Training - $s"
+        $cmd = "cd /d `"$ScriptDir`"; python.exe `"$s`" --verbose"
+        Start-Process cmd -ArgumentList "/k", "title `"$title`" && $cmd"
+        Start-Sleep -Milliseconds 500
     }
 
     Write-Host ""
-    Write-Host "[DONE] All 8 training windows have been launched." -ForegroundColor Yellow
+    Write-Host "[Done] All training windows launched"
     Write-Host ""
-    Read-Host "Press Enter to exit..."
     exit 0
 }
 
-# ──────────────────────────────────────
-#  SEQUENTIAL MODE
-# ──────────────────────────────────────
-Write-Host "[START] Sequential mode - running scripts one by one:" -ForegroundColor Yellow
-Write-Host ""
-foreach ($s in $Scripts) {
-    Write-Host "  - $s" -ForegroundColor Green
-}
-Write-Host ""
-Write-Host "WARNING: Press any key to start sequential execution..." -ForegroundColor Red
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+# Sequential Mode
+Write-Host "[Mode] Sequential - Running scripts one by one"
+Write-Host "       (slope one scripts will skip RMSE calculation)"
 Write-Host ""
 
-# ── Global timer ──
-$GlobalStart = Get-Date
+for ($i = 0; $i -lt $TotalCount; $i++) {
+    $idx = $i + 1
+    $s = $Scripts[$i]
+    
+    # Determine args
+    $args = "--verbose"
+    $cfg = "Calculate RMSE"
+    if ($s -match "slopeone") {
+        $args = "--verbose --skip-rmse"
+        $cfg = "Skip RMSE"
+    }
 
-foreach ($s in $Scripts) {
-    $Start = Get-Date
-
-    Write-Host ("=" * 60) -ForegroundColor Cyan
-    Write-Host "[BEGIN] $s" -ForegroundColor Cyan
-    Write-Host "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Cyan
-    Write-Host ("=" * 60) -ForegroundColor Cyan
+    Write-Host "--- [$idx/$TotalCount] Starting: $s ---"
+    Write-Host "Config: $cfg"
+    Write-Host "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     Write-Host ""
 
-    try {
-        & python.exe "$ScriptDir\$s" --verbose 2>&1 | Out-Host
-        $exitCode = $LASTEXITCODE
+    # Execute
+    & python.exe "$s" $args.Split()
+    $exitCode = $LASTEXITCODE
 
-        if ($exitCode -ne 0) {
-            Write-Host "[FAIL] $s exited with code $exitCode" -ForegroundColor Red
-        } else {
-            Write-Host "[OK]   $s completed successfully" -ForegroundColor Green
+    Write-Host ""
+    if ($exitCode -ne 0) {
+        Write-Host "[FAILED] $s exited with code: $exitCode"
+        $cont = Read-Host "Press Q to quit, other key to continue"
+        if ($cont -eq 'Q' -or $cont -eq 'q') {
+            exit 1
         }
-
-        $Elapsed = (Get-Date) - $Start
-        Write-Host ("Elapsed: {0:N2} sec" -f $Elapsed.TotalSeconds) -ForegroundColor Gray
+    } else {
+        Write-Host "[DONE] $s"
     }
-    catch {
-        Write-Host "[ERROR] $s threw an exception: $_" -ForegroundColor Red
-    }
-
-    Write-Host ""
-    Write-Host "Waiting 3 seconds before next script..."
-    Start-Sleep -Seconds 3
     Write-Host ""
 }
 
-# ── Summary ──
-$GlobalElapsed = (Get-Date) - $GlobalStart
-Write-Host ("=" * 60) -ForegroundColor Cyan
-Write-Host " ALL TRAINING SCRIPTS COMPLETED!" -ForegroundColor Cyan
-Write-Host (" Total time: {0:N2} sec" -f $GlobalElapsed.TotalSeconds) -ForegroundColor Cyan
-Write-Host (" Time: {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) -ForegroundColor Cyan
-Write-Host ("=" * 60) -ForegroundColor Cyan
+# Summary
+Write-Host "=== All $TotalCount training scripts completed ==="
+Write-Host "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Host ""
-Read-Host "Press Enter to exit..."
+Write-Host "--- Exporting models to JSON for backend... ---"
+$exportDir = Join-Path $ScriptDir "..\export"
+$exportScript = Join-Path $exportDir "export_models_to_json.py"
+if (Test-Path $exportScript) {
+    & python.exe $exportScript --model-dir (Join-Path $ScriptDir "..\models") --output-dir (Join-Path $ScriptDir "..\..\backend\models")
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[DONE] Models exported to JSON successfully"
+    } else {
+        Write-Host "[WARN] Model export failed with code: $LASTEXITCODE"
+    }
+} else {
+    Write-Host "[WARN] Export script not found: $exportScript"
+}
+Write-Host ""

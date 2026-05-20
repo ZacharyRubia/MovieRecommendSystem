@@ -289,7 +289,7 @@ def _predict_batch_rmse(batch_indices, train_user_ids, train_movie_ids,
         return preds
 
 
-def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2000, verbose=False):
+def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2000, verbose=False, skip_rmse=False):
     """
     改进 Slope One 训练
     - 基于邻域筛选的预测（使用全局偏差 + 邻域物品筛选）
@@ -399,33 +399,39 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
                 mask = np.ones(len(all_items), dtype=bool)
             user_item_neighbor_masks[ui] = mask
 
-    print(f"  [RMSE 计算] {_N_CPUS} 线程并行...")
-    verbose_step("RMSE计算", f"开始并行计算训练集 RMSE, {_N_CPUS} 线程", verbose)
+    if skip_rmse:
+        print(f"  [跳过 RMSE 计算]（--skip-rmse 模式，仅构建模型）")
+        verbose_step("RMSE计算", "跳过 RMSE 计算", verbose)
+        rmse = None
+        elapsed = time.time() - start_time
+    else:
+        print(f"  [RMSE 计算] {_N_CPUS} 线程并行...")
+        verbose_step("RMSE计算", f"开始并行计算训练集 RMSE, {_N_CPUS} 线程", verbose)
 
-    total = len(train_df)
-    chunk_size_rmse = max(500, total // (_N_CPUS * 4))
-    batches = [list(range(i, min(i + chunk_size_rmse, total))) for i in range(0, total, chunk_size_rmse)]
-    print(f"  {total} 条样本, {len(batches)} 批次")
-    verbose_step("RMSE计算", f"共 {total} 条样本, {len(batches)} 批次", verbose)
+        total = len(train_df)
+        chunk_size_rmse = max(500, total // (_N_CPUS * 4))
+        batches = [list(range(i, min(i + chunk_size_rmse, total))) for i in range(0, total, chunk_size_rmse)]
+        print(f"  {total} 条样本, {len(batches)} 批次")
+        verbose_step("RMSE计算", f"共 {total} 条样本, {len(batches)} 批次", verbose)
 
-    from joblib import Parallel, delayed
-    results = Parallel(n_jobs=_N_CPUS, prefer='threads', verbose=0)(
-        delayed(_predict_batch_rmse)(
-            batch, train_user_ids, train_movie_ids,
-            user2idx, movie2idx, user_ratings_dict,
-            neighbor_item_sets, dev_matrix, freq_matrix,
-            min_common, user_means,
-            user_items_arrays, user_ratings_arrays, user_item_neighbor_masks
-        ) for batch in batches
-    )
+        from joblib import Parallel, delayed
+        results = Parallel(n_jobs=_N_CPUS, prefer='threads', verbose=0)(
+            delayed(_predict_batch_rmse)(
+                batch, train_user_ids, train_movie_ids,
+                user2idx, movie2idx, user_ratings_dict,
+                neighbor_item_sets, dev_matrix, freq_matrix,
+                min_common, user_means,
+                user_items_arrays, user_ratings_arrays, user_item_neighbor_masks
+            ) for batch in batches
+        )
 
-    pred_values = np.concatenate(results).astype(np.float32)
-    rmse = float(np.sqrt(np.mean((pred_values - train_ratings) ** 2)))
-    elapsed = time.time() - start_time
-    print(f"  训练 RMSE: {rmse:.4f}")
-    print(f"  改进 Slope One 训练耗时: {elapsed:.2f} 秒")
-    verbose_step("RMSE计算", f"RMSE={rmse:.4f}", verbose)
-    verbose_step("改进SlopeOne", f"训练完成, 总耗时: {elapsed:.2f} 秒", verbose)
+        pred_values = np.concatenate(results).astype(np.float32)
+        rmse = float(np.sqrt(np.mean((pred_values - train_ratings) ** 2)))
+        elapsed = time.time() - start_time
+        print(f"  训练 RMSE: {rmse:.4f}")
+        print(f"  改进 Slope One 训练耗时: {elapsed:.2f} 秒")
+        verbose_step("RMSE计算", f"RMSE={rmse:.4f}", verbose)
+        verbose_step("改进SlopeOne", f"训练完成, 总耗时: {elapsed:.2f} 秒", verbose)
 
     # 整理输出
     verbose_step("模型构建", "序列化偏差信息和邻居信息...", verbose)
@@ -448,6 +454,11 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
             for nui, nsim in neighbors.items()
         ]
 
+    user_movies_dict = {}
+    for ui in user_ratings_dict:
+        uid = int(all_users[ui])
+        user_movies_dict[uid] = [int(all_movies[mi]) for mi in user_ratings_dict[ui].keys()]
+
     verbose_step("模型构建", f"序列化完成: {len(dev_dict)} 电影条目, {len(user_neighbors_serializable)} 用户邻居", verbose)
     return {
         'algorithm': 'slope_one_improved',
@@ -455,6 +466,7 @@ def train_slopeone_improved(train_df, n_neighbors=30, min_common=3, chunk_size=2
         'min_common': min_common,
         'item_deviations': dev_dict,
         'user_neighbors': user_neighbors_serializable,
+        'user_movies': user_movies_dict,
         'user_means': {int(uid): float(user_means[i]) for i, uid in enumerate(all_users)},
         'user2idx': user2idx,
         'movie2idx': movie2idx,
@@ -499,6 +511,8 @@ def main():
                        help='最小共同评分用户数阈值 (default: 3)')
     parser.add_argument('--chunk-size', type=int, default=2000, help='分块大小 (default: 2000)')
     parser.add_argument('--n-jobs', type=int, default=None, help='并行线程数')
+    parser.add_argument('--skip-rmse', action='store_true',
+                       help='跳过 RMSE 计算（加速训练，仅构建模型）')
     parser.add_argument('--verbose', action='store_true', help='输出详细步骤日志到 logs/verbose/')
     args = parser.parse_args()
 
@@ -525,6 +539,7 @@ def main():
         min_common=args.min_common,
         chunk_size=args.chunk_size,
         verbose=args.verbose,
+        skip_rmse=args.skip_rmse,
     )
     verbose_step("训练完成", "全局偏差矩阵+邻域信息构建完成", args.verbose)
 
