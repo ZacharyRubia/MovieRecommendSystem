@@ -8,7 +8,7 @@ class MovieModel {
     return query(`
       SELECT id, title, description, cover_url, video_url, release_year, duration, avg_rating, created_at
       FROM movies
-      ORDER BY created_at DESC
+      ORDER BY id ASC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
   }
@@ -30,12 +30,19 @@ class MovieModel {
     `, ids);
   }
 
-  // 根据ID查找电影
+  // 根据ID查找电影（含演员、导演）
   static async findById(id) {
     const rows = await query(`
-      SELECT id, title, description, cover_url, video_url, release_year, duration, avg_rating, created_at
-      FROM movies
-      WHERE id = ?
+      SELECT m.*,
+             GROUP_CONCAT(DISTINCT a.name ORDER BY ma.movie_id SEPARATOR ', ') AS actors,
+             GROUP_CONCAT(DISTINCT d.name ORDER BY md.movie_id SEPARATOR ', ') AS directors
+      FROM movies m
+      LEFT JOIN movies_actors ma ON m.id = ma.movie_id
+      LEFT JOIN actors a ON ma.actor_id = a.id
+      LEFT JOIN movies_directors md ON m.id = md.movie_id
+      LEFT JOIN directors d ON md.director_id = d.id
+      WHERE m.id = ?
+      GROUP BY m.id
     `, [id]);
     return rows[0];
   }

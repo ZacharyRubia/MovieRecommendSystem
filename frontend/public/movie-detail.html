@@ -165,6 +165,8 @@
     }
 
     function renderMovieDetail(m) {
+      const actors = m.actors ? m.actors.split(',').map(a => a.trim()).filter(Boolean) : [];
+      const directors = m.directors ? m.directors.split(',').map(d => d.trim()).filter(Boolean) : [];
       document.getElementById('movieDetail').innerHTML = `
         <div class="movie-detail">
           <div class="movie-cover-large">${m.cover_url ? `<img src="${m.cover_url}" alt="${m.title}" onerror="this.parentElement.innerHTML='暂无封面'">` : '暂无封面'}</div>
@@ -175,6 +177,8 @@
               <div class="meta-item"><span class="meta-label">时长:</span><span>${m.duration ? m.duration + ' 分钟' : '未知'}</span></div>
               <div class="meta-item"><span class="meta-label">评分:</span><span style="color:#ff9800;font-weight:bold">★ ${parseFloat(m.avg_rating).toFixed(1) || '暂无'}</span></div>
             </div>
+            ${directors.length ? `<div class="movie-meta-row"><div class="meta-item"><span class="meta-label">导演:</span><span>${directors.join(' / ')}</span></div></div>` : ''}
+            ${actors.length ? `<div class="movie-meta-row"><div class="meta-item"><span class="meta-label">演员:</span><span>${actors.join(' / ')}</span></div></div>` : ''}
             <div class="movie-description"><strong>简介：</strong>${m.description || '暂无简介'}</div>
             <div class="rating-section">
               <h3 class="rating-title">我的评分</h3>
