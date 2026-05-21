@@ -316,7 +316,7 @@ async function analyzeExperiment(exp) {
         'ctr', 'ctr_ci_lower', 'ctr_ci_upper', 'avg_watch_seconds',
         'rating_rate', 'collect_rate', 'positive_events',
         'p_value', 'is_winner', 'is_converged', 'sample_size_sufficient',
-        'bandit_alpha', 'bandit_beta', 'win_probability'
+        'bandit_alpha', 'bandit_beta'
       ];
       const paramVals = [
         exp.id, strat.id, metrics.total_exposures, metrics.total_clicks,
@@ -324,25 +324,12 @@ async function analyzeExperiment(exp) {
         metrics.ctr, ci.lower, ci.upper, metrics.avg_watch_seconds,
         metrics.rating_rate, metrics.collect_rate, metrics.positive_events,
         pValue, isWinner, isConverged, sampleSizeSufficient,
-        banditAlpha, banditBeta, winProbability
+        banditAlpha, banditBeta
       ];
       const placeholders = paramCols.map(() => '?').join(',');
       const sql = `INSERT INTO ab_results (analysis_time, period_start, period_end, ${paramCols.join(',')})
         VALUES (NOW(), DATE_SUB(NOW(), INTERVAL ${LOOKBACK_HOURS} HOUR), NOW(), ${placeholders})`;
-      try {
-        await query(sql, paramVals);
-      } catch (err) {
-        if (err.code === 'ER_BAD_FIELD_ERROR') {
-          const trimmedCols = paramCols.slice(0, -1);
-          const trimmedVals = paramVals.slice(0, -1);
-          const trimmedPH = trimmedCols.map(() => '?').join(',');
-          const trimmedSQL = `INSERT INTO ab_results (analysis_time, period_start, period_end, ${trimmedCols.join(',')})
-            VALUES (NOW(), DATE_SUB(NOW(), INTERVAL ${LOOKBACK_HOURS} HOUR), NOW(), ${trimmedPH})`;
-          await query(trimmedSQL, trimmedVals);
-        } else {
-          throw err;
-        }
-      }
+      await query(sql, paramVals);
     };
 
     await insertResults();

@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>A/B 测试管理 - 电影推荐系统</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -817,12 +820,12 @@
                   <td><strong>${s.name}</strong> ${m.is_winner ? '🏆' : ''}</td>
                   <td><code>${s.algorithm || '-'}</code></td>
                   <td>${(m.total_exposures || 0).toLocaleString()}</td>
-                  <td>${(m.total_positive || m.total_clicks || 0).toLocaleString()}</td>
+                  <td>${(m.total_clicks || m.positive_events || '-').toLocaleString()}</td>
                   <td class="metric-value">${typeof ctr === 'number' ? ctr.toFixed(2)+'%' : ctr}</td>
                   <td class="metric-ci">${m.ctr_ci_lower != null ? '['+(m.ctr_ci_lower*100).toFixed(2)+'%' : '['}${m.ctr_ci_upper != null ? ', '+(m.ctr_ci_upper*100).toFixed(2)+'%]' : '-]'}</td>
                   <td class="${m.p_value != null && m.p_value < 0.05 ? 'p-significant' : ''}">${m.p_value != null ? m.p_value.toFixed(4) : '-'}</td>
-                  <td>-</td>
-                  <td class="${m.is_converged ? 'converged-yes' : 'converged-no'}">${m.is_converged != null ? (m.is_converged ? '✅' : '⏳') : '-'}</td>
+                  <td>${m.win_probability != null ? (m.win_probability*100).toFixed(1)+'%' : '-'}</td>
+                  <td class="${m.is_converged ? 'converged-yes' : 'converged-no'}">${m.is_converged != null ? (m.is_converged ? '是' : '否') : '-'}</td>
                   <td>${m.unique_users || '-'}</td>
                   <td>${s.bandit_alpha != null ? s.bandit_alpha : '-'}</td>
                   <td>${s.bandit_beta != null ? s.bandit_beta : '-'}</td>

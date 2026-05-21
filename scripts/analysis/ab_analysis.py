@@ -481,7 +481,9 @@ def store_results(
                     period_start, period_end,
                     total_exposures, total_clicks, total_ratings,
                     total_collects, total_watch_seconds, unique_users,
-                    ctr, avg_watch_seconds, rating_rate, collect_rate,
+                    ctr, ctr_ci_lower, ctr_ci_upper,
+                    avg_watch_seconds, rating_rate, collect_rate,
+                    positive_events,
                     p_value, is_winner, is_converged,
                     sample_size_sufficient, bandit_alpha, bandit_beta
                 ) VALUES (
@@ -489,7 +491,9 @@ def store_results(
                     %(period_start)s, %(period_end)s,
                     %(exposures)s, %(clicks)s, %(ratings)s,
                     %(collects)s, %(watch_sec)s, %(users)s,
-                    %(ctr)s, %(avg_watch)s, %(rating_rate)s, %(collect_rate)s,
+                    %(ctr)s, %(ctr_ci_lower)s, %(ctr_ci_upper)s,
+                    %(avg_watch)s, %(rating_rate)s, %(collect_rate)s,
+                    %(positives)s,
                     %(p_value)s, %(is_winner)s, %(is_converged)s,
                     %(sample_ok)s, %(alpha)s, %(beta)s
                 )
@@ -506,12 +510,15 @@ def store_results(
                 'watch_sec': metrics['total_watch_seconds'],
                 'users': metrics['unique_users'],
                 'ctr': metrics['ctr'],
+                'ctr_ci_lower': metrics['ctr_ci_lower'],
+                'ctr_ci_upper': metrics['ctr_ci_upper'],
                 'avg_watch': metrics['avg_watch_seconds'],
                 'rating_rate': metrics['rating_rate'],
                 'collect_rate': metrics['collect_rate'],
+                'positives': metrics['positive_events'],
                 'p_value': test.get('p_value'),
                 'is_winner': 1 if test.get('is_winner', False) else 0,
-                'is_converged': 0,  # 收敛判定在 check_convergence 中处理
+                'is_converged': 0,
                 'sample_ok': 1 if test.get('sample_sufficient', False) else 0,
                 'alpha': bp[0],
                 'beta': bp[1],

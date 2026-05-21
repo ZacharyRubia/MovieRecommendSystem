@@ -1197,6 +1197,23 @@ exports.getExperimentById = async (req, res) => {
       );
       if (results.length > 0) {
         strat.latestMetrics = results[0];
+        // 兜底：如果 DB 中 CI 为 NULL，实时计算
+        const m = strat.latestMetrics;
+        if ((m.ctr_ci_lower == null || m.ctr_ci_upper == null) && m.total_exposures > 0) {
+          const positives = m.positive_events || m.total_clicks || 0;
+          const ci = wilsonCI(positives, m.total_exposures);
+          m.ctr_ci_lower = ci.lower;
+          m.ctr_ci_upper = ci.upper;
+        }
+        // 兜底：如果 ctr 为 NULL，实时计算
+        if (m.ctr == null && m.total_exposures > 0) {
+          const positives = m.positive_events || m.total_clicks || 0;
+          m.ctr = positives / m.total_exposures;
+        }
+        // 兜底：统一 total_clicks (兼容旧记录用 positive_events)
+        if ((m.total_clicks == null || m.total_clicks === 0) && m.positive_events > 0) {
+          m.total_clicks = m.positive_events;
+        }
       }
     }
 
@@ -1243,12 +1260,27 @@ exports.getExperimentById = async (req, res) => {
     const control = exp.strategies.find(s => s.is_control === 1) || exp.strategies[0];
     const controlFb = control._fallbackData;
 
+    // 兜底：为所有治疗组补算缺失的 p-value
+    if (control && control.latestMetrics) {
+      const cm = control.latestMetrics;
+      const cPos = cm.positive_events || cm.total_clicks || 0;
+      const cTotal = cm.total_exposures || 0;
+      for (const strat of exp.strategies) {
+        if (!strat.latestMetrics || strat.id === control.id) continue;
+        const m = strat.latestMetrics;
+        if (m.p_value == null && cTotal > 0 && m.total_exposures > 0) {
+          const tPos = m.positive_events || m.total_clicks || 0;
+          m.p_value = wilsonPValue(tPos, m.total_exposures, cPos, cTotal);
+        }
+      }
+    }
+
     for (const strat of exp.strategies) {
       if (strat.latestMetrics) continue;
       const fb = strat._fallbackData;
       if (!fb) continue;
 
-      const ctr = fb.total > 0 ? (fb.positive / fb.total * 100) : 0;
+      const ctr = fb.total > 0 ? (fb.positive / fb.total) : 0;
       let pValue = null;
       let winProb = null;
 
@@ -1267,8 +1299,8 @@ exports.getExperimentById = async (req, res) => {
         unique_users: fb.uniqueUsers,
         avg_rating: fb.avgRating,
         ctr: ctr,
-        ctr_ci_lower: fb.ci.lower * 100,
-        ctr_ci_upper: fb.ci.upper * 100,
+        ctr_ci_lower: fb.ci.lower,
+        ctr_ci_upper: fb.ci.upper,
         p_value: pValue,
         win_probability: winProb,
         is_converged: (pValue !== null && pValue < 0.05) ? 1 : 0,
@@ -1286,10 +1318,10 @@ exports.getExperimentById = async (req, res) => {
           .sort((a, b) => b.latestMetrics.ctr - a.latestMetrics.ctr)[0];
         if (bestTreatment) {
           const bm = bestTreatment.latestMetrics;
-          const cPos = cm.total_positive || 0;
-          const cTotal = cm.total_behaviors || cm.total_exposures || 0;
-          const bPos = bm.total_positive || 0;
-          const bTotal = bm.total_behaviors || bm.total_exposures || 0;
+          const cPos = cm.positive_events || cm.total_clicks || 0;
+          const cTotal = cm.total_exposures || 0;
+          const bPos = bm.positive_events || bm.total_clicks || 0;
+          const bTotal = bm.total_exposures || 0;
           if (cTotal > 0 && bTotal > 0) {
             cm.p_value = wilsonPValue(cPos, cTotal, bPos, bTotal);
             cm.is_converged = (cm.p_value !== null && cm.p_value < 0.05) ? 1 : 0;

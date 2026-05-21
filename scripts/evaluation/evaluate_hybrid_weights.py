@@ -68,6 +68,7 @@ import math
 import json
 import time
 import copy
+import pickle
 import random
 import argparse
 import warnings
@@ -112,6 +113,15 @@ ALL_MODEL_NAMES = [
     'traditional_slope_one',
     'improved_slope_one',
     'svd',
+]
+
+# improved 模式: 仅改进版本 + SVD + Turbo-CF
+IMPROVED_MODEL_NAMES = [
+    'improved_user_cf',
+    'improved_item_cf',
+    'improved_slope_one',
+    'svd',
+    'turbo_cf',
 ]
 
 # 分析点选取数量
@@ -735,6 +745,120 @@ class SVDModel(BaseModel):
         return float(np.clip(pred, 1.0, 5.0))
 
 
+# ─── 2.8 Turbo-CF ──────────────────────────────────────────────
+
+class TurboCFModel(BaseModel):
+    """
+    Turbo-CF（加速协同过滤）
+    - 从 train_turbocf.py 训练的 turbo_cf_model.pkl 加载
+    - 预测公式: pred(u,i) = mean_u + ( Σ sim·(r_vi - mean_v) ) / Σ |sim|
+    """
+    def __init__(self, model_path=None):
+        super().__init__('turbo_cf')
+        self.model_path = model_path
+
+    def train(self, ctx):
+        t0 = time.time()
+        self.ctx = ctx
+
+        if self.model_path and os.path.exists(self.model_path):
+            print(f"    [{self.name}] 从文件加载: {os.path.basename(self.model_path)}")
+            with open(self.model_path, 'rb') as f:
+                model_data = pickle.load(f)
+            self.turbo_model = model_data
+            n_clusters = model_data.get('n_clusters', '?')
+            n_users = model_data.get('n_users', '?')
+            nb_count = sum(len(v) for v in model_data.get('user_neighbors', {}).values())
+            print(f"    [{self.name}] 簇数={n_clusters}, 用户={n_users}, 邻居总数={nb_count}")
+            self.trained = True
+            print(f"    [{self.name}] 加载完成, 耗时: {time.time() - t0:.2f}s")
+            return
+
+        print(f"    [{self.name}] 模型文件不存在, 使用全量 User-CF 回退...")
+        n_users = ctx['n_users']
+        rating_matrix = ctx['rating_matrix']
+        user_means = ctx['user_means']
+        all_users = ctx['all_users']
+
+        centered = rating_matrix.copy().astype(np.float32)
+        row_indices = np.repeat(np.arange(n_users), np.diff(rating_matrix.indptr))
+        centered.data -= user_means[row_indices.astype(np.int32)]
+
+        nn = NearestNeighbors(
+            n_neighbors=min(31, n_users),
+            metric='cosine',
+            algorithm='brute',
+            n_jobs=-1,
+        )
+        nn.fit(centered)
+        distances, indices = nn.kneighbors(centered, return_distance=True)
+
+        turbo_model = {
+            'algorithm': 'turbo_cf',
+            'n_clusters': n_users,
+            'user_neighbors': {},
+            'user_means': {int(uid): float(user_means[i])
+                           for i, uid in enumerate(all_users)},
+            'all_users': [int(u) for u in all_users],
+            'n_users': n_users,
+            'n_movies': ctx['n_movies'],
+        }
+        for i in range(n_users):
+            uid = int(all_users[i])
+            nb_list = []
+            for j in range(1, min(31, n_users)):
+                nb_uid = int(all_users[indices[i, j]])
+                sim = 1.0 - distances[i, j]
+                if sim > 0:
+                    total_sim = sum(abs(1.0 - distances[i, k])
+                                    for k in range(1, min(31, n_users)))
+                    if total_sim > 0:
+                        sim_norm = sim / total_sim
+                        nb_list.append((nb_uid, sim_norm))
+            turbo_model['user_neighbors'][uid] = nb_list
+
+        self.turbo_model = turbo_model
+        self.trained = True
+        print(f"    [{self.name}] 回退训练完成, 耗时: {time.time() - t0:.2f}s")
+
+    def predict(self, user_id, movie_id):
+        model = getattr(self, 'turbo_model', None)
+        if model is None:
+            ctx = self.ctx
+            return float(ctx['user_means'][ctx['user2idx'].get(user_id, 0)])
+        ctx = self.ctx
+
+        uid = user_id
+        mid = movie_id
+
+        user_means = model.get('user_means', {})
+        mean_u = user_means.get(uid)
+        if mean_u is None:
+            u_idx = ctx['user2idx'].get(uid)
+            if u_idx is not None:
+                mean_u = float(ctx['user_means'][u_idx])
+            else:
+                return 3.0
+
+        neighbors = model.get('user_neighbors', {}).get(uid, [])
+        if not neighbors:
+            return float(mean_u)
+
+        num = 0.0
+        den = 0.0
+        for nb_uid, sim in neighbors:
+            nb_ratings = ctx['user_ratings_dict'].get(nb_uid, {})
+            if mid in nb_ratings:
+                mean_v = user_means.get(nb_uid, mean_u)
+                num += sim * (nb_ratings[mid] - mean_v)
+                den += abs(sim)
+
+        if den > 0:
+            pred = float(mean_u + num / den)
+            return max(1.0, min(5.0, pred))
+        return float(mean_u)
+
+
 # ═══════════════════════════════════════════════════════════════
 # 3. 评估指标
 # ═══════════════════════════════════════════════════════════════
@@ -944,9 +1068,9 @@ def get_weight_grid(mode='2', grid_step=DEFAULT_GRID_STEP, n_random=DEFAULT_N_RA
     生成待搜索的权重组合
 
     参数:
-        mode: '2' 或 'all'
+        mode: '2' | 'all' | 'improved'
         grid_step: 双模型网格步长
-        n_random: 全模型随机搜索次数
+        n_random: 随机搜索次数 (all 和 improved 模式使用)
 
     返回:
         list of dict: 每个 dict 为 {model_name: weight}
@@ -991,6 +1115,38 @@ def get_weight_grid(mode='2', grid_step=DEFAULT_GRID_STEP, n_random=DEFAULT_N_RA
                         'item_cf': round(1.0 - w_user, 4),
                     }
                 })
+
+    elif mode == 'improved':
+        # 改进版模式: 5 个子模型，随机搜索
+        model_names = IMPROVED_MODEL_NAMES
+        n_models = len(model_names)
+
+        # 均匀权重 baseline
+        uniform_w = 1.0 / n_models
+        weight_configs.append({
+            'tag': 'uniform',
+            'weights': {name: uniform_w for name in model_names},
+        })
+
+        # 单模型权重 (消融参考)
+        for name in model_names:
+            w = {n: 0.0 for n in model_names}
+            w[name] = 1.0
+            weight_configs.append({
+                'tag': f'single_{name}',
+                'weights': w,
+            })
+
+        # 随机搜索
+        rng = np.random.default_rng(RANDOM_SEED)
+        for i in range(n_random):
+            raw = rng.random(n_models)
+            w = raw / raw.sum()
+            weight_configs.append({
+                'tag': f'random_{i:04d}',
+                'weights': {name: round(float(w[j]), 6)
+                           for j, name in enumerate(model_names)},
+            })
 
     else:
         # 全模型模式: 所有子模型，随机搜索
@@ -1127,7 +1283,7 @@ def init_models(mode, ctx):
     初始化并训练所有子模型
 
     参数:
-        mode: '2' 或 'all'
+        mode: '2' | 'all' | 'improved'
         ctx: 数据上下文
 
     返回:
@@ -1147,6 +1303,32 @@ def init_models(mode, ctx):
 
         models['item_cf'] = ImprovedItemCF(n_neighbors=DEFAULT_N_NEIGHBORS)
         models['item_cf'].train(ctx)
+
+    elif mode == 'improved':
+        # 改进版模式: 改进 User-CF + 改进 Item-CF + 改进 Slope One + SVD + Turbo-CF
+        print(f"\n{'=' * 60}")
+        print(f"[模型初始化] 改进版模式 ({len(IMPROVED_MODEL_NAMES)} 个子模型)")
+        print(f"{'=' * 60}")
+
+        models['improved_user_cf'] = ImprovedUserCF(
+            n_neighbors=DEFAULT_N_NEIGHBORS, use_stability=True
+        )
+        models['improved_user_cf'].train(ctx)
+
+        models['improved_item_cf'] = ImprovedItemCF(n_neighbors=DEFAULT_N_NEIGHBORS)
+        models['improved_item_cf'].train(ctx)
+
+        models['improved_slope_one'] = ImprovedSlopeOne(
+            n_neighbors=DEFAULT_N_NEIGHBORS, svd_factors=50
+        )
+        models['improved_slope_one'].train(ctx)
+
+        models['svd'] = SVDModel(n_factors=50)
+        models['svd'].train(ctx)
+
+        turbo_cf_model_path = os.path.join(MODEL_DIR, 'turbo_cf_model.pkl')
+        models['turbo_cf'] = TurboCFModel(model_path=turbo_cf_model_path)
+        models['turbo_cf'].train(ctx)
 
     else:
         # 全模型模式: 训练所有 7 个子模型
@@ -1351,18 +1533,42 @@ def print_summary(all_results, analysis_points, elapsed, metadata, mode):
 
     print(f"\n数据集: {metadata['dataset']['train_size']:,} 训练 / "
           f"{metadata['dataset']['test_size']:,} 测试")
-    print(f"模式: {'双模型 (User-CF + Item-CF)' if mode == '2' else f'全模型 ({len(ALL_MODEL_NAMES)} 个子模型)'}")
+    if mode == '2':
+        mode_str = '双模型 (User-CF + Item-CF)'
+    elif mode == 'improved':
+        mode_str = f'改进版 ({len(IMPROVED_MODEL_NAMES)} 个子模型: ' + ', '.join(IMPROVED_MODEL_NAMES) + ')'
+    else:
+        mode_str = f'全模型 ({len(ALL_MODEL_NAMES)} 个子模型)'
+    print(f"模式: {mode_str}")
     print(f"权重配置数: {len(all_results)}")
     print(f"总耗时: {elapsed:.2f} 秒")
 
     print(f"\n{'─' * 80}")
     print(f"{'最优结果对比':^80}")
     print(f"{'─' * 80}")
-    print(f"{'标准':<20} {'w_user':<12} {'w_item':<12} {'RMSE':<10} {'MAE':<10} {'F1@10':<10} {'Coverage':<10}")
+    if mode == '2':
+        print(f"{'标准':<20} {'w_user':<12} {'w_item':<12} {'RMSE':<10} {'MAE':<10} {'F1@10':<10} {'Coverage':<10}")
+    else:
+        print(f"{'标准':<20} {'权重':<24} {'RMSE':<10} {'MAE':<10} {'F1@10':<10} {'Coverage':<10}")
     print(f"{'─' * 80}")
 
     # 找到几个关键点打印
-    key_tags = ['current_low', 'current_mid', 'current_high']
+    if mode == '2':
+        key_tags = ['current_low', 'current_mid', 'current_high']
+        display_points = [
+            ('当前(低活跃)', 'current_low'),
+            ('当前(一般)', 'current_mid'),
+            ('当前(高活跃)', 'current_high'),
+            ('最优(RMSE)', 'opt_rmse'),
+            ('最优(F1)', 'opt_f1'),
+        ]
+    else:
+        key_tags = ['uniform']
+        display_points = [
+            ('均匀权重', 'uniform'),
+            ('最优(RMSE)', 'opt_rmse'),
+            ('最优(F1)', 'opt_f1'),
+        ]
     key_results = {}
 
     for r in all_results:
@@ -1372,40 +1578,35 @@ def print_summary(all_results, analysis_points, elapsed, metadata, mode):
             w_item = r['weights'].get('item_cf', 'N/A')
         else:
             w_str = ', '.join([f'{k}={v:.2f}' for k, v in sorted(r['weights'].items()) if v > 0.1])
-            w_user = w_str[:20]
+            w_user = w_str[:24]
             w_item = ''
 
         # 记录关键点
         if tag in key_tags:
             key_results[tag] = r
-        if 'best' in tag.lower() or r == min(all_results, key=lambda x: x['rmse']):
+        if tag == 'uniform':
+            key_results['uniform'] = r
+        if r == min(all_results, key=lambda x: x['rmse']):
             key_results['opt_rmse'] = r
-        if 'best' in tag.lower() or r == max(all_results, key=lambda x: x['f1_at_k']):
+        if r == max(all_results, key=lambda x: x['f1_at_k']):
             key_results['opt_f1'] = r
 
-    # 打印关键点
-    display_points = [
-        ('当前(低活跃)', 'current_low'),
-        ('当前(一般)', 'current_mid'),
-        ('当前(高活跃)', 'current_high'),
-        ('最优(RMSE)', 'opt_rmse'),
-        ('最优(F1)', 'opt_f1'),
-    ]
-
     for label, key in display_points:
-        r = key_results.get(key) or (
-            analysis_points[display_points.index((label, key))]
-            if display_points.index((label, key)) < len(analysis_points)
-            else None
-        )
+        r = key_results.get(key)
         if r is None:
             continue
 
-        w_user_val = r['weights'].get('user_cf', 0) if mode == '2' else 0.5
-        w_item_val = r['weights'].get('item_cf', 0) if mode == '2' else 0.5
-        print(f"{label:<20} {w_user_val:<12.4f} {w_item_val:<12.4f} "
-              f"{r['rmse']:<10.4f} {r['mae']:<10.4f} "
-              f"{r['f1_at_k']:<10.4f} {r['coverage']:<10.4f}")
+        if mode == '2':
+            w_user_val = r['weights'].get('user_cf', 0)
+            w_item_val = r['weights'].get('item_cf', 0)
+            print(f"{label:<20} {w_user_val:<12.4f} {w_item_val:<12.4f} "
+                  f"{r['rmse']:<10.4f} {r['mae']:<10.4f} "
+                  f"{r['f1_at_k']:<10.4f} {r['coverage']:<10.4f}")
+        else:
+            w_str = ', '.join([f'{k}={v:.2f}' for k, v in sorted(r['weights'].items()) if v > 0.05])
+            print(f"{label:<20} {w_str:<24} "
+                  f"{r['rmse']:<10.4f} {r['mae']:<10.4f} "
+                  f"{r['f1_at_k']:<10.4f} {r['coverage']:<10.4f}")
 
     print(f"{'─' * 80}")
 
@@ -1472,6 +1673,8 @@ def run_weight_optimization(
     # ── 5. 构建混合预测器 ──
     if mode == '2':
         model_names = ['user_cf', 'item_cf']
+    elif mode == 'improved':
+        model_names = IMPROVED_MODEL_NAMES
     else:
         model_names = ALL_MODEL_NAMES
 
@@ -1556,8 +1759,8 @@ def main():
   python scripts/evaluation/evaluate_hybrid_weights.py --test-size 5000 --top-n 20
         """,
     )
-    parser.add_argument('--mode', type=str, choices=['2', 'all'], default='2',
-                        help='混合模式: 2 = User-CF+Item-CF (默认), all = 全部子模型')
+    parser.add_argument('--mode', type=str, choices=['2', 'all', 'improved'], default='2',
+                        help='混合模式: 2 = User-CF+Item-CF (默认), all = 全部子模型, improved = 改进版 (5个子模型)')
     parser.add_argument('--test-size', type=int, default=None,
                         help='限制测试样本数 (调试用)')
     parser.add_argument('--top-n', type=int, default=DEFAULT_TOP_N,
