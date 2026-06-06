@@ -41,3 +41,15 @@ dataset/
 # 日志文件
 scripts/train/logs/
 __pycache__/
+
+# 不上传
+dataset/
+docs/
+movies/
+scripts/evaluation_results/
+scripts/extract_test_subset_test/
+scripts/evaluation_cache/
+scripts/models/
+scripts/train/logs/
+scripts/cold_start/
+models/
