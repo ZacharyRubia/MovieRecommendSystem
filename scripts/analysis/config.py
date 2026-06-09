@@ -11,7 +11,7 @@ config.py - A/B 测试分析模块配置文件
 # MySQL 数据库配置
 # =============================================
 MYSQL_CONFIG = {
-    'host': '192.168.1.38',
+    'host': '192.168.43.38',
     'port': 3306,
     'user': 'newuser',
     'password': 'yourpassword',
@@ -25,7 +25,7 @@ MYSQL_CONFIG = {
 # Redis 配置
 # =============================================
 REDIS_CONFIG = {
-    'host': '192.168.1.39',
+    'host': '192.168.43.49',
     'port': 6379,
     'db': 0,
     'decode_responses': True,

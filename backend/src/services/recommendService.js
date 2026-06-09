@@ -70,7 +70,7 @@ async function saveCacheMovieSimilarity(movieId, similarMovies, algorithm = 'ite
 // Qdrant 客户端
 // =============================================
 const qdrantClient = new QdrantClient({
-  host: process.env.QDRANT_HOST || '192.168.1.38',
+  host: process.env.QDRANT_HOST || '192.168.43.38',
   port: parseInt(process.env.QDRANT_PORT) || 6333
 });
 

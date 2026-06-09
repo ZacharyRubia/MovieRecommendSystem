@@ -14,7 +14,7 @@ const db = require('../config/db');
 
 // ==================== Redis 客户端配置 ====================
 
-const REDIS_HOST = process.env.REDIS_HOST || '192.168.1.39';
+const REDIS_HOST = process.env.REDIS_HOST || '192.168.43.49';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
 
